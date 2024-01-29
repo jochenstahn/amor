@@ -9,3 +9,4 @@ visualisation of the content of a raw file (.hdf):
 
 > `events2histogram.py`
 
+#TODO: real readme for final system needed.
