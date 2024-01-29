@@ -16,7 +16,7 @@ conventions (not strictly followed, yet):
 """
 
 __version__ = '2.0'
-__date__    = '2024-01-26'
+__date__    = '2024-01-29'
 
 import os
 import sys
