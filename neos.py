@@ -7,11 +7,13 @@ Author: Jochen Stahn
 
 conventions (not strictly followed, yet):
 - array names end with the suffix '_x[y]' with the meaning
-    _e = events
+    _e  = events
     _tof
-    _l = lambda
-    _t = theta
-    _q = q_z
+    _l  = lambda
+    _t  = theta
+    _z  = detector z
+    _lz = (lambda, detector z)
+    _q  = q_z
 - to come
 """
 
@@ -152,6 +154,52 @@ class Defs:
     hdm       = 6.626176e-34/1.674928e-27               # h / m
     lamdaCut  = 2.5                                     # Aa
 #=====================================================================================================
+class Orso:
+    '''orso compatible output file header content'''
+    
+    def __init__():
+        self.data_source = fileio.DataSource(
+            fileio.Person(
+                None, 
+                None, 
+                contact             = None,
+                ),
+            fileio.Experiment(
+                title               = None, 
+                instrument          = None,
+                start_date          = None, 
+                probe               = None, 
+                facility            = None,
+                proposalID          = None
+                ),
+            fileio.Sample(
+                name                = None,
+                model               = None,
+                sample_parameters   = None,
+                ),
+            fileio.Measurement(
+                instrument_settings = fileio.InstrumentSettings(
+                    incident_angle  = fileio.ValueRange(None, None, 'deg'),
+                    wavelength      = fileio.ValueRange(None, None, 'angstrom'),
+                    polarisation    = None,
+                    configuration   = None,
+                    ),
+                scheme              = 'angle- and energy-dispersive',
+                data_files          = [],
+                additional_files    = None,
+                ),
+            )
+        self.reduction = fileio.Reduction(
+            software    = fileio.Software('eos', version=__version__),
+            timestamp   = datetime.now(),
+            creator     = None, 
+            corrections = ['histogramming in lambda and alpha_f', 
+                           'gravity'],
+            computer    = platform.node(),
+            call        = ' '.join(sys.argv),
+            )
+
+#=====================================================================================================
 class AmorData:
     '''read meta-data and event streams from .hdf file(s), apply filters and conversions'''
     #-------------------------------------------------------------------------------------------------
@@ -274,13 +322,12 @@ class AmorData:
                 model = clas.sampleModel
 
             # assembling orso header information
-            self.data_source = fileio.DataSource(
-                fileio.Person(
+            orso.data_source.owner = fileio.Person(
                     user_name, 
                     None, 
                     contact             = user_email,
                     ),
-                fileio.Experiment(
+            orso.data_source.experiment = fileio.Experiment(
                     title               = title, 
                     instrument          = instrumentName,
                     start_date          = self.start_date, 
@@ -288,20 +335,19 @@ class AmorData:
                     facility            = source,
                     proposalID          = proposal_id
                     ),
-                fileio.Sample(
+            orso.data_source.sample = fileio.Sample(
                     name                = sampleName,
                     model               = model,
                     sample_parameters   = None,
                     ),
-                fileio.Measurement(
-                    instrument_settings = fileio.InstrumentSettings(
-                        incident_angle  = fileio.ValueRange(None, None, 'deg'),
-                        wavelength      = fileio.ValueRange(None, None, 'angstrom'),
-                        polarisation    = None,
-                        configuration   = None,
-                        ),
-                    data_files          = [],
-                    scheme              = 'angle- and energy-dispersive',
+            orso.data_source.measurement.instrument_settings = fileio.InstrumentSettings(
+                    incident_angle  = fileio.ValueRange(None, None, 'deg'),
+                    wavelength      = fileio.ValueRange(None, None, 'angstrom'),
+                    polarisation    = None,
+                    configuration   = None,
+                    ),
+            orso.data_source.measurement.data_files = [],
+            orso.data_source.measurement.scheme     = 'angle- and energy-dispersive',
                     ),
                 )
 
@@ -353,13 +399,13 @@ class AmorData:
         # add header content
         if self.readHeaderInfo:
             self.readHeaderInfo = False
-            self.data_source.measurement.instrument_settings.incident_angle = fileio.ValueRange(self.mu+self.kap+self.kad-0.5*self.div,
+            orso.data_source.measurement.instrument_settings.incident_angle = fileio.ValueRange(self.mu+self.kap+self.kad-0.5*self.div,
                                                                                                 self.mu+self.kap+self.kad+0.5*self.div,
                                                                                                 'deg')
-            self.data_source.measurement.instrument_settings.wavelength = fileio.ValueRange(defs.lamdaCut, clas.lambdaRange[1], 'angstrom')
-            self.data_source.measurement.instrument_settings.mu = fileio.Value(self.mu, 'deg', comment='sample angle to horizon')
-            self.data_source.measurement.instrument_settings.nu = fileio.Value(self.nu, 'deg', comment='detector angle to horizon')
-        self.data_source.measurement.data_files.append(fileio.File(file=fileName.split('/')[-1], timestamp=fileDate))
+            orso.data_source.measurement.instrument_settings.wavelength = fileio.ValueRange(defs.lamdaCut, clas.lambdaRange[1], 'angstrom')
+            orso.data_source.measurement.instrument_settings.mu = fileio.Value(self.mu, 'deg', comment='sample angle to horizon')
+            orso.data_source.measurement.instrument_settings.nu = fileio.Value(self.nu, 'deg', comment='detector angle to horizon')
+        orso.data_source.measurement.data_files.append(fileio.File(file=fileName.split('/')[-1], timestamp=fileDate))
         print(f'#     mu = {self.mu:6.3f}, nu = {self.nu:6.3f}, kap = {self.kap:6.3f}, kad = {self.kap:6.3f}')
         
         # TODO: should extract monitor from counts or beam current times time 
@@ -419,10 +465,10 @@ class AmorData:
         # q_z
         if clas.offSpecular:
             alphaI = self.kap + self.kad + self.mu
-            qz_e = 2*np.pi * ( np.sin( np.deg2rad(alphaF_e) ) + np.sin( np.deg2rad( alphaI ) ) ) / lamda_e
-            # qx_e = ....
+            qz_e = 2 * np.pi * ( np.sin( np.deg2rad(alphaF_e) ) + np.sin( np.deg2rad( alphaI ) ) ) / lamda_e
+            qx_e = 2 * np.pi * ( np.cos( np.deg2rad(alphaF_e) ) - np.cos( np.deg2rad( alphaI ) ) ) / lamda_e 
         else:
-            qz_e = 4*np.pi * np.sin( np.deg2rad(alphaF_e) ) / lamda_e
+            qz_e = 4 * np.pi * np.sin( np.deg2rad(alphaF_e) ) / lamda_e
             # qx_e = 0.
         
         # filter q_z range
@@ -494,6 +540,7 @@ def normalisation_map(short_notation):
         head = f'normalisation matrix based on the measurements \n {fromHDF.file_list} \n nu - mu = {normAngle}\n shape= {np.shape(norm_lz)} (lambda, z) \n measured at mu = {fromHDF.mu:6.3f} deg \n N(l_lambda, z) = theta(z) / sum_i=-1..1 I(l_lambda+i, z)'
         np.savetxt(f'{clas.dataPath}/{name}.norm', norm_lz, header = head)
         normFileList = fromHDF.file_list
+    orso.data_source.measurement.additional_files = normFileList
     return norm_lz, normAngle, normFileList
 #=====================================================================================================
 def output_format_list(outputFormat):
@@ -671,9 +718,10 @@ class Grid:
 
 #=====================================================================================================
 def main():
-    global startTime, grid, clas
+    global startTime, grid, clas, orso
     clas = commandLineArgs()
     grid = Grid()
+    orso = Orso()
     startTime = 0
     if not os.path.exists(f'{clas.dataPath}'):
         os.system(f'mkdir {clas.dataPath}')
@@ -681,21 +729,21 @@ def main():
     
     print('\n######## eos - data reduction for Amor ########')
     
-    reduction = fileio.Reduction(
-        software    = fileio.Software('eos', version=__version__),
-        timestamp   = datetime.now(),
-        creator     = None, 
-        corrections = ['histogramming in lambda and alpha_f', 
-                       'gravity'],
-        computer    = platform.node(),
-        call        = ' '.join(sys.argv),
-        )
+    #reduction = fileio.Reduction(
+    #    software    = fileio.Software('eos', version=__version__),
+    #    timestamp   = datetime.now(),
+    #    creator     = None, 
+    #    corrections = ['histogramming in lambda and alpha_f', 
+    #                   'gravity'],
+    #    computer    = platform.node(),
+    #    call        = ' '.join(sys.argv),
+    #    )
 
     # load or create normalisation matrix
     if clas.normalisationFileIdentifier:
         normalise = True
         norm_lz, normAngle, normFileList = normalisation_map(clas.normalisationFileIdentifier[0])
-        reduction.corrections.append('normalisation with \'additional files\'')
+        orso.reduction.corrections.append('normalisation with \'additional files\'')
     else:
         normalise = False
         norm_lz   = grid.lz()
@@ -708,7 +756,7 @@ def main():
         sq_q, sR_q, sdR_q, sFileName = loadRqz(clas.subtract)
         subtract = True
         print(f'# loaded background file: {sFileName}')
-        reduction.corrections.append(f'background from \'{sFileName}\' subtracted')
+        orso.reduction.corrections.append(f'background from \'{sFileName}\' subtracted')
     else:
         subtract = False
         
@@ -728,7 +776,7 @@ def main():
                 fileio.ErrorColumn(error_of='Qz', error_type='resolution', value_is='sigma'),
                 fileio.Column('time', 's', 'time relative to start of measurement series'),
                 ]
-            data_source = fromHDF.data_source
+            #data_source = fromHDF.data_source
 
             interval = clas.timeSlize[0]
             try:
@@ -741,7 +789,7 @@ def main():
                 stop  = wallTime_e[-1] 
             for i, time in enumerate(np.arange(start, stop, interval)):
                 print(f'#  time slize {i:4n}', end='\r')
-                headerRqz = fileio.Orso(data_source, reduction, columns)
+                headerRqz = fileio.Orso(orso.data_source, orso.reduction, columns)
                 headerRqz.data_set = f'Nr {i} : time = {time:8.1f} s  to {time+interval:8.1f} s'
                 headerRqz = fileio.Orso(**headerRqz.to_dict())
 
@@ -794,8 +842,8 @@ def main():
                     fileio.ErrorColumn(error_of='R', error_type='uncertainty', value_is='sigma'),
                     fileio.ErrorColumn(error_of='Qz', error_type='resolution', value_is='sigma'),
                     ]
-                data_source = fromHDF.data_source
-                headerRqz = fileio.Orso(data_source, reduction, columns)
+                #data_source = fromHDF.data_source
+                headerRqz = fileio.Orso(orso.data_source, orso.reduction, columns)
                 headerRqz.data_set = f'Nr {i} : mu = {fromHDF.mu:6.3f} deg'
                 if i>0 :
                     headerRqz.data_source.measurement.instrument_settings.mu = fileio.Value(fromHDF.mu, 'deg', comment='sample angle to horizon')
@@ -844,8 +892,8 @@ def main():
                     fileio.Column('norm', '', 'normalisation matrix'),
                     fileio.Column('mask', '', 'pixels used for calculating R(q_z)'),
                     ]
-                data_source = fromHDF.data_source
-                headerRlt = fileio.Orso(data_source, reduction, columns)
+                #data_source = fromHDF.data_source
+                headerRlt = fileio.Orso(orso.data_source, orso.reduction, columns)
         
                 ts, zs=ref_lz.shape
                 lindex_lz=np.tile(np.arange(1, ts+1), (zs, 1)).T
