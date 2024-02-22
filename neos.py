@@ -188,7 +188,15 @@ class Orso:
                 additional_files    = self.measurement_additional_files,
                 ),
         )
-
+    #-------------------------------------------------------------------------------------------------
+    def columns(self):
+        columns = [
+            fileio.Column('Qz', '1/angstrom', 'normal momentum transfer'),
+            fileio.Column('R', '', 'specular reflectivity'),
+            fileio.ErrorColumn(error_of='R', error_type='uncertainty', value_is='sigma'),
+            fileio.ErrorColumn(error_of='Qz', error_type='resolution', value_is='sigma'),
+            ]
+        return columns
 
 #=====================================================================================================
 class AmorData:
@@ -295,8 +303,8 @@ class AmorData:
             source           = self.hdf['entry1/Amor/source/name'][0].decode('utf-8')
             sourceProbe      = 'neutron'
             
-            self.start_time     = self.hdf['entry1/start_time'][0].decode('utf-8')
-            self.start_date     = self.start_time.split('T')[0]
+            start_time       = self.hdf['entry1/start_time'][0].decode('utf-8')
+            start_date       = start_time.split(' ')[0]
                
             if clas.sampleModel:
                 model = clas.sampleModel
@@ -313,7 +321,7 @@ class AmorData:
             orso.experiment = fileio.Experiment(
                 title               = title, 
                 instrument          = instrumentName,
-                start_date          = self.start_date, 
+                start_date          = start_date, 
                 probe               = sourceProbe, 
                 facility            = source,
                 proposalID          = proposal_id
@@ -373,7 +381,7 @@ class AmorData:
         # add header content
         if self.readHeaderInfo:
             self.readHeaderInfo = False
-            orso.instrument_settings = fileio.InstrumentSettings(
+            orso.measurement_instrument_settings = fileio.InstrumentSettings(
                 incident_angle = fileio.ValueRange(self.mu+self.kap+self.kad-0.5*self.div,
                                                    self.mu+self.kap+self.kad+0.5*self.div,
                                                    'deg'),
@@ -515,8 +523,17 @@ def normalisation_map(short_notation):
         detZ_e        = fromHDF.detZ_e
         norm_lz, bins_l, bins_z = np.histogram2d(lamda_e, detZ_e, bins = (grid.lamda(), grid.z()))
         norm_lz = np.where(norm_lz>0, norm_lz, np.nan)
-        head = f'normalisation matrix based on the measurements \n {fromHDF.file_list} \n nu - mu = {normAngle}\n shape= {np.shape(norm_lz)} (lambda, z) \n measured at mu = {fromHDF.mu:6.3f} deg \n N(l_lambda, z) = theta(z) / sum_i=-1..1 I(l_lambda+i, z)'
-        np.savetxt(f'{clas.dataPath}/{name}.norm', norm_lz, header = head)
+        if len(lamda_e) > 1e6:
+            head = f'normalisation matrix based on the measurements \n\
+                    {fromHDF.file_list} \n\
+                    nu - mu = {normAngle}\n\
+                    shape= {np.shape(norm_lz)} (lambda, z) \n\
+                    measured at mu = {fromHDF.mu:6.3f} deg \n\
+                    N(l_lambda, z) = theta(z) / sum_i=-1..1 I(l_lambda+i, z)'
+            head = head.replace('    ', '')
+            head = head.replace('../', '')
+            head = head.replace('raw/', '')
+            np.savetxt(f'{clas.dataPath}/{name}.norm', norm_lz, header = head)
         normFileList = fromHDF.file_list
     #orso.measurement_additional_files = normFileList
     return norm_lz, normAngle, normFileList
@@ -743,6 +760,7 @@ def main():
     datasetsRlt = []
     for i, short_notation in enumerate(clas.fileIdentifier):
         print('# reading input:')
+        orso.measurement_data_files = []
         fromHDF.read_data(short_notation)
 
         if clas.timeSlize:
@@ -813,18 +831,13 @@ def main():
                 err_lz *= clas.scale[-1]
 
             if 'Rqz.ort' in output_format_list(clas.outputFormat):
-                columns = [
-                    fileio.Column('Qz', '1/angstrom', 'normal momentum transfer'),
-                    fileio.Column('R', '', 'specular reflectivity'),
-                    fileio.ErrorColumn(error_of='R', error_type='uncertainty', value_is='sigma'),
-                    fileio.ErrorColumn(error_of='Qz', error_type='resolution', value_is='sigma'),
-                    ]
-                headerRqz = fileio.Orso(orso.data_source(), orso.reduction, columns)
+                headerRqz = fileio.Orso(orso.data_source(), orso.reduction, orso.columns())
                 headerRqz.data_set = f'Nr {i} : mu = {fromHDF.mu:6.3f} deg'
-                if i>0 :
-                    headerRqz.data_source.measurement.instrument_settings.mu = fileio.Value(fromHDF.mu, 'deg', comment='sample angle to horizon')
-                    headerRqz.data_source.measurement.instrument_settings.nu = fileio.Value(fromHDF.nu, 'deg', comment='detector angle to horizon')
+                #if i>0 :
+                #    headerRqz.data_source.measurement.instrument_settings.mu = fileio.Value(fromHDF.mu, 'deg', comment='sample angle to horizon')
+                #    headerRqz.data_source.measurement.instrument_settings.nu = fileio.Value(fromHDF.nu, 'deg', comment='detector angle to horizon')
                 headerRqz = fileio.Orso(**headerRqz.to_dict())
+                #print(headerRqz)
 
                 # projection on q-grid 
                 q_q, R_q, dR_q, dq_q = project_on_qz(qz_lz, ref_lz, err_lz, res_lz, norm_lz, mask_lz)
