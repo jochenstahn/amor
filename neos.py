@@ -38,7 +38,7 @@ def commandLineArgs():
     Process command line argument. 
     The type of the default values is used for conversion and validation.
     '''
-    msg = "eos reads data from (one or several) raw file(s) of the .hdf format, \
+    msg = "EOS reads data from (one or several) raw file(s) of the .hdf format, \
            performs various corrections, conversations and projections and exports\
            the resulting reflectivity in an orso-compatible format."
     clas = argparse.ArgumentParser(description = msg)
