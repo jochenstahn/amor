@@ -38,7 +38,7 @@ def commandLineArgs():
     Process command line argument. 
     The type of the default values is used for conversion and validation.
     '''
-    msg = "EOS reads data from (one or several) raw file(s) of the .hdf format, \
+    msg = "eos reads data from (one or several) raw file(s) of the .hdf format, \
            performs various corrections, conversations and projections and exports\
            the resulting reflectivity in an orso-compatible format."
     clas = argparse.ArgumentParser(description = msg)
@@ -383,9 +383,9 @@ class AmorData:
         if self.readHeaderInfo:
             self.readHeaderInfo = False
             header.measurement_instrument_settings = fileio.InstrumentSettings(
-                incident_angle = fileio.ValueRange(self.mu+self.kap+self.kad-0.5*self.div,
-                                                   self.mu+self.kap+self.kad+0.5*self.div,
-                                                   'deg'),
+                incident_angle = fileio.ValueRange(round(self.mu+self.kap+self.kad-0.5*self.div, 3),
+                                                   round(self.mu+self.kap+self.kad+0.5*self.div, 3),
+                                                   'deg'), 
                 wavelength = fileio.ValueRange(defs.lamdaCut, clas.lambdaRange[1], 'angstrom'),
                 polarization = fileio.Polarization.unpolarized,
                 )
@@ -524,6 +524,9 @@ def normalisation_map(short_notation):
         detZ_e        = fromHDF.detZ_e
         norm_lz, bins_l, bins_z = np.histogram2d(lamda_e, detZ_e, bins = (grid.lamda(), grid.z()))
         norm_lz = np.where(norm_lz>0, norm_lz, np.nan)
+        # TODO: correct for the SM reflectivity
+        # q_lz
+        # -> Rsm_lz
         if len(lamda_e) > 1e6:
             head = f'normalisation matrix based on the measurements \n\
                     {fromHDF.file_list} \n\
@@ -724,16 +727,6 @@ def main():
     
     print('\n######## eos - data reduction for Amor ########')
     
-    #reduction = fileio.Reduction(
-    #    software    = fileio.Software('eos', version=__version__),
-    #    timestamp   = datetime.now(),
-    #    creator     = None, 
-    #    corrections = ['histogramming in lambda and alpha_f', 
-    #                   'gravity'],
-    #    computer    = platform.node(),
-    #    call        = ' '.join(sys.argv),
-    #    )
-
     # load or create normalisation matrix
     if clas.normalisationFileIdentifier:
         normalise = True
@@ -765,13 +758,8 @@ def main():
 
         if clas.timeSlize:
             wallTime_e = fromHDF.wallTime_e
-            columns = [
-                fileio.Column('Qz', '1/angstrom', 'normal momentum transfer'),
-                fileio.Column('R', '', 'specular reflectivity'),
-                fileio.ErrorColumn(error_of='R', error_type='uncertainty', value_is='sigma'),
-                fileio.ErrorColumn(error_of='Qz', error_type='resolution', value_is='sigma'),
-                fileio.Column('time', 's', 'time relative to start of measurement series'),
-                ]
+                headerRqz = fileio.Orso(header.data_source(), header.reduction, header.columns())
+            columns = np.append(header.columns(), fileio.Column('time', 's', 'time relative to start of measurement series'))
 
             interval = clas.timeSlize[0]
             try:
@@ -833,11 +821,7 @@ def main():
             if 'Rqz.ort' in output_format_list(clas.outputFormat):
                 headerRqz = fileio.Orso(header.data_source(), header.reduction, header.columns())
                 headerRqz.data_set = f'Nr {i} : mu = {fromHDF.mu:6.3f} deg'
-                #if i>0 :
-                #    headerRqz.data_source.measurement.instrument_settings.mu = fileio.Value(fromHDF.mu, 'deg', comment='sample angle to horizon')
-                #    headerRqz.data_source.measurement.instrument_settings.nu = fileio.Value(fromHDF.nu, 'deg', comment='detector angle to horizon')
                 headerRqz = fileio.Orso(**headerRqz.to_dict())
-                #print(headerRqz)
 
                 # projection on q-grid 
                 q_q, R_q, dR_q, dq_q = project_on_qz(qz_lz, ref_lz, err_lz, res_lz, norm_lz, mask_lz)
@@ -914,11 +898,13 @@ def main():
 
     if 'Rqz.ort' in output_format_list(clas.outputFormat):
         print(f'#   {clas.dataPath}/{clas.outputName}.Rqz.ort')
-        fileio.save_orso(datasetsRqz, f'{clas.dataPath}/{clas.outputName}.Rqz.ort', data_separator='\n')
+        theSecondLine = f' {header.experiment.title} | {header.experiment.start_date} | sample {header.sample.name} | R(q_z)'
+        fileio.save_orso(datasetsRqz, f'{clas.dataPath}/{clas.outputName}.Rqz.ort', data_separator='\n', comment=theSecondLine)
 
     if 'Rlt.ort' in output_format_list(clas.outputFormat):
         print(f'#   {clas.dataPath}/{clas.outputName}.Rlt.ort')
-        fileio.save_orso(datasetsRlt, f'{clas.dataPath}/{clas.outputName}.Rlt.ort', data_separator='\n')
+        theSecondLine = f' {header.experiment.title} | {header.experiment.start_date} | sample {header.sample.name} | R(lambda, theta)'
+        fileio.save_orso(datasetsRlt, f'{clas.dataPath}/{clas.outputName}.Rlt.ort', data_separator='\n', comment=theSecondLine)
 
     print('')
 #=====================================================================================================
