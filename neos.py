@@ -18,7 +18,7 @@ conventions (not strictly followed, yet):
 """
 
 __version__ = '2.0'
-__date__    = '2024-01-29'
+__date__    = '2024-02-23'
 
 import os
 import sys
@@ -525,17 +525,24 @@ def normalisation_map(short_notation):
         norm_lz, bins_l, bins_z = np.histogram2d(lamda_e, detZ_e, bins = (grid.lamda(), grid.z()))
         norm_lz = np.where(norm_lz>0, norm_lz, np.nan)
         # TODO: correct for the SM reflectivity
-        # q_lz
-        # -> Rsm_lz
+        lamda_l  = grid.lamda()
+        theta_z  = normAngle + fromHDF.delta_z
+        lamda_lz = (grid.lz().T*lamda_l[:-1]).T
+        theta_lz = grid.lz()*theta_z 
+        qz_lz    = 4.0*np.pi * np.sin(np.deg2rad(theta_lz)) / lamda_lz
+        Rsm_lz   = np.ones(np.shape(qz_lz))
+        Rsm_lz   = np.where(qz_lz>0.0217, 1-(qz_lz-0.0217)*(0.0625/0.0217), Rsm_lz)
+        Rsm_lz   = np.where(qz_lz>0.0217*5, np.nan, Rsm_lz)
+        norm_lz  = norm_lz / Rsm_lz
         if len(lamda_e) > 1e6:
-            head = f'normalisation matrix based on the measurements \n\
-                    {fromHDF.file_list} \n\
-                    nu - mu = {normAngle}\n\
-                    shape= {np.shape(norm_lz)} (lambda, z) \n\
-                    measured at mu = {fromHDF.mu:6.3f} deg \n\
-                    N(l_lambda, z) = theta(z) / sum_i=-1..1 I(l_lambda+i, z)'
-            head = head.replace('    ', '')
+            head = ('normalisation matrix based on the measurements\n'
+                   f'{fromHDF.file_list}\n'
+                   f'nu - mu = {normAngle}\n'
+                   f'shape= {np.shape(norm_lz)} (lambda, z)\n'
+                   f'measured at mu = {fromHDF.mu:6.3f} deg\n'
+                   f'N(l_lambda, z) = theta(z) / sum_i=-1..1 I(l_lambda+i, z)')
             head = head.replace('../', '')
+            head = head.replace('./', '')
             head = head.replace('raw/', '')
             np.savetxt(f'{clas.dataPath}/{name}.norm', norm_lz, header = head)
         normFileList = fromHDF.file_list
@@ -758,7 +765,7 @@ def main():
 
         if clas.timeSlize:
             wallTime_e = fromHDF.wallTime_e
-                headerRqz = fileio.Orso(header.data_source(), header.reduction, header.columns())
+            headerRqz = fileio.Orso(header.data_source(), header.reduction, header.columns())
             columns = np.append(header.columns(), fileio.Column('time', 's', 'time relative to start of measurement series'))
 
             interval = clas.timeSlize[0]
