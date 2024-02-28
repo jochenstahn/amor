@@ -1,7 +1,7 @@
 
-# documentation for **neos.py**
+# documentation for **eos.py**
 
-**neos** is a python program used at the neutron reflectometer *Amor* at *SINQ* 
+**eos** is a python program used at the neutron reflectometer *Amor* at *SINQ* 
 to turn *raw data*
 into reduced an *orso* comptible *reflectivity file*. 
 
@@ -23,7 +23,7 @@ reduced: *orso reflectivity* format:
 
 ## environment
 
-**neos** (version 2.0 and later) was developen with python3.9. 
+**eos** (version 2.0 and later) was developen with python3.9. 
 
 The following (non-trivial) python modules are required:
 
@@ -33,7 +33,14 @@ The following (non-trivial) python modules are required:
 
 ## usage
 
-**neos** is using command line arguments to
+**eos** can read one or several *.hdf* files for one or several instrument settings, and
+it creates one or several reflectivity curves or intensity maps. 
+
+> **Warning**: Choosing wrong combinations
+> can easily lead to huge data files. E.g. time-slizing and output of 
+> intensity maps might use several hundred GB. 
+
+**eos** is using command line arguments to
 
 - find the raw data
 - overwrite default values
@@ -41,31 +48,9 @@ The following (non-trivial) python modules are required:
 - define reduction steps
 - define the output path and name
 
-More detailed explanations for some arguments are given in the next section.
+### communicate file numbers and path information
 
-### output for `python eos.py -h`:
-
-``` man
-usage: neos.py [-h] [-d DATAPATH] [-Y YEAR]
-               [-n FILEIDENTIFIER [FILEIDENTIFIER ...]]
-               [-r NORMALISATIONFILEIDENTIFIER [NORMALISATIONFILEIDENTIFIER ...]]
-               [-sub SUBTRACT] [-o OUTPUTNAME]
-               [-of OUTPUTFORMAT [OUTPUTFORMAT ...]]
-               [--offSpecular OFFSPECULAR] [-a QRESOLUTION]
-               [-ts TIMESLIZE [TIMESLIZE ...]] [-s SCALE [SCALE ...]]
-               [-S AUTOSCALE AUTOSCALE] [-l LAMBDARANGE LAMBDARANGE]
-               [-t THETARANGE THETARANGE] [-T THETARANGER THETARANGER]
-               [-y YRANGE YRANGE] [-q QZRANGE QZRANGE] [-cs CHOPPERSPEED]
-               [-cp CHOPPERPHASE] [-co CHOPPERPHASEOFFSET] [-m MUOFFSET]
-               [-mu MU] [-nu NU] [-sm SAMPLEMODEL]
-
-eos reads data from (one or several) raw file(s) of the .hdf format, performs
-various corrections, conversations and projections and exports the resulting
-reflectivity in an orso-compatible format.
-
-optional arguments:
-  -h, --help            show this help message and exit
-
+```
 input data:
   -d DATAPATH, --dataPath DATAPATH
                         relative path to directory with .hdf files
@@ -76,51 +61,9 @@ input data:
                         file number(s) of normalisation measurement
   -sub SUBTRACT, --subtract SUBTRACT
                         R(q_z) curve to be subtracted (in .Rqz.ort format
-
-output:
-  -o OUTPUTNAME, --outputName OUTPUTNAME
-                        output file name (withot suffix)
-  -of OUTPUTFORMAT [OUTPUTFORMAT ...], --outputFormat OUTPUTFORMAT [OUTPUTFORMAT ...]
-  --offSpecular OFFSPECULAR
-  -a QRESOLUTION, --qResolution QRESOLUTION
-                        q_z resolution
-  -ts TIMESLIZE [TIMESLIZE ...], --timeSlize TIMESLIZE [TIMESLIZE ...]
-                        time slizing <interval> ,[<start> [,stop]]
-  -s SCALE [SCALE ...], --scale SCALE [SCALE ...]
-                        scaling factor for R(q_z)
-  -S AUTOSCALE AUTOSCALE, --autoscale AUTOSCALE AUTOSCALE
-                        scale to 1 in the given q_z range
-
-masks:
-  -l LAMBDARANGE LAMBDARANGE, --lambdaRange LAMBDARANGE LAMBDARANGE
-                        wavelength range
-  -t THETARANGE THETARANGE, --thetaRange THETARANGE THETARANGE
-                        absolute theta range
-  -T THETARANGER THETARANGER, --thetaRangeR THETARANGER THETARANGER
-                        relative theta range
-  -y YRANGE YRANGE, --yRange YRANGE YRANGE
-                        detector y range
-  -q QZRANGE QZRANGE, --qzRange QZRANGE QZRANGE
-                        q_z range
-
-overwrite:
-  -cs CHOPPERSPEED, --chopperSpeed CHOPPERSPEED
-                        chopper speed in rpm
-  -cp CHOPPERPHASE, --chopperPhase CHOPPERPHASE
-                        chopper phase
-  -co CHOPPERPHASEOFFSET, --chopperPhaseOffset CHOPPERPHASEOFFSET
-                        phase offset between chopper opening and trigger pulse
-  -m MUOFFSET, --muOffset MUOFFSET
-                        mu offset
-  -mu MU, --mu MU       value of mu
-  -nu NU, --nu NU       value of nu
-  -sm SAMPLEMODEL, --sampleModel SAMPLEMODEL
-                        1-line orso sample model description
 ```
 
-## read data file(s)
-
-### absolute minimum
+**minimum**  
 
 purposes:
 
@@ -136,12 +79,12 @@ actions:
 
 > example:
 > 
-> `> python neos.py -n 456 -o foo`  
+> `> python eos.py -n 456 -o foo`  
 > looks for the file `amor<year>n000456.hdf` in one of the default locations
 > (`./`, `./raw/`, `../raw`, local raw data directory on Amor) and
 > writes the output to `foo.Rqz.ort`.
 
-### normalisation
+**with normalisation**
 
 purposes:
 
@@ -161,24 +104,26 @@ actions:
 
 > example:
 > 
-> `> python neos.py -n 456 -r 123 -o foo`  
+> `> python eos.py -n 456 -r 123 -o foo`  
 > looks for the files `amor<year>n000456.hdf` (reflectivity) and `amor<year>n000123.hdf`
 > (normalisation) in one of the default locations
 > (`./`, `./raw/`, `../raw`, local raw data directory on Amor) and
 > writes the output to `foo.Rqz.ort`.
 
-### read multiple files
+**read multiple files**
 
-- **for the same instrument parameter set (same $\mu$)**
+- **for the same instrument parameter set**
 
   The arguments of the keys `-n` and `-r` have the general form  
   `<start1>[-<end1>[:<increment1]][,<start2>[-<end2>[:<increment2]],...]`  
-  Each number range is defined by a star value, an optional stop value and an
-  optional increment. Various ranges are separated by a `,`.
+  Each number range is defined by a start value, an optional stop value and an
+  optional increment. Various ranges are separated by a ','.
 
   > example:  
   >
-  > `20-25:2,28-30,40` resolves into the list `[20, 22, 24, 28, 29, 30, 40]`
+  > `20-25:2,28-30,40`  
+  > resolves into the list  
+  > `[20, 22, 24, 28, 29, 30, 40]`
 
   action:  
 
@@ -195,7 +140,7 @@ actions:
 
   > example:  
   >
-  > `> python neos.py -n 20,21 30 -r 123 -o foo`   
+  > `> python eos.py -n 20,21 30 -r 123 -o foo`   
   > results in two reflectivity curves, the first made from files #20 and #21, 
   > the second from file #30. Both are saved in `foo.Rqz.ort`. 
 
@@ -203,7 +148,7 @@ actions:
   
   `-r` does accept only one argument! 
 
-### misc.
+**misc.**
 
 **year**: The raw file name is created using the file number and the actual year. In case 
 the data to be processed were recorded in a previous year, this must be 
@@ -220,9 +165,27 @@ from the reduced data. E.g. to emphasize the high-$q$ region on a linear scale, 
 to illustrate changes in a series of measurements. The argument is   
 `-sub <filename>`.
 
+---
+
 ## output options
 
-### other formats
+```
+output:
+  -o OUTPUTNAME, --outputName OUTPUTNAME
+                        output file name (withot suffix)
+  -of OUTPUTFORMAT [OUTPUTFORMAT ...], --outputFormat OUTPUTFORMAT [OUTPUTFORMAT ...]
+  --offSpecular OFFSPECULAR
+  -a QRESOLUTION, --qResolution QRESOLUTION
+                        q_z resolution
+  -ts TIMESLIZE [TIMESLIZE ...], --timeSlize TIMESLIZE [TIMESLIZE ...]
+                        time slizing <interval> ,[<start> [,stop]]
+  -s SCALE [SCALE ...], --scale SCALE [SCALE ...]
+                        scaling factor for R(q_z)
+  -S AUTOSCALE AUTOSCALE, --autoscale AUTOSCALE AUTOSCALE
+                        scale to 1 in the given q_z range
+```
+
+### output formats
 
 Besides the default *orso* format `.Rqz.ort`, there is the option to
 write the $R(\lambda, \alpha_f)$ array and the related input, normalisation and
@@ -284,7 +247,23 @@ column is added with the start time of the respective slize. This enables fast p
 > Then until $t = 4020\,\mathrm{s}$ (or the end of measurement #22) a $R(q_z)$ curve is generated
 > for each $60\,\mathrm{s}$ interval.  
 
+---
+
 ## masksing
+
+``` 
+masks:
+  -l LAMBDARANGE LAMBDARANGE, --lambdaRange LAMBDARANGE LAMBDARANGE
+                        wavelength range
+  -t THETARANGE THETARANGE, --thetaRange THETARANGE THETARANGE
+                        absolute theta range
+  -T THETARANGER THETARANGER, --thetaRangeR THETARANGER THETARANGER
+                        relative theta range
+  -y YRANGE YRANGE, --yRange YRANGE YRANGE
+                        detector y range
+  -q QZRANGE QZRANGE, --qzRange QZRANGE QZRANGE
+                        q_z range
+```
 
 The specularely reflected intensity illuminated the detector only in a
 limited region. To reduce noise, the **detector region of interest** is reduced by default
@@ -299,15 +278,12 @@ waveengths with unit `angstrom`.
 The **$\mathbf{q_z}$ range** can de limited using `-q`, where the arguments are the momentum 
 transfer with unit `1/angstrom`.
 
+---
+
 ## overwrite parameters from the nexus file
 
-purposes:
-
-- debugging
-- correctiion of wrong entries (due to communication problems)
-- take into account misalignments
-
 ```
+overwrite:
   -cs CHOPPERSPEED, --chopperSpeed CHOPPERSPEED
                         chopper speed in rpm
   -cp CHOPPERPHASE, --chopperPhase CHOPPERPHASE
@@ -321,3 +297,18 @@ purposes:
   -sm SAMPLEMODEL, --sampleModel SAMPLEMODEL
                         1-line orso sample model description
 ```
+
+purposes:
+
+- debugging
+- correctiion of wrong entries (due to communication problems)
+- take into account misalignments
+
+---
+
+## TODO list
+
+- start and stop time of the measurement are not correct due to incomplete *.hdf* files.
+- off-speculer measurements are not yet included
+- background subtraction is missing
+- several header parameters for *orso* compatibility are missing
