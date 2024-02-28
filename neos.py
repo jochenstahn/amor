@@ -18,7 +18,7 @@ conventions (not strictly followed, yet):
 """
 
 __version__ = '2.0'
-__date__    = '2024-02-23'
+__date__    = '2024-02-28'
 
 import os
 import sys
@@ -437,7 +437,7 @@ class AmorData:
         mask_e = (clas.yRange[0] <= detY_e) & (detY_e <= clas.yRange[1])
         
         # correct tof for beam size effect at chopper:  t_cor = (delta / 180 deg) * tau 
-        # TODO: check for correctnes
+        # TODO: check for correctness
         if not clas.offSpecular:
             tof_e    -= ( delta_e / 180. ) * self.tau  
                   
@@ -524,7 +524,7 @@ def normalisation_map(short_notation):
         detZ_e        = fromHDF.detZ_e
         norm_lz, bins_l, bins_z = np.histogram2d(lamda_e, detZ_e, bins = (grid.lamda(), grid.z()))
         norm_lz = np.where(norm_lz>0, norm_lz, np.nan)
-        # TODO: correct for the SM reflectivity
+        # correct for the SM reflectivity
         lamda_l  = grid.lamda()
         theta_z  = normAngle + fromHDF.delta_z
         lamda_lz = (grid.lz().T*lamda_l[:-1]).T
