@@ -44,14 +44,6 @@ def commandLineArgs():
     clas = argparse.ArgumentParser(description = msg)
 
     input_data = clas.add_argument_group('input data')
-    input_data.add_argument("-d", "--dataPath",  
-                            type = str,
-                            default = '.',
-                            help = "relative path to directory with .hdf files")
-    input_data.add_argument("-Y", "--year",
-                            default = datetime.year,
-                            type = int,
-                            help = "year the measurement was performed")
     input_data.add_argument("-n", "--fileIdentifier",       
                             default = ['0'],                               
                             nargs = '+',
@@ -60,8 +52,16 @@ def commandLineArgs():
                             default = [],                               
                             nargs = '+',
                             help = "file number(s) of normalisation measurement")
+    input_data.add_argument("-d", "--dataPath",  
+                            type = str,
+                            default = '.',
+                            help = "relative path to directory with .hdf files")
+    input_data.add_argument("-Y", "--year",
+                            default = datetime.year,
+                            type = int,
+                            help = "year the measurement was performed")
     input_data.add_argument("-sub", "--subtract",
-                            help = "R(q_z) curve to be subtracted (in .Rqz.ort format")
+                            help = "R(q_z) curve to be subtracted (in .Rqz.ort format)")
 
     output = clas.add_argument_group('output')
     output.add_argument("-o", "--outputName",
