@@ -389,8 +389,8 @@ class AmorData:
                 wavelength = fileio.ValueRange(defs.lamdaCut, clas.lambdaRange[1], 'angstrom'),
                 polarization = fileio.Polarization.unpolarized,
                 )
-            header.measurement_instrument_settings.mu = fileio.Value(self.mu, 'deg', comment='sample angle to horizon')
-            header.measurement_instrument_settings.nu = fileio.Value(self.nu, 'deg', comment='detector angle to horizon')
+            header.measurement_instrument_settings.mu = fileio.Value(round(self.mu, 3), 'deg', comment='sample angle to horizon')
+            header.measurement_instrument_settings.nu = fileio.Value(round(self.nu, 3), 'deg', comment='detector angle to horizon')
         if norm: 
             header.measurement_additional_files.append(fileio.File(file=fileName.split('/')[-1], timestamp=fileDate))
         else:
