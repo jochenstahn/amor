@@ -812,7 +812,7 @@ def main():
                 orso_data          = fileio.OrsoDataset(headerRqz, data)
                 headerRqz          = fileio.Orso(**headerRqz.to_dict())
                 datasetsRqz.append(orso_data)
-                print([di.info.data_set for di in datasetsRqz]) 
+                #print([di.info.data_set for di in datasetsRqz]) 
             print('')
 
         else:
@@ -907,7 +907,6 @@ def main():
 
     if 'Rqz.ort' in output_format_list(clas.outputFormat):
         print(f'#   {clas.dataPath}/{clas.outputName}.Rqz.ort')
-        print([di.info.data_set for di in datasetsRqz]) 
         theSecondLine = f' {header.experiment.title} | {header.experiment.start_date} | sample {header.sample.name} | R(q_z)'
         fileio.save_orso(datasetsRqz, f'{clas.dataPath}/{clas.outputName}.Rqz.ort', data_separator='\n', comment=theSecondLine)
 
