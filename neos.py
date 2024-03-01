@@ -18,7 +18,7 @@ conventions (not strictly followed, yet):
 """
 
 __version__ = '2.0'
-__date__    = '2024-02-28'
+__date__    = '2024-03-01'
 
 import os
 import sys
@@ -31,7 +31,8 @@ import h5py
 from orsopy import fileio
 import platform
 #=====================================================================================================
-
+# TODO:
+# - calculate resolution using the chopperPhase
 #=====================================================================================================
 def commandLineArgs():
     '''
@@ -190,13 +191,13 @@ class Header:
         )
     #-------------------------------------------------------------------------------------------------
     def columns(self):
-        columns = [
+        cols = [
             fileio.Column('Qz', '1/angstrom', 'normal momentum transfer'),
             fileio.Column('R', '', 'specular reflectivity'),
             fileio.ErrorColumn(error_of='R', error_type='uncertainty', distribution='gaussian', value_is='sigma'),
             fileio.ErrorColumn(error_of='Qz', error_type='resolution', distribution='gaussian', value_is='sigma'),
             ]
-        return columns
+        return cols
 
 #=====================================================================================================
 class AmorData:
@@ -232,7 +233,7 @@ class AmorData:
              
     #-------------------------------------------------------------------------------------------------
     def path_generator(self, number):
-        fileName = f'amor{clas.year}n{number:06n}.hdf'
+        fileName = f'amor{clas.year}n{number:06d}.hdf'
         if   os.path.exists(f'{clas.dataPath}/{fileName}'):
             path = clas.dataPath
         elif os.path.exists(fileName):
@@ -468,7 +469,7 @@ class AmorData:
         self.lamda_e       = lamda_e[mask_e]
         self.wallTime_e    = wallTime_e[mask_e]
 
-        print(f'#     number of events: total = {totalNumber:7n}, filtered = {np.shape(self.lamda_e)[0]:7n}')
+        print(f'#     number of events: total = {totalNumber:7d}, filtered = {np.shape(self.lamda_e)[0]:7d}')
 #=====================================================================================================
 class Detector:
     def __init__(self):
@@ -765,8 +766,8 @@ def main():
 
         if clas.timeSlize:
             wallTime_e = fromHDF.wallTime_e
-            headerRqz = fileio.Orso(header.data_source(), header.reduction, header.columns())
-            columns = np.append(header.columns(), fileio.Column('time', 's', 'time relative to start of measurement series'))
+            columns = header.columns() + [fileio.Column('time', 's', 'time relative to start of measurement series')]
+            headerRqz = fileio.Orso(header.data_source(), header.reduction, columns)
 
             interval = clas.timeSlize[0]
             try:
@@ -778,10 +779,7 @@ def main():
             except:
                 stop  = wallTime_e[-1] 
             for i, time in enumerate(np.arange(start, stop, interval)):
-                print(f'#  time slize {i:4n}', end='\r')
-                headerRqz = fileio.Orso(header.data_source(), header.reduction, columns)
-                headerRqz.data_set = f'Nr {i} : time = {time:8.1f} s  to {time+interval:8.1f} s'
-                headerRqz = fileio.Orso(**headerRqz.to_dict())
+                print(f'#  time slize {i:4d}', end='\r')
 
                 filter_e = np.where((time < wallTime_e) & (wallTime_e < time+interval), True, False)
                 lamda_e  = fromHDF.lamda_e[filter_e] 
@@ -805,12 +803,16 @@ def main():
                         dR_q = np.sqrt( dR_q**2 + sdR_q**2 )
                     else:
                         subtract = False
-                        print(f'# backgroung file {sFileName} not compatible with q_z scale ({len(sq_q)} vs. {len(q_q)})')
+                        print(f'# background file {sFileName} not compatible with q_z scale ({len(sq_q)} vs. {len(q_q)})')
 
-                tme_q    = np.ones(np.shape(q_q))*time
-                data     = np.array([q_q, R_q, dR_q, dq_q, tme_q]).T
-                orso_data       = fileio.OrsoDataset(headerRqz, data)
+                tme_q              = np.ones(np.shape(q_q))*time
+                data               = np.array([q_q, R_q, dR_q, dq_q, tme_q]).T
+                headerRqz.data_set = f'{i}: time = {time:8.1f} s  to {time+interval:8.1f} s'
+                #headerRqz          = fileio.Orso(**headerRqz.to_dict())
+                orso_data          = fileio.OrsoDataset(headerRqz, data)
+                headerRqz          = fileio.Orso(**headerRqz.to_dict())
                 datasetsRqz.append(orso_data)
+                print([di.info.data_set for di in datasetsRqz]) 
             print('')
 
         else:
@@ -905,6 +907,7 @@ def main():
 
     if 'Rqz.ort' in output_format_list(clas.outputFormat):
         print(f'#   {clas.dataPath}/{clas.outputName}.Rqz.ort')
+        print([di.info.data_set for di in datasetsRqz]) 
         theSecondLine = f' {header.experiment.title} | {header.experiment.start_date} | sample {header.sample.name} | R(q_z)'
         fileio.save_orso(datasetsRqz, f'{clas.dataPath}/{clas.outputName}.Rqz.ort', data_separator='\n', comment=theSecondLine)
 
