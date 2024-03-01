@@ -810,7 +810,7 @@ def main():
                 headerRqz.data_set = f'{i}: time = {time:8.1f} s  to {time+interval:8.1f} s'
                 orso_data          = fileio.OrsoDataset(headerRqz, data)
                 # make a copy of the header for the next iteration
-                headerRqz          = fileio.Orso(**headerRqz.to_dict())
+                headerRqz          = fileio.Orso.from_dict(headerRqz.to_dict())
                 datasetsRqz.append(orso_data)
                 #print([di.info.data_set for di in datasetsRqz]) 
             print('')
