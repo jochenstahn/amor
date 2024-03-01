@@ -808,8 +808,8 @@ def main():
                 tme_q              = np.ones(np.shape(q_q))*time
                 data               = np.array([q_q, R_q, dR_q, dq_q, tme_q]).T
                 headerRqz.data_set = f'{i}: time = {time:8.1f} s  to {time+interval:8.1f} s'
-                #headerRqz          = fileio.Orso(**headerRqz.to_dict())
                 orso_data          = fileio.OrsoDataset(headerRqz, data)
+                # make a copy of the header for the next iteration
                 headerRqz          = fileio.Orso(**headerRqz.to_dict())
                 datasetsRqz.append(orso_data)
                 #print([di.info.data_set for di in datasetsRqz]) 
