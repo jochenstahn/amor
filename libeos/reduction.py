@@ -6,7 +6,7 @@ import numpy as np
 from orsopy import fileio
 
 from .command_line import expand_file_list
-from .dataset import AmorData
+from .file_reader import AmorData
 from .header import Header
 from .options import EOSConfig
 from .instrument import Grid

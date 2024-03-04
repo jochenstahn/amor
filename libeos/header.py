@@ -8,7 +8,7 @@ from datetime import datetime
 
 from orsopy import fileio
 
-from libeos import __version__
+from . import __version__
 
 
 class Header:

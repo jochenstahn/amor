@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 from datetime import datetime
+from typing import List
 
 import h5py
 import numpy as np
@@ -16,17 +17,41 @@ from .options import ExperimentConfig, ReaderConfig
 
 class AmorData:
     """read meta-data and event streams from .hdf file(s), apply filters and conversions"""
+    chopperDetectorDistance: float
+    chopperDistance: float
+    chopperPhase: float
+    chopperSpeed: float
+    ctime: float
+    div: float
+    data_file_numbers: List[int]
+    delta_z: np.ndarray
+    detZ_e: np.ndarray
+    lamda_e: np.ndarray
+    wallTime_e: np.ndarray
+    kad: float
+    kap: float
+    lambdaMax: float
+    lambda_e: np.ndarray
+    monitor1: float
+    monitor2: float
+    mu: float
+    nu: float
+    tau: float
+    tofCut: float
+    start_date: str
+
     #-------------------------------------------------------------------------------------------------
-    def __init__(self, header: Header, reader_config: ReaderConfig, config: ExperimentConfig, short_notation, norm=False):
+    def __init__(self, header: Header, reader_config: ReaderConfig, config: ExperimentConfig,
+                 short_notation:str, norm=False):
         self.startTime = reader_config.startTime
         self.header = header
         self.config = config
         self.reader_config = reader_config
-        self.read_data(short_notation, norm=norm)
+        self.expand_file_list(short_notation)
+        self.read_data(norm=norm)
 
     #-------------------------------------------------------------------------------------------------
-    def read_data(self, short_notation, norm=False):
-        self.data_file_numbers = self.expand_file_list(short_notation)
+    def read_data(self, norm=False):
         self.file_list = []
         for number in self.data_file_numbers:
             self.file_list.append(self.path_generator(number))
@@ -79,7 +104,7 @@ class AmorData:
                     file_list += range(int(i.split('-', 1)[0]), int(i.split('-', 1)[1])+1, int(step))
             else:
                 file_list += [int(i)]
-        return sorted(file_list)
+        self.data_file_numbers=sorted(file_list)
     #-------------------------------------------------------------------------------------------------
     def resolve_pixels(self):
         """determine spatial coordinats and angles from pixel number"""
@@ -120,7 +145,7 @@ class AmorData:
             sourceProbe      = 'neutron'
 
             start_time       = self.hdf['entry1/start_time'][0].decode('utf-8')
-            start_date       = start_time.split(' ')[0]
+            self.start_date       = start_time.split(' ')[0]
 
             if self.config.sampleModel:
                 model = self.config.sampleModel
@@ -138,7 +163,7 @@ class AmorData:
             self.header.experiment = fileio.Experiment(
                 title               = title,
                 instrument          = instrumentName,
-                start_date          = start_date,
+                start_date          = self.start_date,
                 probe               = sourceProbe,
                 facility            = source,
                 proposalID          = proposal_id
