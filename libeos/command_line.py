@@ -180,7 +180,6 @@ def command_line_options():
         autoscale=clas.autoscale,
         thetaRange=clas.thetaRange,
         thetaRangeR=clas.thetaRangeR,
-        lambdaRange=clas.lambdaRange,
         fileIdentifier=clas.fileIdentifier,
         scale=clas.scale,
         subtract=clas.subtract,

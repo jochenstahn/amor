@@ -210,18 +210,16 @@ class AmorReduction:
         logging.warning(f' time slize {ti:4d}, done')
 
     def save_Rqz(self):
-        logging.warning(f'  {self.reader_config.dataPath}/{self.output_config.outputName}.Rqz.ort')
+        fname = os.path.join(self.reader_config.dataPath, f'{self.output_config.outputName}.Rqz.ort')
+        logging.warning(f'  {fname}')
         theSecondLine = f' {self.header.experiment.title} | {self.header.experiment.start_date} | sample {self.header.sample.name} | R(q_z)'
-        fileio.save_orso(self.datasetsRqz, f'{self.reader_config.dataPath}/{self.output_config.outputName}.Rqz.ort',
-                         data_separator='\n',
-                         comment=theSecondLine)
+        fileio.save_orso(self.datasetsRqz, fname, data_separator='\n', comment=theSecondLine)
 
     def save_Rtl(self):
-        logging.warning(f'  {self.reader_config.dataPath}/{self.output_config.outputName}.Rlt.ort')
+        fname = os.path.join(self.reader_config.dataPath, f'{self.output_config.outputName}.Rlt.ort')
+        logging.warning(f'  {fname}')
         theSecondLine = f' {self.header.experiment.title} | {self.header.experiment.start_date} | sample {self.header.sample.name} | R(lambda, theta)'
-        fileio.save_orso(self.datasetsRlt, f'{self.reader_config.dataPath}/{self.output_config.outputName}.Rlt.ort',
-                         data_separator='\n',
-                         comment=theSecondLine)
+        fileio.save_orso(self.datasetsRlt, fname, data_separator='\n', comment=theSecondLine)
 
     def autoscale(self, q_q, R_q, dR_q, pR_q=[], pdR_q=[]):
         autoscale = self.reduction_config.autoscale
@@ -278,12 +276,13 @@ class AmorReduction:
         return q_q[1:], R_q, dR_q, dq_q
 
     def loadRqz(self, name):
-        if os.path.exists(f'{self.reader_config.dataPath}/{name}'):
-            fileName = f'{self.reader_config.dataPath}/{name}'
-        elif os.path.exists(f'{self.reader_config.dataPath}/{name}.Rqz.ort'):
-            fileName = f'{self.reader_config.dataPath}/{name}.Rqz.ort'
+        fname = os.path.join(self.reader_config.dataPath, name)
+        if os.path.exists(fname):
+            fileName = fname
+        elif os.path.exists(f'{fname}.Rqz.ort'):
+            fileName = f'{fname}.Rqz.ort'
         else:
-            sys.exit(f'### the background file \'{self.reader_config.dataPath}/{name}\' does not exist! => stopping')
+            sys.exit(f'### the background file \'{fname}\' does not exist! => stopping')
 
         q_q, Sq_q, dS_q = np.loadtxt(fileName, usecols=(0, 1, 2), comments='#', unpack=True)
 
@@ -295,14 +294,14 @@ class AmorReduction:
         name = str(normalisation_list[0])
         for i in range(1, len(normalisation_list), 1):
             name = f'{name}_{normalisation_list[i]}'
-        if os.path.exists(f'{dataPath}/{name}.norm'):
-            logging.info(f'# normalisation matrix: found and using {dataPath}/{name}.norm')
+        n_path = os.path.join(dataPath, f'{name}.norm')
+        if os.path.exists(n_path):
+            logging.info(f'# normalisation matrix: found and using {n_path}')
             self.norm_lz = np.loadtxt(f'{dataPath}/{name}.norm')
-            fh = open(f'{dataPath}/{name}.norm', 'r')
-            fh.readline()
-            self.normFileList = fh.readline().split('[')[1].split(']')[0].replace('\'', '').split(', ')
-            self.normAngle = float(fh.readline().split('= ')[1])
-            fh.close()
+            with open(n_path, 'r') as fh:
+                fh.readline()
+                self.normFileList = fh.readline().split('[')[1].split(']')[0].replace('\'', '').split(', ')
+                self.normAngle = float(fh.readline().split('= ')[1])
             for i, entry in enumerate(self.normFileList):
                  self.normFileList[i] = entry.split('/')[-1]
             self.header.measurement_additional_files = self.normFileList
@@ -362,9 +361,9 @@ class AmorReduction:
           t0 = fromHDF.nu - fromHDF.mu
           mask_lz   = np.logical_and(mask_lz, np.where(theta_lz-t0 >= self.reduction_config.thetaRangeR[0], True, False))
           mask_lz   = np.logical_and(mask_lz, np.where(theta_lz-t0 <= self.reduction_config.thetaRangeR[1], True, False))
-        if self.reduction_config.lambdaRange[1]<15:
-          mask_lz   = np.logical_and(mask_lz, np.where(lamda_lz >= self.reduction_config.lambdaRange[0], True, False))
-          mask_lz   = np.logical_and(mask_lz, np.where(lamda_lz <= self.reduction_config.lambdaRange[1], True, False))
+        if self.experiment_config.lambdaRange[1]<15:
+          mask_lz   = np.logical_and(mask_lz, np.where(lamda_lz >= self.experiment_config.lambdaRange[0], True, False))
+          mask_lz   = np.logical_and(mask_lz, np.where(lamda_lz <= self.experiment_config.lambdaRange[1], True, False))
 
         #           gravity correction
         #theta_lz += np.rad2deg( np.arctan( 3.07e-10 * (fromHDF.detectorDistance + detXdist_e) * lamda_lz**2 ) )

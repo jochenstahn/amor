@@ -12,13 +12,12 @@ class ReaderConfig:
 
 @dataclass
 class ExperimentConfig:
-    sampleModel: str
-
     chopperPhase: float
     yRange: Tuple[float, float]
     lambdaRange: Tuple[float, float]
     qzRange: Tuple[float, float]
 
+    sampleModel: Optional[str] = None
     chopperPhaseOffset: float = 0.0
     mu: Optional[float] = None
     nu: Optional[float] = None
@@ -28,14 +27,13 @@ class ExperimentConfig:
 @dataclass
 class ReductionConfig:
     qResolution: float
-    autoscale: Tuple[bool, bool]
     thetaRange: Tuple[float, float]
     thetaRangeR: Tuple[float, float]
-    lambdaRange: Tuple[float, float]
 
     fileIdentifier: list = field(default_factory=lambda: ["0"])
     scale: list = field(default_factory=lambda: [1]) #per file scaling; if less elements than files use the last one
 
+    autoscale: Optional[Tuple[bool, bool]] = None
     subtract: Optional[str] = None
     normalisationFileIdentifier: Optional[list] = None
     timeSlize: Optional[list] = None

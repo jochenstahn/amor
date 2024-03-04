@@ -76,7 +76,7 @@ class AmorData:
     #-------------------------------------------------------------------------------------------------
     def path_generator(self, number):
         fileName = f'amor{self.reader_config.year}n{number:06d}.hdf'
-        if   os.path.exists(f'{self.reader_config.dataPath}/{fileName}'):
+        if os.path.exists(os.path.join(self.reader_config.dataPath,fileName)):
             path = self.reader_config.dataPath
         elif os.path.exists(fileName):
             path = '.'
@@ -149,8 +149,6 @@ class AmorData:
 
             if self.config.sampleModel:
                 model = self.config.sampleModel
-            else:
-                model = None
 
             # assembling orso header information
             self.header.owner = fileio.Person(

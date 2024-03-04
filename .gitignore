@@ -1,5 +1,6 @@
 *~
 *.bak
+*.log
 __py_cache__
 raw
 .idea
