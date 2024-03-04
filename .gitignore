@@ -2,4 +2,4 @@
 *.bak
 __py_cache__
 raw
-
+.idea
