@@ -21,7 +21,6 @@ class Detector:
 class Grid:
 
     def __init__(self, qResolution):
-        self.det  = Detector()
         self.lamdaCut = const.lamdaCut
         self.dldl = 0.005     # Delta lambda / lambda
         self.qResolution = qResolution
@@ -46,24 +45,24 @@ class Grid:
         return lamda_grid
 
     def z(self):
-        return np.arange(self.det.nBlades*self.det.nWires+1)
+        return np.arange(Detector.nBlades*Detector.nWires+1)
 
     def lz(self):
         return np.ones(( np.shape(self.lamda()[:-1])[0], np.shape(self.z()[:-1])[0] ))
 
     def delta(self, detectorDistance):
         # unused for now
-        bladeAngle = np.rad2deg( 2. * np.arcsin(0.5*self.det.bladeZ / detectorDistance) )
-        blade_grid = np.arctan( np.arange(33) * self.det.dZ / ( detectorDistance + np.arange(33) * self.det.dX) )
+        bladeAngle = np.rad2deg( 2. * np.arcsin(0.5*Detector.bladeZ / detectorDistance) )
+        blade_grid = np.arctan( np.arange(33) * Detector.dZ / ( detectorDistance + np.arange(33) * Detector.dX) )
         blade_grid = np.rad2deg(blade_grid)
         stepWidth  = blade_grid[1] - blade_grid[0]
         blade_grid = blade_grid - 0.2 * stepWidth
 
         delta_grid = []
-        for b in np.arange(self.det.nBlades-1):
+        for b in np.arange(Detector.nBlades-1):
             delta_grid = np.concatenate((delta_grid, blade_grid), axis=None)
             blade_grid = blade_grid + bladeAngle
             delta_grid = delta_grid[delta_grid<blade_grid[0]-0.5*stepWidth]
         delta_grid = np.concatenate((delta_grid, blade_grid), axis=None)
 
-        return -np.flip(delta_grid) + 0.5*self.det.nBlades * bladeAngle
+        return -np.flip(delta_grid) + 0.5*Detector.nBlades * bladeAngle

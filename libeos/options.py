@@ -8,6 +8,7 @@ from typing import Optional, Tuple
 class ReaderConfig:
     year: int
     dataPath: str
+    startTime: Optional[float] = 0
 
 @dataclass
 class ExperimentConfig:

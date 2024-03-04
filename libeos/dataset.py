@@ -1,6 +1,5 @@
 import logging
 import os
-import platform
 import subprocess
 import sys
 from datetime import datetime
@@ -9,76 +8,25 @@ import h5py
 import numpy as np
 from orsopy import fileio
 
-from . import __version__, const
+from . import const
+from .header import Header
 from .instrument import Detector
 from .options import ExperimentConfig, ReaderConfig
 
-class Header:
-    """orso compatible output file header content"""
-
-    def __init__(self):
-        self.owner                           = None
-        self.experiment                      = None
-        self.sample                          = None
-        self.measurement_instrument_settings = None
-        self.measurement_scheme              = None
-        self.measurement_data_files          = []
-        self.measurement_additional_files    = []
-
-        self.reduction = fileio.Reduction(
-            software    = fileio.Software('eos', version=__version__),
-            call        = ' '.join(sys.argv),
-            computer    = platform.node(),
-            timestamp   = datetime.now(),
-            creator     = None,
-            corrections = ['histogramming in lambda and alpha_f',
-                           'gravity'],
-            )
-    #-------------------------------------------------------------------------------------------------
-    def data_source(self):
-        return fileio.DataSource(
-            self.owner,
-            self.experiment,
-            self.sample,
-            fileio.Measurement(
-                instrument_settings = self.measurement_instrument_settings,
-                scheme              = self.measurement_scheme,
-                data_files          = self.measurement_data_files,
-                additional_files    = self.measurement_additional_files,
-                ),
-        )
-    #-------------------------------------------------------------------------------------------------
-    def columns(self):
-        cols = [
-            fileio.Column('Qz', '1/angstrom', 'normal momentum transfer'),
-            fileio.Column('R', '', 'specular reflectivity'),
-            fileio.ErrorColumn(error_of='R', error_type='uncertainty', distribution='gaussian', value_is='sigma'),
-            fileio.ErrorColumn(error_of='Qz', error_type='resolution', distribution='gaussian', value_is='sigma'),
-            ]
-        return cols
-
-    def orso_header(self, columns=None, extra_columns=[]):
-        """
-        Generate ORSO header from a copy of this class' data.
-        """
-        ds = fileio.DataSource.from_dict(self.data_source().to_dict())
-        red = fileio.Reduction.from_dict(self.reduction.to_dict())
-        if columns is None:
-            columns = self.columns()
-        return fileio.Orso(ds, red, columns+extra_columns)
 
 class AmorData:
     """read meta-data and event streams from .hdf file(s), apply filters and conversions"""
     #-------------------------------------------------------------------------------------------------
-    def __init__(self, startTime, header:Header, reader_config: ReaderConfig, config: ExperimentConfig):
-        self.startTime = startTime
+    def __init__(self, header: Header, reader_config: ReaderConfig, config: ExperimentConfig, short_notation, norm=False):
+        self.startTime = reader_config.startTime
         self.header = header
         self.config = config
         self.reader_config = reader_config
+        self.read_data(short_notation, norm=norm)
+
     #-------------------------------------------------------------------------------------------------
     def read_data(self, short_notation, norm=False):
         self.data_file_numbers = self.expand_file_list(short_notation)
-        #self.year = clas.year
         self.file_list = []
         for number in self.data_file_numbers:
             self.file_list.append(self.path_generator(number))
@@ -107,15 +55,15 @@ class AmorData:
             path = self.reader_config.dataPath
         elif os.path.exists(fileName):
             path = '.'
-        elif os.path.exists(f'./raw/{fileName}'):
-            path = './raw'
-        elif os.path.exists(f'../raw/{fileName}'):
-            path = '../raw'
+        elif os.path.exists(os.path.join('.','raw', fileName)):
+            path = os.path.join('.','raw')
+        elif os.path.exists(os.path.join('..','raw', fileName)):
+            path = os.path.join('..','raw')
         elif os.path.exists(f'/afs/psi.ch/project/sinqdata/{self.reader_config.year}/amor/{int(number/1000)}/{fileName}'):
-            path = '/afs/psi.ch/project/sinqdata/{self.config.year}/amor/{int(number/1000)}'
+            path = f'/afs/psi.ch/project/sinqdata/{self.reader_config.year}/amor/{int(number/1000)}'
         else:
             sys.exit(f'# ERROR: the file {fileName} is nowhere to be found!')
-        return f'{path}/{fileName}'
+        return os.path.join(path, fileName)
     #-------------------------------------------------------------------------------------------------
     def expand_file_list(self, short_notation):
         """Evaluate string entry for file number lists"""
@@ -135,17 +83,16 @@ class AmorData:
     #-------------------------------------------------------------------------------------------------
     def resolve_pixels(self):
         """determine spatial coordinats and angles from pixel number"""
-        det = Detector()
-        nPixel = det.nWires * det.nStripes * det.nBlades
+        nPixel = Detector.nWires * Detector.nStripes * Detector.nBlades
         pixelID = np.arange(nPixel)
-        (bladeNr, bPixel) = np.divmod(pixelID, det.nWires * det.nStripes)
-        (bZi, detYi)      = np.divmod(bPixel, det.nStripes)                     # z index on blade, y index on detector
-        detZi             = bladeNr * det.nWires + bZi                          # z index on detector
-        detX              = bZi * det.dX                                        # x position in detector
-        # detZ              = det.zero - bladeNr * det.bladeZ - bZi * det.dZ      # z position on detector
-        bladeAngle        = np.rad2deg( 2. * np.arcsin(0.5*det.bladeZ / det.distance) )
-        delta             = (det.nBlades/2. - bladeNr) * bladeAngle \
-                            - np.rad2deg( np.arctan(bZi*det.dZ / ( det.distance + bZi * det.dX) ) )
+        (bladeNr, bPixel) = np.divmod(pixelID, Detector.nWires * Detector.nStripes)
+        (bZi, detYi)      = np.divmod(bPixel, Detector.nStripes)                     # z index on blade, y index on detector
+        detZi             = bladeNr * Detector.nWires + bZi                          # z index on detector
+        detX              = bZi * Detector.dX                                        # x position in detector
+        # detZ              = Detector.zero - bladeNr * Detector.bladeZ - bZi * Detector.dZ      # z position on detector
+        bladeAngle        = np.rad2deg( 2. * np.arcsin(0.5*Detector.bladeZ / Detector.distance) )
+        delta             = (Detector.nBlades/2. - bladeNr) * bladeAngle \
+                            - np.rad2deg( np.arctan(bZi*Detector.dZ / ( Detector.distance + bZi * Detector.dX) ) )
         self.delta_z      = delta[detYi==1]
         return np.vstack((detYi.T, detZi.T, detX.T, delta.T)).T
         #return matr
@@ -268,7 +215,7 @@ class AmorData:
 
         # TODO: should extract monitor from counts or beam current times time
         self.monitor1 = self.ctime
-        self.monitor2=self.monitor1
+        self.monitor2 = self.monitor1
 
         # read data event streams
         tof_e        = np.array(self.hdf['/entry1/Amor/detector/data/event_time_offset'][:])/1.e9

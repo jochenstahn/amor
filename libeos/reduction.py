@@ -6,7 +6,8 @@ import numpy as np
 from orsopy import fileio
 
 from .command_line import expand_file_list
-from .dataset import AmorData, Header
+from .dataset import AmorData
+from .header import Header
 from .options import EOSConfig
 from .instrument import Grid
 
@@ -18,7 +19,6 @@ class AmorReduction:
         self.output_config = config.output
         self.grid = Grid(config.reductoin.qResolution)
         self.header = Header()
-        self.startTime = 0
 
     def reduce(self):
         if not os.path.exists(f'{self.reader_config.dataPath}'):
@@ -46,9 +46,8 @@ class AmorReduction:
         # load measurement data and do the reduction
         self.datasetsRqz = []
         self.datasetsRlt = []
-        self.file_reader = AmorData(self.startTime, header=self.header, reader_config=self.reader_config, config=self.experiment_config)
         for i, short_notation in enumerate(self.reduction_config.fileIdentifier):
-            self.read_single_file(i, short_notation)
+            self.read_file_block(i, short_notation)
 
         # output
         logging.warning('output:')
@@ -59,10 +58,13 @@ class AmorReduction:
         if 'Rlt.ort' in self.output_config.outputFormats:
             self.save_Rtl()
 
-    def read_single_file(self, i, short_notation):
+    def read_file_block(self, i, short_notation):
         logging.warning('reading input:')
         self.header.measurement_data_files = []
-        self.file_reader.read_data(short_notation)
+        self.file_reader = AmorData(header=self.header,
+                                    reader_config=self.reader_config,
+                                    config=self.experiment_config,
+                                    short_notation=short_notation)
         if self.reduction_config.timeSlize:
             self.read_timeslices(i)
         else:
@@ -289,7 +291,6 @@ class AmorReduction:
 
     def create_normalisation_map(self, short_notation):
         dataPath = self.reader_config.dataPath
-        fromHDF = AmorData(self.startTime, header=self.header, reader_config=self.reader_config, config=self.experiment_config)
         normalisation_list = expand_file_list(short_notation)
         name = str(normalisation_list[0])
         for i in range(1, len(normalisation_list), 1):
@@ -307,7 +308,10 @@ class AmorReduction:
             self.header.measurement_additional_files = self.normFileList
         else:
             logging.info(f'# normalisation matrix: using the files {normalisation_list}')
-            fromHDF.read_data(short_notation, norm=True)
+            fromHDF = AmorData(header=self.header,
+                               reader_config=self.reader_config,
+                               config=self.experiment_config,
+                               short_notation=short_notation, norm=True)
             self.normAngle     = fromHDF.nu - fromHDF.mu
             lamda_e       = fromHDF.lamda_e
             detZ_e        = fromHDF.detZ_e
