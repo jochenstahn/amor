@@ -13,7 +13,6 @@ from . import __version__, const
 from .instrument import Detector
 from .options import ExperimentConfig, ReaderConfig
 
-
 class Header:
     """orso compatible output file header content"""
 
@@ -58,6 +57,15 @@ class Header:
             ]
         return cols
 
+    def orso_header(self, columns=None, extra_columns=[]):
+        """
+        Generate ORSO header from a copy of this class' data.
+        """
+        ds = fileio.DataSource.from_dict(self.data_source().to_dict())
+        red = fileio.Reduction.from_dict(self.reduction.to_dict())
+        if columns is None:
+            columns = self.columns()
+        return fileio.Orso(ds, red, columns+extra_columns)
 
 class AmorData:
     """read meta-data and event streams from .hdf file(s), apply filters and conversions"""

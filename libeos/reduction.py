@@ -24,197 +24,202 @@ class AmorReduction:
         if not os.path.exists(f'{self.reader_config.dataPath}'):
             logging.debug(f'Creating destination path {self.reader_config.dataPath}')
             os.system(f'mkdir {self.reader_config.dataPath}')
-        fromHDF = AmorData(self.startTime, header=self.header, reader_config=self.reader_config, config=self.experiment_config)
 
         # load or create normalisation matrix
         if self.reduction_config.normalisationFileIdentifier:
-            normalise = True
-            norm_lz, normAngle, normFileList = self.normalisation_map(self.reduction_config.normalisationFileIdentifier[0])
-            self.header.reduction.corrections.append('normalisation with \'additional files\'')
+            self.create_normalisation_map(self.reduction_config.normalisationFileIdentifier[0])
         else:
-            normalise = False
-            norm_lz = self.grid.lz()
-            normAngle = 1.
+            self.norm_lz = self.grid.lz()
+            self.normAngle = 1.
 
             logging.warning('normalisation matrix: none requested')
 
         # load R(q_z) curve to be subtracted:
         if self.reduction_config.subtract:
-            sq_q, sR_q, sdR_q, sFileName = self.loadRqz(self.reduction_config.subtract)
-            subtract = True
-            logging.warning(f'loaded background file: {sFileName}')
-            self.header.reduction.corrections.append(f'background from \'{sFileName}\' subtracted')
+            self.sq_q, self.sR_q, self.sdR_q, self.sFileName = self.loadRqz(self.reduction_config.subtract)
+            logging.warning(f'loaded background file: {self.sFileName}')
+            self.header.reduction.corrections.append(f'background from \'{self.sFileName}\' subtracted')
+            self.subtract = True
         else:
-            subtract = False
+            self.subtract = False
 
         # load measurement data and do the reduction
-        datasetsRqz = []
-        datasetsRlt = []
+        self.datasetsRqz = []
+        self.datasetsRlt = []
+        self.file_reader = AmorData(self.startTime, header=self.header, reader_config=self.reader_config, config=self.experiment_config)
         for i, short_notation in enumerate(self.reduction_config.fileIdentifier):
-            logging.warning('reading input:')
-            self.header.measurement_data_files = []
-            fromHDF.read_data(short_notation)
-
-            if self.reduction_config.timeSlize:
-                wallTime_e = fromHDF.wallTime_e
-                columns = self.header.columns()+[fileio.Column('time', 's', 'time relative to start of measurement series')]
-                headerRqz = fileio.Orso(self.header.data_source(), self.header.reduction, columns)
-
-                interval = self.reduction_config.timeSlize[0]
-                try:
-                    start = self.reduction_config.timeSlize[1]
-                except:
-                    start = 0
-                try:
-                    stop = self.reduction_config.timeSlize[2]
-                except:
-                    stop = wallTime_e[-1]
-                # make overwriting log lines possible by removing newline at the end
-                logging.StreamHandler.terminator = "\r"
-                for i, time in enumerate(np.arange(start, stop, interval)):
-                    logging.warning(f' time slize {i:4d}')
-
-                    filter_e = np.where((time<wallTime_e) & (wallTime_e<time+interval), True, False)
-                    lamda_e = fromHDF.lamda_e[filter_e]
-                    detZ_e = fromHDF.detZ_e[filter_e]
-
-                    qz_lz, ref_lz, err_lz, res_lz, lamda_lz, theta_lz, int_lz, mask_lz = self.project_on_lz(
-                            fromHDF, norm_lz, normAngle, lamda_e, detZ_e)
-                    q_q, R_q, dR_q, dq_q = self.project_on_qz(qz_lz, ref_lz, err_lz, res_lz, norm_lz, mask_lz)
-
-                    filter_q = np.where((self.experiment_config.qzRange[0]<q_q) & (q_q<self.experiment_config.qzRange[1]),
-                                        True, False)
-                    q_q = q_q[filter_q]
-                    R_q = R_q[filter_q]
-                    dR_q = dR_q[filter_q]
-                    dq_q = dq_q[filter_q]
-
-                    if self.reduction_config.autoscale:
-                        R_q, dR_q = self.autoscale(q_q, R_q, dR_q)
-
-                    if subtract:
-                        if len(q_q)==len(sq_q):
-                            R_q -= sR_q
-                            dR_q = np.sqrt(dR_q**2+sdR_q**2)
-                        else:
-                            subtract = False
-                            logging.warning(
-                                f'background file {sFileName} not compatible with q_z scale ({len(sq_q)} vs. {len(q_q)})')
-
-                    tme_q = np.ones(np.shape(q_q))*time
-                    data = np.array([q_q, R_q, dR_q, dq_q, tme_q]).T
-                    headerRqz.data_set = f'{i}: time = {time:8.1f} s  to {time+interval:8.1f} s'
-                    orso_data = fileio.OrsoDataset(headerRqz, data)
-                    # make a copy of the header for the next iteration
-                    headerRqz = fileio.Orso.from_dict(headerRqz.to_dict())
-                    datasetsRqz.append(orso_data)
-                # reset normal logging behavior
-                logging.StreamHandler.terminator = "\n"
-                logging.warning(f' time slize {i:4d}, done')
-            else:
-                lamda_e = fromHDF.lamda_e
-                detZ_e = fromHDF.detZ_e
-
-                qz_lz, ref_lz, err_lz, res_lz, lamda_lz, theta_lz, int_lz, mask_lz = self.project_on_lz(
-                        fromHDF, norm_lz, normAngle, lamda_e, detZ_e)
-                try:
-                    ref_lz *= self.reduction_config.scale[i]
-                    err_lz *= self.reduction_config.scale[i]
-                except IndexError:
-                    ref_lz *= self.reduction_config.scale[-1]
-                    err_lz *= self.reduction_config.scale[-1]
-
-                if 'Rqz.ort' in self.output_config.outputFormats:
-                    headerRqz = fileio.Orso(self.header.data_source(), self.header.reduction, self.header.columns())
-                    headerRqz.data_set = f'Nr {i} : mu = {fromHDF.mu:6.3f} deg'
-
-                    # projection on q-grid
-                    q_q, R_q, dR_q, dq_q = self.project_on_qz(qz_lz, ref_lz, err_lz, res_lz, norm_lz, mask_lz, self.grid)
-
-                    filter_q = np.where((self.experiment_config.qzRange[0]<q_q) & (q_q<self.experiment_config.qzRange[1]), True, False)
-                    q_q = q_q[filter_q]
-                    R_q = R_q[filter_q]
-                    dR_q = dR_q[filter_q]
-                    dq_q = dq_q[filter_q]
-
-                    if self.reduction_config.autoscale:
-                        if i==0:
-                            R_q, dR_q = self.autoscale(q_q, R_q, dR_q)
-                        else:
-                            pRq_z = datasetsRqz[i-1].data[:, 1]
-                            pdRq_z = datasetsRqz[i-1].data[:, 2]
-                            R_q, dR_q = self.autoscale(q_q, R_q, dR_q, pRq_z, pdRq_z)
-
-                    if subtract:
-                        if len(q_q)==len(sq_q):
-                            R_q -= sR_q
-                            dR_q = np.sqrt(dR_q**2+sdR_q**2)
-                        else:
-                            logging.warning(
-                                f'backgroung file {sFileName} not compatible with q_z scale ({len(sq_q)} vs. {len(q_q)})')
-
-                    data = np.array([q_q, R_q, dR_q, dq_q]).T
-                    orso_data = fileio.OrsoDataset(headerRqz, data)
-                    headerRqz = fileio.Orso(**headerRqz.to_dict())
-                    datasetsRqz.append(orso_data)
-
-                if 'Rlt.ort' in self.output_config.outputFormats:
-                    columns = [
-                        fileio.Column('Qz', '1/angstrom', 'normal momentum transfer'),
-                        fileio.Column('R', '', 'specular reflectivity'),
-                        fileio.ErrorColumn(error_of='R', error_type='uncertainty', value_is='sigma'),
-                        fileio.ErrorColumn(error_of='Qz', error_type='resolution', value_is='sigma'),
-                        fileio.Column('lambda', 'angstrom', 'wavelength'),
-                        fileio.Column('alpha_f', 'deg', 'final angle'),
-                        fileio.Column('l', '', 'index of lambda-bin'),
-                        fileio.Column('t', '', 'index of theta bin'),
-                        fileio.Column('intensity', '', 'filtered neutron events per pixel'),
-                        fileio.Column('norm', '', 'normalisation matrix'),
-                        fileio.Column('mask', '', 'pixels used for calculating R(q_z)'),
-                        ]
-                    # data_source = fromHDF.data_source
-                    headerRlt = fileio.Orso(self.header.data_source, self.header.reduction, columns)
-
-                    ts, zs = ref_lz.shape
-                    lindex_lz = np.tile(np.arange(1, ts+1), (zs, 1)).T
-                    tindex_lz = np.tile(np.arange(1, zs+1), (ts, 1))
-
-                    j = 0
-                    for item in zip(
-                            qz_lz.T,
-                            ref_lz.T,
-                            err_lz.T,
-                            res_lz.T,
-                            lamda_lz.T,
-                            theta_lz.T,
-                            lindex_lz.T,
-                            tindex_lz.T,
-                            int_lz.T,
-                            norm_lz.T,
-                            np.where(mask_lz, 1, 0).T
-                            ):
-                        data = np.array(list(item)).T
-                        headerRlt = fileio.Orso(**headerRlt.to_dict())
-                        headerRlt.data_set = f'dataset_{i}_{j+1} : alpha_f = {theta_lz[0, j]:6.3f} deg'
-                        orso_data = fileio.OrsoDataset(headerRlt, data)
-                        datasetsRlt.append(orso_data)
-                        j += 1
+            self.read_single_file(i, short_notation)
 
         # output
         logging.warning('output:')
 
         if 'Rqz.ort' in self.output_config.outputFormats:
-            logging.warning(f'  {self.reader_config.dataPath}/{self.output_config.outputName}.Rqz.ort')
-            theSecondLine = f' {self.header.experiment.title} | {self.header.experiment.start_date} | sample {self.header.sample.name} | R(q_z)'
-            fileio.save_orso(datasetsRqz, f'{self.reader_config.dataPath}/{self.output_config.outputName}.Rqz.ort', data_separator='\n',
-                             comment=theSecondLine)
+            self.save_Rqz()
 
         if 'Rlt.ort' in self.output_config.outputFormats:
-            logging.warning(f'  {self.reader_config.dataPath}/{self.output_config.outputName}.Rlt.ort')
-            theSecondLine = f' {self.header.experiment.title} | {self.header.experiment.start_date} | sample {self.header.sample.name} | R(lambda, theta)'
-            fileio.save_orso(datasetsRlt, f'{self.reader_config.dataPath}/{self.output_config.outputName}.Rlt.ort', data_separator='\n',
-                             comment=theSecondLine)
+            self.save_Rtl()
 
+    def read_single_file(self, i, short_notation):
+        logging.warning('reading input:')
+        self.header.measurement_data_files = []
+        self.file_reader.read_data(short_notation)
+        if self.reduction_config.timeSlize:
+            self.read_timeslices(i)
+        else:
+            self.read_unsliced(i)
+
+    def read_unsliced(self, i):
+        lamda_e = self.file_reader.lamda_e
+        detZ_e = self.file_reader.detZ_e
+        qz_lz, ref_lz, err_lz, res_lz, lamda_lz, theta_lz, int_lz, self.mask_lz = self.project_on_lz(
+                self.file_reader, self.norm_lz, self.normAngle, lamda_e, detZ_e)
+        try:
+            ref_lz *= self.reduction_config.scale[i]
+            err_lz *= self.reduction_config.scale[i]
+        except IndexError:
+            ref_lz *= self.reduction_config.scale[-1]
+            err_lz *= self.reduction_config.scale[-1]
+        if 'Rqz.ort' in self.output_config.outputFormats:
+            headerRqz = self.header.orso_header()
+            headerRqz.data_set = f'Nr {i} : mu = {self.file_reader.mu:6.3f} deg'
+
+            # projection on q-grid
+            q_q, R_q, dR_q, dq_q = self.project_on_qz(qz_lz, ref_lz, err_lz, res_lz, self.norm_lz, self.mask_lz)
+
+            filter_q = np.where((self.experiment_config.qzRange[0]<q_q) & (q_q<self.experiment_config.qzRange[1]),
+                                True, False)
+            q_q = q_q[filter_q]
+            R_q = R_q[filter_q]
+            dR_q = dR_q[filter_q]
+            dq_q = dq_q[filter_q]
+
+            if self.reduction_config.autoscale:
+                if i==0:
+                    R_q, dR_q = self.autoscale(q_q, R_q, dR_q)
+                else:
+                    pRq_z = self.datasetsRqz[i-1].data[:, 1]
+                    pdRq_z = self.datasetsRqz[i-1].data[:, 2]
+                    R_q, dR_q = self.autoscale(q_q, R_q, dR_q, pRq_z, pdRq_z)
+
+            if self.subtract:
+                if len(q_q)==len(self.sq_q):
+                    R_q -= self.sR_q
+                    dR_q = np.sqrt(dR_q**2+self.sdR_q**2)
+                else:
+                    logging.warning(
+                            f'backgroung file {self.sFileName} not compatible with q_z scale ({len(self.sq_q)} vs. {len(q_q)})')
+
+            data = np.array([q_q, R_q, dR_q, dq_q]).T
+            orso_data = fileio.OrsoDataset(headerRqz, data)
+            self.datasetsRqz.append(orso_data)
+        if 'Rlt.ort' in self.output_config.outputFormats:
+            columns = [
+                fileio.Column('Qz', '1/angstrom', 'normal momentum transfer'),
+                fileio.Column('R', '', 'specular reflectivity'),
+                fileio.ErrorColumn(error_of='R', error_type='uncertainty', value_is='sigma'),
+                fileio.ErrorColumn(error_of='Qz', error_type='resolution', value_is='sigma'),
+                fileio.Column('lambda', 'angstrom', 'wavelength'),
+                fileio.Column('alpha_f', 'deg', 'final angle'),
+                fileio.Column('l', '', 'index of lambda-bin'),
+                fileio.Column('t', '', 'index of theta bin'),
+                fileio.Column('intensity', '', 'filtered neutron events per pixel'),
+                fileio.Column('norm', '', 'normalisation matrix'),
+                fileio.Column('mask', '', 'pixels used for calculating R(q_z)'),
+                ]
+            # data_source = file_reader.data_source
+
+            ts, zs = ref_lz.shape
+            lindex_lz = np.tile(np.arange(1, ts+1), (zs, 1)).T
+            tindex_lz = np.tile(np.arange(1, zs+1), (ts, 1))
+
+            j = 0
+            for item in zip(
+                    qz_lz.T,
+                    ref_lz.T,
+                    err_lz.T,
+                    res_lz.T,
+                    lamda_lz.T,
+                    theta_lz.T,
+                    lindex_lz.T,
+                    tindex_lz.T,
+                    int_lz.T,
+                    self.norm_lz.T,
+                    np.where(self.mask_lz, 1, 0).T
+                    ):
+                data = np.array(list(item)).T
+                headerRlt = self.header.orso_header(columns=columns)
+                headerRlt.data_set = f'dataset_{i}_{j+1} : alpha_f = {theta_lz[0, j]:6.3f} deg'
+                orso_data = fileio.OrsoDataset(headerRlt, data)
+                self.datasetsRlt.append(orso_data)
+                j += 1
+
+    def read_timeslices(self, i):
+        wallTime_e = self.file_reader.wallTime_e
+        interval = self.reduction_config.timeSlize[0]
+        try:
+            start = self.reduction_config.timeSlize[1]
+        except:
+            start = 0
+        try:
+            stop = self.reduction_config.timeSlize[2]
+        except:
+            stop = wallTime_e[-1]
+        # make overwriting log lines possible by removing newline at the end
+        logging.StreamHandler.terminator = "\r"
+        for ti, time in enumerate(np.arange(start, stop, interval)):
+            logging.warning(f' time slize {ti:4d}')
+
+            filter_e = np.where((time<wallTime_e) & (wallTime_e<time+interval), True, False)
+            lamda_e = self.file_reader.lamda_e[filter_e]
+            detZ_e = self.file_reader.detZ_e[filter_e]
+
+            qz_lz, ref_lz, err_lz, res_lz, lamda_lz, theta_lz, int_lz, mask_lz = self.project_on_lz(
+                    self.file_reader, self.norm_lz, self.normAngle, lamda_e, detZ_e)
+            q_q, R_q, dR_q, dq_q = self.project_on_qz(qz_lz, ref_lz, err_lz, res_lz, self.norm_lz, mask_lz)
+
+            filter_q = np.where((self.experiment_config.qzRange[0]<q_q) & (q_q<self.experiment_config.qzRange[1]),
+                                True, False)
+            q_q = q_q[filter_q]
+            R_q = R_q[filter_q]
+            dR_q = dR_q[filter_q]
+            dq_q = dq_q[filter_q]
+
+            if self.reduction_config.autoscale:
+                R_q, dR_q = self.autoscale(q_q, R_q, dR_q)
+
+            if self.subtract:
+                if len(q_q)==len(self.sq_q):
+                    R_q -= self.sR_q
+                    dR_q = np.sqrt(dR_q**2+self.sdR_q**2)
+                else:
+                    self.subtract = False
+                    logging.warning(
+                            f'background file {self.sFileName} not compatible with q_z scale ({len(self.sq_q)} vs. {len(q_q)})')
+
+            tme_q = np.ones(np.shape(q_q))*time
+            data = np.array([q_q, R_q, dR_q, dq_q, tme_q]).T
+            headerRqz = self.header.orso_header(
+                    extra_columns=[fileio.Column('time', 's', 'time relative to start of measurement series')])
+            headerRqz.data_set = f'{i}_{ti}: time = {time:8.1f} s  to {time+interval:8.1f} s'
+            orso_data = fileio.OrsoDataset(headerRqz, data)
+            self.datasetsRqz.append(orso_data)
+        # reset normal logging behavior
+        logging.StreamHandler.terminator = "\n"
+        logging.warning(f' time slize {ti:4d}, done')
+
+    def save_Rqz(self):
+        logging.warning(f'  {self.reader_config.dataPath}/{self.output_config.outputName}.Rqz.ort')
+        theSecondLine = f' {self.header.experiment.title} | {self.header.experiment.start_date} | sample {self.header.sample.name} | R(q_z)'
+        fileio.save_orso(self.datasetsRqz, f'{self.reader_config.dataPath}/{self.output_config.outputName}.Rqz.ort',
+                         data_separator='\n',
+                         comment=theSecondLine)
+
+    def save_Rtl(self):
+        logging.warning(f'  {self.reader_config.dataPath}/{self.output_config.outputName}.Rlt.ort')
+        theSecondLine = f' {self.header.experiment.title} | {self.header.experiment.start_date} | sample {self.header.sample.name} | R(lambda, theta)'
+        fileio.save_orso(self.datasetsRlt, f'{self.reader_config.dataPath}/{self.output_config.outputName}.Rlt.ort',
+                         data_separator='\n',
+                         comment=theSecondLine)
 
     def autoscale(self, q_q, R_q, dR_q, pR_q=[], pdR_q=[]):
         autoscale = self.reduction_config.autoscale
@@ -282,7 +287,7 @@ class AmorReduction:
 
         return q_q, Sq_q, dS_q, fileName
 
-    def normalisation_map(self, short_notation):
+    def create_normalisation_map(self, short_notation):
         dataPath = self.reader_config.dataPath
         fromHDF = AmorData(self.startTime, header=self.header, reader_config=self.reader_config, config=self.experiment_config)
         normalisation_list = expand_file_list(short_notation)
@@ -291,47 +296,46 @@ class AmorReduction:
             name = f'{name}_{normalisation_list[i]}'
         if os.path.exists(f'{dataPath}/{name}.norm'):
             logging.info(f'# normalisation matrix: found and using {dataPath}/{name}.norm')
-            norm_lz = np.loadtxt(f'{dataPath}/{name}.norm')
+            self.norm_lz = np.loadtxt(f'{dataPath}/{name}.norm')
             fh = open(f'{dataPath}/{name}.norm', 'r')
             fh.readline()
-            normFileList = fh.readline().split('[')[1].split(']')[0].replace('\'', '').split(', ')
-            normAngle = float(fh.readline().split('= ')[1])
+            self.normFileList = fh.readline().split('[')[1].split(']')[0].replace('\'', '').split(', ')
+            self.normAngle = float(fh.readline().split('= ')[1])
             fh.close()
-            for i, entry in enumerate(normFileList):
-                 normFileList[i] = entry.split('/')[-1]
-            self.header.measurement_additional_files = normFileList
+            for i, entry in enumerate(self.normFileList):
+                 self.normFileList[i] = entry.split('/')[-1]
+            self.header.measurement_additional_files = self.normFileList
         else:
             logging.info(f'# normalisation matrix: using the files {normalisation_list}')
             fromHDF.read_data(short_notation, norm=True)
-            normAngle     = fromHDF.nu - fromHDF.mu
+            self.normAngle     = fromHDF.nu - fromHDF.mu
             lamda_e       = fromHDF.lamda_e
             detZ_e        = fromHDF.detZ_e
-            norm_lz, bins_l, bins_z = np.histogram2d(lamda_e, detZ_e, bins = (self.grid.lamda(), self.grid.z()))
-            norm_lz = np.where(norm_lz>0, norm_lz, np.nan)
+            self.norm_lz, bins_l, bins_z = np.histogram2d(lamda_e, detZ_e, bins = (self.grid.lamda(), self.grid.z()))
+            self.norm_lz = np.where(self.norm_lz>0, self.norm_lz, np.nan)
             # correct for the SM reflectivity
             lamda_l  = self.grid.lamda()
-            theta_z  = normAngle + fromHDF.delta_z
+            theta_z  = self.normAngle + fromHDF.delta_z
             lamda_lz = (self.grid.lz().T*lamda_l[:-1]).T
             theta_lz = self.grid.lz()*theta_z
             qz_lz    = 4.0*np.pi * np.sin(np.deg2rad(theta_lz)) / lamda_lz
             Rsm_lz   = np.ones(np.shape(qz_lz))
             Rsm_lz   = np.where(qz_lz>0.0217, 1-(qz_lz-0.0217)*(0.0625/0.0217), Rsm_lz)
             Rsm_lz   = np.where(qz_lz>0.0217*5, np.nan, Rsm_lz)
-            norm_lz  = norm_lz / Rsm_lz
+            self.norm_lz  = self.norm_lz / Rsm_lz
             if len(lamda_e) > 1e6:
                 head = ('normalisation matrix based on the measurements\n'
                        f'{fromHDF.file_list}\n'
-                       f'nu - mu = {normAngle}\n'
-                       f'shape= {np.shape(norm_lz)} (lambda, z)\n'
+                       f'nu - mu = {self.normAngle}\n'
+                       f'shape= {np.shape(self.norm_lz)} (lambda, z)\n'
                        f'measured at mu = {fromHDF.mu:6.3f} deg\n'
                        f'N(l_lambda, z) = theta(z) / sum_i=-1..1 I(l_lambda+i, z)')
                 head = head.replace('../', '')
                 head = head.replace('./', '')
                 head = head.replace('raw/', '')
-                np.savetxt(f'{dataPath}/{name}.norm', norm_lz, header = head)
-            normFileList = fromHDF.file_list
-        return norm_lz, normAngle, normFileList
-
+                np.savetxt(f'{dataPath}/{name}.norm', self.norm_lz, header = head)
+            self.normFileList = fromHDF.file_list
+        self.header.reduction.corrections.append('normalisation with \'additional files\'')
 
     def project_on_lz(self, fromHDF, norm_lz, normAngle, lamda_e, detZ_e):
         # projection on lambda-z-grid
