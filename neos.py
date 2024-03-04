@@ -15,6 +15,7 @@ conventions (not strictly followed, yet):
     _q  = q_z
 - to come
 """
+import logging
 
 from libeos.command_line import command_line_options
 from libeos.logconfig import setup_logging
@@ -30,13 +31,16 @@ from libeos.reduction import AmorReduction
 
 def main():
     setup_logging()
+    logging.warning('######## eos - data reduction for Amor ########')
 
     # read command line arguments and generate classes holding configuration parameters
-    reader_config, reduction_config, output_config = command_line_options()
+    config = command_line_options()
     # Create reducer with these arguments
-    reducer = AmorReduction(reader_config, reduction_config, output_config)
+    reducer = AmorReduction(config)
     # Perform actual reduction
     reducer.reduce()
+
+    logging.info('######## eos - finished ########')
 
 if __name__ == '__main__':
     main()

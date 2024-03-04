@@ -4,11 +4,13 @@ Classes for stroing various configurations needed for reduction.
 from dataclasses import dataclass, field
 from typing import Optional, Tuple
 
-
 @dataclass
-class DataReaderConfig:
+class ReaderConfig:
     year: int
     dataPath: str
+
+@dataclass
+class ExperimentConfig:
     sampleModel: str
 
     chopperPhase: float
@@ -31,7 +33,7 @@ class ReductionConfig:
     lambdaRange: Tuple[float, float]
 
     fileIdentifier: list = field(default_factory=lambda: ["0"])
-    scale: list = field(default_factory=lambda: [1]) #per file scaling, if less elements then files use the last one
+    scale: list = field(default_factory=lambda: [1]) #per file scaling; if less elements than files use the last one
 
     subtract: Optional[str] = None
     normalisationFileIdentifier: Optional[list] = None
@@ -39,5 +41,12 @@ class ReductionConfig:
 
 @dataclass
 class OutputConfig:
-    outputFormats: list #output_format_list(clas.outputFormat)
+    outputFormats: list
     outputName: str
+
+@dataclass
+class EOSConfig:
+    reader: ReaderConfig
+    experiment: ExperimentConfig
+    reductoin: ReductionConfig
+    output: OutputConfig

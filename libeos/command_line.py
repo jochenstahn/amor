@@ -2,7 +2,7 @@ import argparse
 from datetime import datetime
 
 from .logconfig import update_loglevel
-from .options import DataReaderConfig, OutputConfig, ReductionConfig
+from .options import ReaderConfig, EOSConfig, ExperimentConfig, OutputConfig, ReductionConfig
 
 
 def commandLineArgs():
@@ -160,9 +160,10 @@ def command_line_options():
     clas   = commandLineArgs()
     update_loglevel(clas.verbose, clas.debug)
 
-    reader_config = DataReaderConfig(
+    reader_config = ReaderConfig(
         year=clas.year,
-        dataPath=clas.dataPath,
+        dataPath=clas.dataPath)
+    experiment_config = ExperimentConfig(
         sampleModel=clas.sampleModel,
         chopperPhase=clas.chopperPhase,
         chopperPhaseOffset=clas.chopperPhaseOffset,
@@ -190,4 +191,4 @@ def command_line_options():
         outputFormats=output_format_list(clas.outputFormat),
         outputName=clas.outputName
         )
-    return reader_config, reduction_config, output_config
+    return EOSConfig(reader_config, experiment_config, reduction_config, output_config)

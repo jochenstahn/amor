@@ -11,7 +11,7 @@ from orsopy import fileio
 
 from . import __version__, const
 from .instrument import Detector
-from .options import DataReaderConfig
+from .options import ExperimentConfig, ReaderConfig
 
 
 class Header:
@@ -62,10 +62,11 @@ class Header:
 class AmorData:
     """read meta-data and event streams from .hdf file(s), apply filters and conversions"""
     #-------------------------------------------------------------------------------------------------
-    def __init__(self, startTime, header:Header, config: DataReaderConfig):
+    def __init__(self, startTime, header:Header, reader_config: ReaderConfig, config: ExperimentConfig):
         self.startTime = startTime
         self.header = header
         self.config = config
+        self.reader_config = reader_config
     #-------------------------------------------------------------------------------------------------
     def read_data(self, short_notation, norm=False):
         self.data_file_numbers = self.expand_file_list(short_notation)
@@ -93,16 +94,16 @@ class AmorData:
 
     #-------------------------------------------------------------------------------------------------
     def path_generator(self, number):
-        fileName = f'amor{self.config.year}n{number:06d}.hdf'
-        if   os.path.exists(f'{self.config.dataPath}/{fileName}'):
-            path = self.config.dataPath
+        fileName = f'amor{self.reader_config.year}n{number:06d}.hdf'
+        if   os.path.exists(f'{self.reader_config.dataPath}/{fileName}'):
+            path = self.reader_config.dataPath
         elif os.path.exists(fileName):
             path = '.'
         elif os.path.exists(f'./raw/{fileName}'):
             path = './raw'
         elif os.path.exists(f'../raw/{fileName}'):
             path = '../raw'
-        elif os.path.exists(f'/afs/psi.ch/project/sinqdata/{self.config.year}/amor/{int(number/1000)}/{fileName}'):
+        elif os.path.exists(f'/afs/psi.ch/project/sinqdata/{self.reader_config.year}/amor/{int(number/1000)}/{fileName}'):
             path = '/afs/psi.ch/project/sinqdata/{self.config.year}/amor/{int(number/1000)}'
         else:
             sys.exit(f'# ERROR: the file {fileName} is nowhere to be found!')

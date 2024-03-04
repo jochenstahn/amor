@@ -7,26 +7,24 @@ from orsopy import fileio
 
 from .command_line import expand_file_list
 from .dataset import AmorData, Header
-from .options import DataReaderConfig, ReductionConfig, OutputConfig
+from .options import EOSConfig
 from .instrument import Grid
 
 class AmorReduction:
-    def __init__(self,
-                  data_reader_config: DataReaderConfig,
-                  reduction_config: ReductionConfig,
-                  output_config: OutputConfig):
-        self.data_reader_config = data_reader_config
-        self.reduction_config = reduction_config
-        self.output_config = output_config
-
-    def reduce(self):
-        self.grid = Grid(self.reduction_config.qResolution)
+    def __init__(self, config: EOSConfig):
+        self.experiment_config = config.experiment
+        self.reader_config = config.reader
+        self.reduction_config = config.reductoin
+        self.output_config = config.output
+        self.grid = Grid(config.reductoin.qResolution)
         self.header = Header()
         self.startTime = 0
-        if not os.path.exists(f'{self.data_reader_config.dataPath}'):
-            os.system(f'mkdir {self.data_reader_config.dataPath}')
-        fromHDF = AmorData(self.startTime, header=self.header, config=self.data_reader_config)
-        logging.warning('\n######## eos - data reduction for Amor ########')
+
+    def reduce(self):
+        if not os.path.exists(f'{self.reader_config.dataPath}'):
+            logging.debug(f'Creating destination path {self.reader_config.dataPath}')
+            os.system(f'mkdir {self.reader_config.dataPath}')
+        fromHDF = AmorData(self.startTime, header=self.header, reader_config=self.reader_config, config=self.experiment_config)
 
         # load or create normalisation matrix
         if self.reduction_config.normalisationFileIdentifier:
@@ -84,7 +82,7 @@ class AmorReduction:
                             fromHDF, norm_lz, normAngle, lamda_e, detZ_e)
                     q_q, R_q, dR_q, dq_q = self.project_on_qz(qz_lz, ref_lz, err_lz, res_lz, norm_lz, mask_lz)
 
-                    filter_q = np.where((self.data_reader_config.qzRange[0]<q_q) & (q_q<self.data_reader_config.qzRange[1]),
+                    filter_q = np.where((self.experiment_config.qzRange[0]<q_q) & (q_q<self.experiment_config.qzRange[1]),
                                         True, False)
                     q_q = q_q[filter_q]
                     R_q = R_q[filter_q]
@@ -133,7 +131,7 @@ class AmorReduction:
                     # projection on q-grid
                     q_q, R_q, dR_q, dq_q = self.project_on_qz(qz_lz, ref_lz, err_lz, res_lz, norm_lz, mask_lz, self.grid)
 
-                    filter_q = np.where((self.reduction_config.qzRange[0]<q_q) & (q_q<self.reduction_config.qzRange[1]), True, False)
+                    filter_q = np.where((self.experiment_config.qzRange[0]<q_q) & (q_q<self.experiment_config.qzRange[1]), True, False)
                     q_q = q_q[filter_q]
                     R_q = R_q[filter_q]
                     dR_q = dR_q[filter_q]
@@ -206,15 +204,15 @@ class AmorReduction:
         logging.warning('output:')
 
         if 'Rqz.ort' in self.output_config.outputFormats:
-            logging.warning(f'  {self.data_reader_config.dataPath}/{self.output_config.outputName}.Rqz.ort')
+            logging.warning(f'  {self.reader_config.dataPath}/{self.output_config.outputName}.Rqz.ort')
             theSecondLine = f' {self.header.experiment.title} | {self.header.experiment.start_date} | sample {self.header.sample.name} | R(q_z)'
-            fileio.save_orso(datasetsRqz, f'{self.data_reader_config.dataPath}/{self.output_config.outputName}.Rqz.ort', data_separator='\n',
+            fileio.save_orso(datasetsRqz, f'{self.reader_config.dataPath}/{self.output_config.outputName}.Rqz.ort', data_separator='\n',
                              comment=theSecondLine)
 
         if 'Rlt.ort' in self.output_config.outputFormats:
-            logging.warning(f'  {self.data_reader_config.dataPath}/{self.output_config.outputName}.Rlt.ort')
+            logging.warning(f'  {self.reader_config.dataPath}/{self.output_config.outputName}.Rlt.ort')
             theSecondLine = f' {self.header.experiment.title} | {self.header.experiment.start_date} | sample {self.header.sample.name} | R(lambda, theta)'
-            fileio.save_orso(datasetsRlt, f'{self.data_reader_config.dataPath}/{self.output_config.outputName}.Rlt.ort', data_separator='\n',
+            fileio.save_orso(datasetsRlt, f'{self.reader_config.dataPath}/{self.output_config.outputName}.Rlt.ort', data_separator='\n',
                              comment=theSecondLine)
 
 
@@ -273,20 +271,20 @@ class AmorReduction:
         return q_q[1:], R_q, dR_q, dq_q
 
     def loadRqz(self, name):
-        if os.path.exists(f'{self.data_reader_config.dataPath}/{name}'):
-            fileName = f'{self.data_reader_config.dataPath}/{name}'
-        elif os.path.exists(f'{self.data_reader_config.dataPath}/{name}.Rqz.ort'):
-            fileName = f'{self.data_reader_config.dataPath}/{name}.Rqz.ort'
+        if os.path.exists(f'{self.reader_config.dataPath}/{name}'):
+            fileName = f'{self.reader_config.dataPath}/{name}'
+        elif os.path.exists(f'{self.reader_config.dataPath}/{name}.Rqz.ort'):
+            fileName = f'{self.reader_config.dataPath}/{name}.Rqz.ort'
         else:
-            sys.exit(f'### the background file \'{self.data_reader_config.dataPath}/{name}\' does not exist! => stopping')
+            sys.exit(f'### the background file \'{self.reader_config.dataPath}/{name}\' does not exist! => stopping')
 
         q_q, Sq_q, dS_q = np.loadtxt(fileName, usecols=(0, 1, 2), comments='#', unpack=True)
 
         return q_q, Sq_q, dS_q, fileName
 
     def normalisation_map(self, short_notation):
-        dataPath = self.data_reader_config.dataPath
-        fromHDF = AmorData(self.startTime, self.header, self.data_reader_config)
+        dataPath = self.reader_config.dataPath
+        fromHDF = AmorData(self.startTime, header=self.header, reader_config=self.reader_config, config=self.experiment_config)
         normalisation_list = expand_file_list(short_notation)
         name = str(normalisation_list[0])
         for i in range(1, len(normalisation_list), 1):
