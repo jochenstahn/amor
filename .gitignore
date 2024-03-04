@@ -1,7 +1,7 @@
 *~
 *.bak
 *.log
-__py_cache__
+__pycache__
 raw
 .idea
 test_data
