@@ -33,6 +33,8 @@ import platform
 #=====================================================================================================
 # TODO:
 # - calculate resolution using the chopperPhase
+# - deal with background correction
+# - format of 'call' + add '-Y' if not supplied
 #=====================================================================================================
 def commandLineArgs():
     '''
@@ -812,7 +814,6 @@ def main():
                 # make a copy of the header for the next iteration
                 headerRqz          = fileio.Orso.from_dict(headerRqz.to_dict())
                 datasetsRqz.append(orso_data)
-                #print([di.info.data_set for di in datasetsRqz]) 
             print('')
 
         else:
@@ -830,7 +831,6 @@ def main():
             if 'Rqz.ort' in output_format_list(clas.outputFormat):
                 headerRqz = fileio.Orso(header.data_source(), header.reduction, header.columns())
                 headerRqz.data_set = f'Nr {i} : mu = {fromHDF.mu:6.3f} deg'
-                headerRqz = fileio.Orso(**headerRqz.to_dict())
 
                 # projection on q-grid 
                 q_q, R_q, dR_q, dq_q = project_on_qz(qz_lz, ref_lz, err_lz, res_lz, norm_lz, mask_lz)
@@ -858,6 +858,7 @@ def main():
 
                 data = np.array([q_q, R_q, dR_q, dq_q]).T
                 orso_data       = fileio.OrsoDataset(headerRqz, data)
+                headerRqz       = fileio.Orso(**headerRqz.to_dict())
                 datasetsRqz.append(orso_data)
    
             if 'Rlt.ort' in output_format_list(clas.outputFormat):
