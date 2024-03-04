@@ -23,6 +23,7 @@ import os
 import sys
 import subprocess
 import logging
+import logging.handlers
 import argparse
 import numpy as np
 from datetime import datetime
@@ -148,7 +149,11 @@ def commandLineArgs():
     overwrite.add_argument("-sm", "--sampleModel",
                             type = str,
                             help = "1-line orso sample model description")
-                            
+
+    misc = clas.add_argument_group('misc')
+    misc.add_argument('-v', '--verbose', action='store_true')
+    misc.add_argument('-vv', '--debug', action='store_true')
+
     return clas.parse_args()
 #=====================================================================================================
 class Defs:
@@ -290,7 +295,7 @@ class AmorData:
         
         if self.readHeaderInfo:
             # read general information and first data set
-            print(f'#   meta data from: {self.file_list[0]}')
+            logging.info(f'#   meta data from: {self.file_list[0]}')
             self.hdf = h5py.File(self.file_list[0], 'r', swmr=True)
 
             title            = self.hdf['entry1/title'][0].decode('utf-8')
@@ -341,7 +346,7 @@ class AmorData:
         self.chopperDetectorDistance = self.detectorDistance - float(np.take(self.hdf['entry1/Amor/chopper/distance'], 0))
         self.tofCut                  = defs.lamdaCut * self.chopperDetectorDistance / defs.hdm * 1.e-13
     
-        print(f'#   data from file: {fileName}')
+        logging.info(f'#   data from file: {fileName}')
         try:
             self.mu   = float(np.take(self.hdf['/entry1/Amor/master_parameters/mu/value'], 0))
             self.nu   = float(np.take(self.hdf['/entry1/Amor/master_parameters/nu/value'], 0))
@@ -397,7 +402,7 @@ class AmorData:
             header.measurement_additional_files.append(fileio.File(file=fileName.split('/')[-1], timestamp=fileDate))
         else:
             header.measurement_data_files.append(fileio.File(file=fileName.split('/')[-1], timestamp=fileDate))
-        print(f'#     mu = {self.mu:6.3f}, nu = {self.nu:6.3f}, kap = {self.kap:6.3f}, kad = {self.kap:6.3f}')
+        logging.info(f'#     mu = {self.mu:6.3f}, nu = {self.nu:6.3f}, kap = {self.kap:6.3f}, kad = {self.kap:6.3f}')
         
         # TODO: should extract monitor from counts or beam current times time 
         self.monitor1 = self.ctime
@@ -419,7 +424,7 @@ class AmorData:
         if not self.startTime and not norm:
             self.startTime = wallTime_e[0]
         wallTime_e -= self.startTime
-        #print(f'wall time from {wallTime_e[0]} to {wallTime_e[-1]}')
+        logging.debug(f'wall time from {wallTime_e[0]} to {wallTime_e[-1]}')
  
         # filter 'strange' tof times > 2 tau
         if True:
@@ -428,7 +433,7 @@ class AmorData:
             pixelID_e  = pixelID_e[filter_e]
             wallTime_e = wallTime_e[filter_e]
             if np.shape(filter_e)[0]-np.shape(tof_e)[0] > 0.5 : 
-                print(f'#    strange times: {np.shape(filter_e)[0]-np.shape(tof_e)[0]}')
+                logging.warning(f'#    strange times: {np.shape(filter_e)[0]-np.shape(tof_e)[0]}')
         tof_e        = np.remainder( tof_e - self.tofCut + self.tau, self.tau) + self.tofCut  # tof shifted to 1 frame
         tof_e        = tof_e + self.tau * clas.chopperPhaseOffset / 180. # correction for time offset between chopper pulse and tof zero
 
@@ -470,7 +475,7 @@ class AmorData:
         self.lamda_e       = lamda_e[mask_e]
         self.wallTime_e    = wallTime_e[mask_e]
 
-        print(f'#     number of events: total = {totalNumber:7d}, filtered = {np.shape(self.lamda_e)[0]:7d}')
+        logging.info(f'#     number of events: total = {totalNumber:7d}, filtered = {np.shape(self.lamda_e)[0]:7d}')
 #=====================================================================================================
 class Detector:
     def __init__(self):
@@ -508,7 +513,7 @@ def normalisation_map(short_notation):
     for i in range(1, len(normalisation_list), 1):
         name = f'{name}_{normalisation_list[i]}'
     if os.path.exists(f'{clas.dataPath}/{name}.norm'):
-        print(f'# normalisation matrix: found and using {clas.dataPath}/{name}.norm')
+        logging.info(f'# normalisation matrix: found and using {clas.dataPath}/{name}.norm')
         norm_lz = np.loadtxt(f'{clas.dataPath}/{name}.norm')
         fh = open(f'{clas.dataPath}/{name}.norm', 'r')
         fh.readline()
@@ -519,7 +524,7 @@ def normalisation_map(short_notation):
              normFileList[i] = entry.split('/')[-1]
         header.measurement_additional_files = normFileList
     else:
-        print(f'# normalisation matrix: using the files {normalisation_list}')
+        logging.info(f'# normalisation matrix: using the files {normalisation_list}')
         fromHDF.read_data(short_notation, norm=True)
         normAngle     = fromHDF.nu - fromHDF.mu 
         lamda_e       = fromHDF.lamda_e
@@ -643,7 +648,7 @@ def autoscale(q_q, R_q, dR_q, pR_q=[], pdR_q=[]):
         if len(filter_q[filter_q]) > 0:
             scale = np.sum(R_q[filter_q]**2/dR_q[filter_q]) / np.sum(R_q[filter_q]/dR_q[filter_q])
         else:
-            print(f'#     automatic scaling not possible')
+            logging.warning(f'#     automatic scaling not possible')
             scale = 1.
     else:
         filter_q  = np.where(np.isnan(pR_q*R_q), False, True)
@@ -653,11 +658,11 @@ def autoscale(q_q, R_q, dR_q, pR_q=[], pdR_q=[]):
             scale = np.sum(R_q[filter_q]**3 * pR_q[filter_q] / (dR_q[filter_q]**2 * pdR_q[filter_q]**2)) \
                   / np.sum(R_q[filter_q]**2 * pR_q[filter_q]**2 / (dR_q[filter_q]**2  * pdR_q[filter_q]**2))
         else:
-            print(f'#     automatic scaling not possible')
+            logging.warning(f'#     automatic scaling not possible')
             scale = 1.
     R_q  /= scale
     dR_q /= scale
-    #print(f'#     scaling factor = {scale}')
+    logging.debug(f'#     scaling factor = {scale}')
         
     return R_q, dR_q
 #=====================================================================================================
@@ -686,7 +691,7 @@ class Grid:
         a, b = np.histogram([clas.qResolution], bins = resolutions)
         dqdq = np.matmul(b[:-1],a)
         if dqdq != clas.qResolution:
-            print(f'#   changed resolution to {dqdq}')
+            logging.info(f'#   changed resolution to {dqdq}')
         qq = 0.01 
         # linear up to qq
         q_grid = np.arange(0, qq, qq*dqdq)
@@ -724,9 +729,47 @@ class Grid:
         return -np.flip(delta_grid) + 0.5*self.det.nBlades * bladeAngle
 
 #=====================================================================================================
+def setup_logging():
+    logger = logging.getLogger()  # logging.getLogger('quicknxs')
+    logger.setLevel(logging.DEBUG)
+    # rename levels to make clear warning is can be a normal message
+    logging.addLevelName(logging.INFO, 'VERB')
+    logging.addLevelName(logging.WARNING, 'MESG')
+    # setting up a logger for console output
+    console = logging.StreamHandler(sys.__stdout__)
+    console.name = 'console'
+    formatter = logging.Formatter('# %(message)s')
+    console.setFormatter(formatter)
+    console.setLevel(logging.WARNING)
+    logger.addHandler(console)
+
+    # if os.path.exists('amor_eos.log'):
+    #     rollover = True
+    # else:
+    #     rollover = False
+    logfile = logging.handlers.RotatingFileHandler('amor_eos.log', encoding='utf8', mode='w',
+                                                   maxBytes=200*1024**2, backupCount=20)
+    # if rollover: logfile.doRollover()
+    formatter = logging.Formatter(
+        '[%(levelname).4s] - %(asctime)s - %(filename)s:%(lineno)i:%(funcName)s %(message)s',
+            '')
+    logfile.setFormatter(formatter)
+    logfile.setLevel(logging.DEBUG)
+    logger.addHandler(logfile)
+#=====================================================================================================
 def main():
+    setup_logging()
+
     global startTime, grid, clas, header
     clas   = commandLineArgs()
+    if clas.verbose:
+        logging.getLogger().handlers[0].setLevel(logging.INFO)
+    if clas.debug:
+        console = logging.getLogger().handlers[0]
+        console.setLevel(logging.DEBUG)
+        formatter = logging.Formatter('%(levelname).1s %(message)s')
+        console.setFormatter(formatter)
+
     grid   = Grid()
     header = Header()
     startTime = 0
@@ -734,7 +777,7 @@ def main():
         os.system(f'mkdir {clas.dataPath}')
     fromHDF = AmorData()
     
-    print('\n######## eos - data reduction for Amor ########')
+    logging.warning('\n######## eos - data reduction for Amor ########')
     
     # load or create normalisation matrix
     if clas.normalisationFileIdentifier:
@@ -746,13 +789,13 @@ def main():
         norm_lz   = grid.lz()
         normAngle = 1.
 
-        print('# normalisation matrix: none requested')
+        logging.warning('normalisation matrix: none requested')
 
     # load R(q_z) curve to be subtracted:
     if clas.subtract:
         sq_q, sR_q, sdR_q, sFileName = loadRqz(clas.subtract)
         subtract = True
-        print(f'# loaded background file: {sFileName}')
+        logging.warning(f'loaded background file: {sFileName}')
         header.reduction.corrections.append(f'background from \'{sFileName}\' subtracted')
     else:
         subtract = False
@@ -761,7 +804,7 @@ def main():
     datasetsRqz = []
     datasetsRlt = []
     for i, short_notation in enumerate(clas.fileIdentifier):
-        print('# reading input:')
+        logging.warning('reading input:')
         header.measurement_data_files = []
         fromHDF.read_data(short_notation)
 
@@ -778,9 +821,11 @@ def main():
             try:
                 stop  = clas.timeSlize[2]
             except:
-                stop  = wallTime_e[-1] 
+                stop  = wallTime_e[-1]
+            # make overwriting log lines possible by removing newline at the end
+            logging.StreamHandler.terminator="\r"
             for i, time in enumerate(np.arange(start, stop, interval)):
-                print(f'#  time slize {i:4d}', end='\r')
+                logging.warning(f' time slize {i:4d}')
 
                 filter_e = np.where((time < wallTime_e) & (wallTime_e < time+interval), True, False)
                 lamda_e  = fromHDF.lamda_e[filter_e] 
@@ -804,7 +849,7 @@ def main():
                         dR_q = np.sqrt( dR_q**2 + sdR_q**2 )
                     else:
                         subtract = False
-                        print(f'# background file {sFileName} not compatible with q_z scale ({len(sq_q)} vs. {len(q_q)})')
+                        logging.warning(f'background file {sFileName} not compatible with q_z scale ({len(sq_q)} vs. {len(q_q)})')
 
                 tme_q              = np.ones(np.shape(q_q))*time
                 data               = np.array([q_q, R_q, dR_q, dq_q, tme_q]).T
@@ -813,8 +858,9 @@ def main():
                 # make a copy of the header for the next iteration
                 headerRqz          = fileio.Orso.from_dict(headerRqz.to_dict())
                 datasetsRqz.append(orso_data)
-            print('')
-
+            # reset normal logging behavior
+            logging.StreamHandler.terminator="\n"
+            logging.warning(f' time slize {i:4d}, done')
         else:
             lamda_e  = fromHDF.lamda_e
             detZ_e   = fromHDF.detZ_e
@@ -853,7 +899,7 @@ def main():
                         R_q  -= sR_q
                         dR_q = np.sqrt( dR_q**2 + sdR_q**2 )
                     else:
-                        print(f'# backgroung file {sFileName} not compatible with q_z scale ({len(sq_q)} vs. {len(q_q)})')
+                        logging.warning(f'backgroung file {sFileName} not compatible with q_z scale ({len(sq_q)} vs. {len(q_q)})')
 
                 data = np.array([q_q, R_q, dR_q, dq_q]).T
                 orso_data       = fileio.OrsoDataset(headerRqz, data)
@@ -903,19 +949,18 @@ def main():
                     j += 1
 
     # output
-    print('# output:')
+    logging.warning('output:')
 
     if 'Rqz.ort' in output_format_list(clas.outputFormat):
-        print(f'#   {clas.dataPath}/{clas.outputName}.Rqz.ort')
+        logging.warning(f'  {clas.dataPath}/{clas.outputName}.Rqz.ort')
         theSecondLine = f' {header.experiment.title} | {header.experiment.start_date} | sample {header.sample.name} | R(q_z)'
         fileio.save_orso(datasetsRqz, f'{clas.dataPath}/{clas.outputName}.Rqz.ort', data_separator='\n', comment=theSecondLine)
 
     if 'Rlt.ort' in output_format_list(clas.outputFormat):
-        print(f'#   {clas.dataPath}/{clas.outputName}.Rlt.ort')
+        logging.warning(f'  {clas.dataPath}/{clas.outputName}.Rlt.ort')
         theSecondLine = f' {header.experiment.title} | {header.experiment.start_date} | sample {header.sample.name} | R(lambda, theta)'
         fileio.save_orso(datasetsRlt, f'{clas.dataPath}/{clas.outputName}.Rlt.ort', data_separator='\n', comment=theSecondLine)
 
-    print('')
 #=====================================================================================================
 if __name__ == '__main__':
     main()
