@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-#-*- coding: utf-8 -*-
 """
 eos reduces measurements performed on Amor@SINQ, PSI
 
@@ -37,10 +36,10 @@ import platform
 # - format of 'call' + add '-Y' if not supplied
 #=====================================================================================================
 def commandLineArgs():
-    '''
-    Process command line argument. 
+    """
+    Process command line argument.
     The type of the default values is used for conversion and validation.
-    '''
+    """
     msg = "eos reads data from (one or several) raw file(s) of the .hdf format, \
            performs various corrections, conversations and projections and exports\
            the resulting reflectivity in an orso-compatible format."
@@ -153,12 +152,12 @@ def commandLineArgs():
     return clas.parse_args()
 #=====================================================================================================
 class Defs:
-    '''definition of a series of fixed parameters and constants'''
+    """definition of a series of fixed parameters and constants"""
     hdm       = 6.626176e-34/1.674928e-27               # h / m
     lamdaCut  = 2.5                                     # Aa
 #=====================================================================================================
 class Header:
-    '''orso compatible output file header content'''
+    """orso compatible output file header content"""
     
     def __init__(self):
         self.owner                           = None
@@ -203,7 +202,7 @@ class Header:
 
 #=====================================================================================================
 class AmorData:
-    '''read meta-data and event streams from .hdf file(s), apply filters and conversions'''
+    """read meta-data and event streams from .hdf file(s), apply filters and conversions"""
     #-------------------------------------------------------------------------------------------------
     def __init__(self):
         global startTime
@@ -251,7 +250,7 @@ class AmorData:
         return f'{path}/{fileName}'
     #-------------------------------------------------------------------------------------------------
     def expand_file_list(self, short_notation):
-        '''Evaluate string entry for file number lists'''
+        """Evaluate string entry for file number lists"""
         #log().debug('Executing get_flist')
         file_list=[]
         for i in short_notation.split(','):
@@ -267,7 +266,7 @@ class AmorData:
         return sorted(file_list)
     #-------------------------------------------------------------------------------------------------
     def resolve_pixels(self):
-        '''determine spatial coordinats and angles from pixel number'''
+        """determine spatial coordinats and angles from pixel number"""
         det = Detector()
         nPixel = det.nWires * det.nStripes * det.nBlades
         pixelID = np.arange(nPixel)
@@ -486,7 +485,7 @@ class Detector:
         self.distance = 4000.                                 # mm  distance from focal point to leading blade edge 
 #=====================================================================================================
 def expand_file_list(short_notation):
-    '''Evaluate string entry for file number lists'''
+    """Evaluate string entry for file number lists"""
     #log().debug('Executing get_flist')
     file_list=[]
     for i in short_notation.split(','):
