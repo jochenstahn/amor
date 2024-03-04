@@ -1,6 +1,9 @@
 import argparse
 from datetime import datetime
 
+from .logconfig import update_loglevel
+from .options import DataReaderConfig, OutputConfig, ReductionConfig
+
 
 def commandLineArgs():
     """
@@ -151,5 +154,40 @@ def output_format_list(outputFormat):
         format_list.append('Rqz.orb')
     if 'orb' in outputFormat or 'Rlt.orb' in outputFormat or 'Rlt' in outputFormat:
         format_list.append('Rlt.orb')
-
     return sorted(format_list, reverse=True)
+
+def command_line_options():
+    clas   = commandLineArgs()
+    update_loglevel(clas.verbose, clas.debug)
+
+    reader_config = DataReaderConfig(
+        year=clas.year,
+        dataPath=clas.dataPath,
+        sampleModel=clas.sampleModel,
+        chopperPhase=clas.chopperPhase,
+        chopperPhaseOffset=clas.chopperPhaseOffset,
+        yRange=clas.yRange,
+        lambdaRange=clas.lambdaRange,
+        qzRange=clas.qzRange,
+        offSpecular=clas.offSpecular,
+        mu=clas.mu,
+        nu=clas.nu,
+        muOffset=clas.muOffset
+        )
+    reduction_config = ReductionConfig(
+        qResolution=clas.qResolution,
+        autoscale=clas.autoscale,
+        thetaRange=clas.thetaRange,
+        thetaRangeR=clas.thetaRangeR,
+        lambdaRange=clas.lambdaRange,
+        fileIdentifier=clas.fileIdentifier,
+        scale=clas.scale,
+        subtract=clas.subtract,
+        normalisationFileIdentifier=clas.normalisationFileIdentifier,
+        timeSlize=clas.timeSlize
+        )
+    output_config = OutputConfig(
+        outputFormats=output_format_list(clas.outputFormat),
+        outputName=clas.outputName
+        )
+    return reader_config, reduction_config, output_config

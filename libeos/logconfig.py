@@ -3,6 +3,7 @@ Setup for the logging of eos.
 """
 import sys
 import logging
+import logging.handlers
 
 def setup_logging():
     logger = logging.getLogger()  # logging.getLogger('quicknxs')

@@ -4,8 +4,6 @@ import platform
 import subprocess
 import sys
 from datetime import datetime
-from dataclasses import dataclass
-from typing import Optional, Tuple
 
 import h5py
 import numpy as np
@@ -13,23 +11,8 @@ from orsopy import fileio
 
 from . import __version__, const
 from .instrument import Detector
+from .options import DataReaderConfig
 
-@dataclass
-class DataReaderConfig:
-    year: int
-    dataPath: str
-    sampleModel: str
-
-    chopperPhase: float
-    yRange: Tuple[float, float]
-    lambdaRange: Tuple[float, float]
-    qzRange: Tuple[float, float]
-
-    chopperPhaseOffset: float = 0.0
-    mu: Optional[float] = None
-    nu: Optional[float] = None
-    muOffset: Optional[float] = None
-    offSpecular: bool = False
 
 class Header:
     """orso compatible output file header content"""
