@@ -1,4 +1,5 @@
 import os
+import cProfile
 from unittest import TestCase
 from libeos import options, reduction, logconfig
 
@@ -6,12 +7,22 @@ logconfig.setup_logging()
 logconfig.update_loglevel(True, False)
 
 class FullAmorTest(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.pr = cProfile.Profile()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.pr.dump_stats("profile_test.prof")
+
     def setUp(self):
+        self.pr.enable()
         self.reader_config = options.ReaderConfig(
                 year=2023,
                 dataPath=os.path.join('..', "test_data"))
 
     def tearDown(self):
+        self.pr.disable()
         for fi in ['test.Rqz.ort', '614.norm']:
             try:
                 os.unlink(os.path.join(self.reader_config.dataPath, fi))
@@ -46,6 +57,11 @@ class FullAmorTest(TestCase):
                 outputName='test'
                 )
         config=options.EOSConfig(self.reader_config, experiment_config, reduction_config, output_config)
+        # run three times to get similar timing to noslicing runs
+        reducer = reduction.AmorReduction(config)
+        reducer.reduce()
+        reducer = reduction.AmorReduction(config)
+        reducer.reduce()
         reducer = reduction.AmorReduction(config)
         reducer.reduce()
 
