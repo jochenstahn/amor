@@ -14,6 +14,11 @@ from .header import Header
 from .instrument import Detector
 from .options import ExperimentConfig, ReaderConfig
 
+try:
+    from . import nb_helpers
+except Exception:
+    nb_helpers = None
+
 
 class AmorData:
     """read meta-data and event streams from .hdf file(s), apply filters and conversions"""
@@ -184,9 +189,16 @@ class AmorData:
         self.wallTime_e = self.wallTime_e[self.mask_e]
 
     def calculate_derived_properties(self):
-        # lambda
-        self.lamda_e = (1.e13*self.tof_e*const.hdm)/(self.chopperDetectorDistance+self.detXdist_e)
         self.lamdaMax = const.lamdaCut+1.e13*self.tau*const.hdm/(self.chopperDetectorDistance+124.)
+        if nb_helpers and not self.config.offSpecular:
+            self.lamda_e, self.qz_e, self.mask_e = nb_helpers.calculate_derived_properties_focussing(
+                    self.tof_e, self.detXdist_e, self.delta_e, self.mask_e,
+                    self.config.lambdaRange[0], self.config.lambdaRange[1], self.nu, self.mu,
+                    self.chopperDetectorDistance, const.hdm
+                    )
+            return
+        # lambda
+        self.lamda_e = (1.e13*const.hdm)*self.tof_e/(self.chopperDetectorDistance+self.detXdist_e)
         self.mask_e = np.logical_and(self.mask_e, (self.config.lambdaRange[0]<=self.lamda_e) & (
                     self.lamda_e<=self.config.lambdaRange[1]))
         # alpha_f
@@ -194,24 +206,32 @@ class AmorData:
         # q_z
         if self.config.offSpecular:
             alphaI = self.kap+self.kad+self.mu
-            self.qz_e = 2*np.pi*(np.sin(np.deg2rad(alphaF_e))+np.sin(np.deg2rad(alphaI)))/self.lamda_e
-            self.qx_e = 2*np.pi*(np.cos(np.deg2rad(alphaF_e))-np.cos(np.deg2rad(alphaI)))/self.lamda_e
+            self.qz_e = 2*np.pi*((np.sin(np.deg2rad(alphaF_e))+np.sin(np.deg2rad(alphaI)))/self.lamda_e)
+            self.qx_e = 2*np.pi*((np.cos(np.deg2rad(alphaF_e))-np.cos(np.deg2rad(alphaI)))/self.lamda_e)
             self.header.measurement_scheme = 'energy-dispersive',
         else:
-            self.qz_e = 4*np.pi*np.sin(np.deg2rad(alphaF_e))/self.lamda_e
+            self.qz_e = 4*np.pi*(np.sin(np.deg2rad(alphaF_e))/self.lamda_e)
             # qx_e = 0.
             self.header.measurement_scheme = 'angle- and energy-dispersive'
 
     def filter_project_x(self):
         pixelLookUp = self.resolve_pixels()
-        # resolve pixel ID into y and z indicees, x position and angle
-        (detY_e, self.detZ_e, self.detXdist_e, self.delta_e) = pixelLookUp[np.int_(self.pixelID_e)-1, :].T
-        # define mask and filter y range
-        self.mask_e = (self.config.yRange[0]<=detY_e) & (detY_e<=self.config.yRange[1])
+        if nb_helpers:
+            (self.detZ_e, self.detXdist_e, self.delta_e, self.mask_e) = nb_helpers.filter_project_x(
+                    pixelLookUp, self.pixelID_e.astype(np.int64), self.config.yRange[0], self.config.yRange[1]
+                    )
+        else:
+            # resolve pixel ID into y and z indicees, x position and angle
+            (detY_e, self.detZ_e, self.detXdist_e, self.delta_e) = pixelLookUp[np.int_(self.pixelID_e)-1, :].T
+            # define mask and filter y range
+            self.mask_e = (self.config.yRange[0]<=detY_e) & (detY_e<=self.config.yRange[1])
 
     def merge_frames(self):
         total_offset = self.tofCut+self.tau*self.config.chopperPhaseOffset/180.
-        self.tof_e = np.remainder(self.tof_e-(self.tofCut-self.tau), self.tau)+total_offset  # tof shifted to 1 frame
+        if nb_helpers:
+            self.tof_e = nb_helpers.merge_frames(self.tof_e, self.tofCut, self.tau, total_offset)
+        else:
+            self.tof_e = np.remainder(self.tof_e-(self.tofCut-self.tau), self.tau)+total_offset  # tof shifted to 1 frame
 
     def filter_strange_times(self):
         # filter 'strange' tof times > 2 tau
@@ -223,11 +243,14 @@ class AmorData:
             logging.warning(f'#    strange times: {np.shape(filter_e)[0]-np.shape(self.tof_e)[0]}')
 
     def extract_walltime(self, norm):
-        totalNumber = np.shape(self.tof_e)[0]
-        self.wallTime_e = np.empty(totalNumber)
-        for i in range(len(self.dataPacket_p)-1):
-            self.wallTime_e[self.dataPacket_p[i]:self.dataPacket_p[i+1]] = self.dataPacketTime_p[i]
-        self.wallTime_e[self.dataPacket_p[-1]:] = self.dataPacketTime_p[-1]
+        if nb_helpers:
+            self.wallTime_e = nb_helpers.extract_walltime(self.tof_e, self.dataPacket_p, self.dataPacketTime_p)
+        else:
+            totalNumber = np.shape(self.tof_e)[0]
+            self.wallTime_e = np.empty(totalNumber)
+            for i in range(len(self.dataPacket_p)-1):
+                self.wallTime_e[self.dataPacket_p[i]:self.dataPacket_p[i+1]] = self.dataPacketTime_p[i]
+            self.wallTime_e[self.dataPacket_p[-1]:] = self.dataPacketTime_p[-1]
         if not self.startTime and not norm:
             self.startTime = self.wallTime_e[0]
         self.wallTime_e -= self.startTime
