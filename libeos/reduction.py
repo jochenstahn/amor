@@ -385,3 +385,46 @@ class AmorReduction:
 
         return qz_lz, ref_lz, err_lz, res_lz, lamda_lz, theta_lz, int_lz, mask_lz
 
+
+    @staticmethod
+    def histogram2d_lz(lamda_e, detZ_e, bins):
+        """
+        Perform binning operation equivalent to numpy bin2d for the sepcial case
+        of the second dimension using integer positions (pre-defined pixels).
+        Based on the devide_bin algorithm below.
+        """
+        dimension = bins[1].shape[0]-1
+        if not (np.array(bins[1])==np.arange(dimension+1)).all():
+            raise ValueError("histogram2d_lz requires second bin dimension to be contigous integer range")
+        binning = AmorReduction.devide_bin(lamda_e, detZ_e.astype(np.int64), bins[0], dimension)
+        return np.array(binning), bins[0], bins[1]
+
+    @staticmethod
+    def devide_bin(lambda_e, position_e, lamda_edges, dimension):
+        '''
+        Use a divide and conquer strategy to bin the data. For the actual binning the
+        numpy bincount function is used, as it is much faster than histogram for
+        counting of integer values.
+
+        :param lambda_e: Array of wavelength for each event
+        :param position_e: Array of positional indices for each event
+        :param lamda_edges: The edges of bins to be used for the histogram
+        :param dimension: position number of buckets in output arrray
+
+        :return: 2D list of dimensions (lambda, x) of counts
+        '''
+        if len(lambda_e)==0:
+            # no more events in range, return empty bins
+            return [np.zeros(dimension, dtype=int).tolist()]*(len(lamda_edges)-1)
+        if len(lamda_edges)==2:
+            # deepest recursion reached, all items should be within the two ToF edges
+            return [np.bincount(position_e, minlength=dimension).tolist()]
+        # split all events into two time of flight regions
+        split_idx = len(lamda_edges)//2
+        left_region = lambda_e<lamda_edges[split_idx]
+        left_list = AmorReduction.devide_bin(lambda_e[left_region], position_e[left_region],
+                                             lamda_edges[:split_idx+1], dimension)
+        right_region = np.logical_not(left_region)
+        right_list = AmorReduction.devide_bin(lambda_e[right_region], position_e[right_region],
+                                              lamda_edges[split_idx:], dimension)
+        return left_list+right_list
