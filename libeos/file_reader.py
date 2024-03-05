@@ -156,7 +156,7 @@ class AmorData:
         self.read_event_stream()
         totalNumber = np.shape(self.tof_e)[0]
 
-        self.extract_walltime(norm, totalNumber)
+        self.extract_walltime(norm)
 
         if True:
             self.filter_strange_times()
@@ -185,7 +185,7 @@ class AmorData:
 
     def calculate_derived_properties(self):
         # lambda
-        self.lamda_e = 1.e13*self.tof_e*const.hdm/(self.chopperDetectorDistance+self.detXdist_e)
+        self.lamda_e = (1.e13*self.tof_e*const.hdm)/(self.chopperDetectorDistance+self.detXdist_e)
         self.lamdaMax = const.lamdaCut+1.e13*self.tau*const.hdm/(self.chopperDetectorDistance+124.)
         self.mask_e = np.logical_and(self.mask_e, (self.config.lambdaRange[0]<=self.lamda_e) & (
                     self.lamda_e<=self.config.lambdaRange[1]))
@@ -222,7 +222,8 @@ class AmorData:
         if np.shape(filter_e)[0]-np.shape(self.tof_e)[0]>0.5:
             logging.warning(f'#    strange times: {np.shape(filter_e)[0]-np.shape(self.tof_e)[0]}')
 
-    def extract_walltime(self, norm, totalNumber):
+    def extract_walltime(self, norm):
+        totalNumber = np.shape(self.tof_e)[0]
         self.wallTime_e = np.empty(totalNumber)
         for i in range(len(self.dataPacket_p)-1):
             self.wallTime_e[self.dataPacket_p[i]:self.dataPacket_p[i+1]] = self.dataPacketTime_p[i]
