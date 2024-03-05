@@ -160,7 +160,7 @@ class AmorData:
 
         if True:
             self.filter_strange_times()
-        self.marge_frames()
+        self.merge_frames()
 
         self.filter_project_x()
 
@@ -209,9 +209,9 @@ class AmorData:
         # define mask and filter y range
         self.mask_e = (self.config.yRange[0]<=detY_e) & (detY_e<=self.config.yRange[1])
 
-    def marge_frames(self):
-        self.tof_e = np.remainder(self.tof_e-self.tofCut+self.tau, self.tau)+self.tofCut  # tof shifted to 1 frame
-        self.tof_e = self.tof_e+self.tau*self.config.chopperPhaseOffset/180.  # correction for time offset between chopper pulse and tof zero
+    def merge_frames(self):
+        total_offset = self.tofCut+self.tau*self.config.chopperPhaseOffset/180.
+        self.tof_e = np.remainder(self.tof_e-(self.tofCut-self.tau), self.tau)+total_offset  # tof shifted to 1 frame
 
     def filter_strange_times(self):
         # filter 'strange' tof times > 2 tau
