@@ -1,5 +1,7 @@
 *~
 *.bak
-__py_cache__
+*.log
+__pycache__
 raw
-
+.idea
+test_data
