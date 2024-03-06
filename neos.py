@@ -2,7 +2,8 @@
 """
 eos reduces measurements performed on Amor@SINQ, PSI
 
-Author: Jochen Stahn
+Author: Jochen Stahn (algorithms, python draft),
+        Artur Glavic (structuring and optimisation of code)
 
 conventions (not strictly followed, yet):
 - array names end with the suffix '_x[y]' with the meaning
@@ -13,14 +14,13 @@ conventions (not strictly followed, yet):
     _z  = detector z
     _lz = (lambda, detector z)
     _q  = q_z
-- to come
 """
+
 import logging
 
 from libeos.command_line import command_line_options
 from libeos.logconfig import setup_logging
 from libeos.reduction import AmorReduction
-
 
 #=====================================================================================================
 # TODO:
