@@ -1,5 +1,5 @@
 import argparse
-from datetime import datetime
+from datetime import date
 
 from .logconfig import update_loglevel
 from .options import ReaderConfig, EOSConfig, ExperimentConfig, OutputConfig, ReductionConfig
@@ -29,7 +29,7 @@ def commandLineArgs():
                             default = '.',
                             help = "relative path to directory with .hdf files")
     input_data.add_argument("-Y", "--year",
-                            default = datetime.year,
+                            default = date.today().year,
                             type = int,
                             help = "year the measurement was performed")
     input_data.add_argument("-sub", "--subtract",
@@ -161,33 +161,35 @@ def command_line_options():
     update_loglevel(clas.verbose, clas.debug)
 
     reader_config = ReaderConfig(
-        year=clas.year,
-        dataPath=clas.dataPath)
+        year                         = clas.year,
+        dataPath                     = clas.dataPath
+        )
     experiment_config = ExperimentConfig(
-        sampleModel=clas.sampleModel,
-        chopperPhase=clas.chopperPhase,
-        chopperPhaseOffset=clas.chopperPhaseOffset,
-        yRange=clas.yRange,
-        lambdaRange=clas.lambdaRange,
-        qzRange=clas.qzRange,
-        offSpecular=clas.offSpecular,
-        mu=clas.mu,
-        nu=clas.nu,
-        muOffset=clas.muOffset
+        sampleModel                  = clas.sampleModel,
+        chopperPhase                 = clas.chopperPhase,
+        chopperPhaseOffset           = clas.chopperPhaseOffset,
+        yRange                       = clas.yRange,
+        lambdaRange                  = clas.lambdaRange,
+        qzRange                      = clas.qzRange,
+        offSpecular                  = clas.offSpecular,
+        mu                           = clas.mu,
+        nu                           = clas.nu,
+        muOffset                     = clas.muOffset
         )
     reduction_config = ReductionConfig(
-        qResolution=clas.qResolution,
-        autoscale=clas.autoscale,
-        thetaRange=clas.thetaRange,
-        thetaRangeR=clas.thetaRangeR,
-        fileIdentifier=clas.fileIdentifier,
-        scale=clas.scale,
-        subtract=clas.subtract,
-        normalisationFileIdentifier=clas.normalisationFileIdentifier,
-        timeSlize=clas.timeSlize
+        qResolution                  = clas.qResolution,
+        autoscale                    = clas.autoscale,
+        thetaRange                   = clas.thetaRange,
+        thetaRangeR                  = clas.thetaRangeR,
+        fileIdentifier               = clas.fileIdentifier,
+        scale                        = clas.scale,
+        subtract                     = clas.subtract,
+        normalisationFileIdentifier  = clas.normalisationFileIdentifier,
+        timeSlize                    = clas.timeSlize
         )
     output_config = OutputConfig(
-        outputFormats=output_format_list(clas.outputFormat),
-        outputName=clas.outputName
+        outputFormats                = output_format_list(clas.outputFormat),
+        outputName                   = clas.outputName
         )
+
     return EOSConfig(reader_config, experiment_config, reduction_config, output_config)

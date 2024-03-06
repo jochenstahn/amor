@@ -25,7 +25,7 @@ class Header:
 
         self.reduction = fileio.Reduction(
             software    = fileio.Software('eos', version=__version__),
-            call        = ' '.join(sys.argv),
+            call        = self.create_call_string(),
             computer    = platform.node(),
             timestamp   = datetime.now(),
             creator     = None,
@@ -54,7 +54,7 @@ class Header:
             fileio.ErrorColumn(error_of='Qz', error_type='resolution', distribution='gaussian', value_is='sigma'),
             ]
         return cols
-
+    #-------------------------------------------------------------------------------------------------
     def orso_header(self, columns=None, extra_columns=[]):
         """
         Generate ORSO header from a copy of this class' data.
@@ -64,3 +64,9 @@ class Header:
         if columns is None:
             columns = self.columns()
         return fileio.Orso(ds, red, columns+extra_columns)
+    #-------------------------------------------------------------------------------------------------
+    def create_call_string(self):
+        callString = ' '.join(sys.argv)
+        if '-Y' not in callString:
+            callString += f' -Y {datetime.now().year}'
+        return callString
