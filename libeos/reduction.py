@@ -18,7 +18,7 @@ class AmorReduction:
         self.reduction_config = config.reductoin
         self.output_config = config.output
         self.grid = Grid(config.reductoin.qResolution)
-        self.header = Header()
+        self.header = Header(config)
 
     def reduce(self):
         if not os.path.exists(f'{self.reader_config.dataPath}'):

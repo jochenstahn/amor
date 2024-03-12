@@ -14,7 +14,7 @@ from . import __version__
 class Header:
     """orso compatible output file header content"""
 
-    def __init__(self):
+    def __init__(self, config):
         self.owner                           = None
         self.experiment                      = None
         self.sample                          = None
@@ -25,7 +25,7 @@ class Header:
 
         self.reduction = fileio.Reduction(
             software    = fileio.Software('eos', version=__version__),
-            call        = self.create_call_string(),
+            call        = self.call_string(config),
             computer    = platform.node(),
             timestamp   = datetime.now(),
             creator     = None,
@@ -71,80 +71,91 @@ class Header:
             callString += f' -Y {datetime.now().year}'
         return callString
     #-------------------------------------------------------------------------------------------------
-    def call_string():
-        base = 'python eos.py '
+    def call_string(self, config):
+        self.experiment_config = config.experiment
+        self.reader_config = config.reader
+        self.reduction_config = config.reductoin
+        self.output_config = config.output
+        
+        base = 'python eos.py'
 
         inpt = ''
-        if clas.year:
-            inpt += f' --year {clas.year}'
+        if self.reader_config.year:
+            inpt += f' --year {self.reader_config.year}'
         else:
             inpt += f' --year {datetime.now().year}'
-        if clas.dataPath:
-            inpt += f' --dataPath {clas.dataPath}'
-        if clas.subtract:
-            inpt += f' -subtract {clas.subtract}'
-        if clas.normalisationFileIdentifier:
-            inpt += f' -r {clas.normalisationFileIdentifier}'
+        if self.reader_config.dataPath != '.':
+            inpt += f' --dataPath {self.reader_config.dataPath}'
+        if self.reduction_config.subtract:
+            inpt += f' -subtract {self.reduction_config.subtract}'
+        if self.reduction_config.normalisationFileIdentifier:
+            inpt += f' -r {" ".join(self.reduction_config.normalisationFileIdentifier)}'
         # get file list somehow
-        if ...:
-            inpt += f' -n {file_list}'
+        if False:
+            pass
+            #inpt += f' -n {file_list}'
         else:
-            inpt += f' -n {clas.fileIdentifier}'
+            inpt += f' -n {" ".join(self.reduction_config.fileIdentifier)}'
 
         otpt = ''
-        if outputFormats != 'Rqz.ort':
-            otpt =  f" -of  '{outputFormats}'"
-        if clas.outputName:
-            otpt += f' -o {clas.outputName}'
+        if self.reduction_config.qResolution:
+            otpt += f' -q {self.reduction_config.qResolution}'
+        if self.output_config.outputFormats != 'Rqz.ort':
+            otpt =  f' -of {" ".join(self.output_config.outputFormats)}'
+        if self.output_config.outputName:
+            otpt += f' -o {self.output_config.outputName}'
         else:
             pass
             # default name
             
         mask = ''    
-        if clas.yRange:
-            mask += f' -y {clas.yRange}'
-        if clas.lambdaRange:
-            mask += f' -l {clas.lambdaRange}'
-        if clas.thetaRange:
-            mask += f' -- thetaRange {clas.thetaRange}'
-        elif clas.thetaRangeR:
-            mask += f' -t {clas.thetaRangeR}'
-        if clas.qzRange:
-            mask += f' -q {clas.qzRange}'
-        if clas.qResolution:
-            mask += f' -a {clas.qResolution}'
+        if self.experiment_config.yRange != [11, 41]:
+            mask += f' -y {" ".join(str(ii) for ii in self.experiment_config.yRange)}'
+        if self.experiment_config.lambdaRange!= [2, 15]:
+            mask += f' -l {" ".join(str(ff) for ff in self.experiment_config.lambdaRange)}'
+        if self.reduction_config.thetaRange != [-12, 12]:
+            mask += f' --thetaRange {" ".join(str(ff) for ff in self.reduction_config.thetaRange)}'
+        elif self.reduction_config.thetaRangeR != [-12, 12]:
+            mask += f' -t {" ".join(str(ff) for ff in self.reduction_config.thetaRangeR)}'
+        if self.experiment_config.qzRange!= [0.005, 0.3]:
+            mask += f' -q {" ".join(str(ff) for ff in self.experiment_config.qzRange)}'
 
         para = ''
-        if clas.chopperPhase:
-            para += f' --chopperPhase {clas.chopperPhase}'
-        if clas.chopperPhaseOffset:
-            para += f' --chopperPhaseOffset {clas.chopperPhaseOffset}'
-        if clas.mu:
-            para += f' --mu {clas.mu}'
-        elif clas.muOffset:
-            para += f' --muOffset {clas.muOffset}'
-        if clas.nu:
-            para += f' --nu {clas.nu}'
+        if self.experiment_config.chopperPhase != -13.5:
+            para += f' --chopperPhase {self.experiment_config.chopperPhase}'
+        if self.experiment_config.chopperPhaseOffset != -5:
+            para += f' --chopperPhaseOffset {self.experiment_config.chopperPhaseOffset}'
+        if self.experiment_config.mu:
+            para += f' --mu {self.experiment_config.mu}'
+        elif self.experiment_config.muOffset:
+            para += f' --muOffset {self.experiment_config.muOffset}'
+        if self.experiment_config.nu:
+            para += f' --nu {self.experiment_config.nu}'
 
-        if clas.sampleModel:
-            modl =  f" --sampleModel '{clas.sampleModel}'"
+        modl = ''
+        if self.experiment_config.sampleModel:
+            modl += f" --sampleModel '{self.experiment_config.sampleModel}'"
 
         acts = ''
-        if clas.autoscale:
-            acts += f' --autoscale {clas.autoscale}'
-        if clas.scale:
-            acts += f' --scale {clas.scale}'
-        if clas.timeSlize:
-            acts += f' --timeSlize {clas.timeSlize}'
+        if self.reduction_config.autoscale:
+            acts += f' --autoscale {" ".join(str(ff) for ff in self.reduction_config.autoscale)}'
+        if self.reduction_config.scale != [1]:
+            acts += f' --scale {self.reduction_config.scale}'
+        if self.reduction_config.timeSlize:
+            acts += f' --timeSlize {" ".join(str(ff) for ff in self.reduction_config.timeSlize)}'
 
-        mlst = base + '\n' + inpt + '\n' + outp 
+        #experiment_config = ExperimentConfig(
+        #    offSpecular                  = clas.offSpecular,
+        #    )
+
+        mlst = base + '  ' + inpt + '  ' + otpt 
         if mask:
-            mlst += '\n' + mask
+            mlst += '  ' + mask
         if para:
-            mlst += '\n' + para
+            mlst += '  ' + para
         if acts:
-            mlst += '\n' + acts
-        if mask:
-            mlst += '\n' + modl
+            mlst += '  ' + acts
+        if modl:
+            mlst += '  ' + modl
 
         return  mlst
