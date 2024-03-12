@@ -229,7 +229,7 @@ class AmorReduction:
             if len(filter_q[filter_q]) > 0:
                 scale = np.sum(R_q[filter_q]**2/dR_q[filter_q]) / np.sum(R_q[filter_q]/dR_q[filter_q])
             else:
-                logging.warning(f'#     automatic scaling not possible')
+                logging.warning('#     automatic scaling not possible')
                 scale = 1.
         else:
             filter_q  = np.where(np.isnan(pR_q*R_q), False, True)
@@ -239,7 +239,7 @@ class AmorReduction:
                 scale = np.sum(R_q[filter_q]**3 * pR_q[filter_q] / (dR_q[filter_q]**2 * pdR_q[filter_q]**2)) \
                       / np.sum(R_q[filter_q]**2 * pR_q[filter_q]**2 / (dR_q[filter_q]**2  * pdR_q[filter_q]**2))
             else:
-                logging.warning(f'#     automatic scaling not possible')
+                logging.warning('#     automatic scaling not possible')
                 scale = 1.
         R_q  /= scale
         dR_q /= scale
@@ -378,7 +378,7 @@ class AmorReduction:
         #theta_lz += np.rad2deg( np.arctan( 3.07e-10 * (fromHDF.detectorDistance + detXdist_e) * lamda_lz**2 ) )
         theta_lz += np.rad2deg( np.arctan( 3.07e-10 * fromHDF.detectorDistance * lamda_lz**2 ) )
 
-        z_z       = enumerate(theta_z)
+        #z_z       = enumerate(theta_z)
         qz_lz     = 4.0*np.pi * np.sin(np.deg2rad(theta_lz)) / lamda_lz
         int_lz, bins_l, bins_z  = np.histogram2d(lamda_e, detZ_e, bins = (lamda_l, self.grid.z()))
         #           cut normalisation sample horizon
