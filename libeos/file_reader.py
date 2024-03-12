@@ -125,7 +125,6 @@ class AmorData:
                             - np.rad2deg( np.arctan(bZi*Detector.dZ / ( Detector.distance + bZi * Detector.dX) ) )
         self.delta_z      = delta[detYi==1]
         return np.vstack((detYi.T, detZi.T, detX.T, delta.T)).T
-        #return matr
     #-------------------------------------------------------------------------------------------------
     def read_individual_data(self, fileName, norm=False):
         self.hdf = h5py.File(fileName, 'r', swmr=True)
@@ -279,7 +278,8 @@ class AmorData:
         except(KeyError, IndexError):
             logging.warning("     using parameters from nicos cache")
             year_date = str(self.start_date).replace('-', '/', 1)
-            cachePath = '/home/amor/nicosdata/amor/cache/'
+            #cachePath = '/home/amor/nicosdata/amor/cache/'
+            cachePath = '/home/nicos/amorcache/'
             value = str(subprocess.getoutput(f'/usr/bin/grep "value" {cachePath}nicos-mu/{year_date}')).split('\t')[-1]
             self.mu = float(value)
             value = str(subprocess.getoutput(f'/usr/bin/grep "value" {cachePath}nicos-nu/{year_date}')).split('\t')[-1]
@@ -303,8 +303,10 @@ class AmorData:
             self.nu = self.config.nu
 
         # TODO:  figure out real stop time....
+        #self.ctime=(self.hdf['/entry1/Amor/detector/data/event_time_zero'][-1]
+        #    - self.hdf['/entry1/Amor/detector/data/event_time_zero'][0]) / 1.e9
         self.ctime=(self.hdf['/entry1/Amor/detector/data/event_time_zero'][-1]
-            - self.hdf['/entry1/Amor/detector/data/event_time_zero'][0]) / 1.e9
+            - datetime.fromisoformat(self.hdf['/entry1/start_time'][0].decode('utf-8')).timestamp()) / 1.e9
         self.fileDate = datetime.fromisoformat( self.hdf['/entry1/start_time'][0].decode('utf-8') )
 
     def read_header_info(self):
