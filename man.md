@@ -40,6 +40,7 @@ The following (non-trivial) python modules are required:
 - `numpy`
 - `h5py`
 - [`orsopy`](https://orsopy.readthedocs.io/en/latest)
+- `numba`
 
 # usage
 
