@@ -2,7 +2,7 @@ import argparse
 from datetime import date
 
 from .logconfig import update_loglevel
-from .options import ReaderConfig, EOSConfig, ExperimentConfig, OutputConfig, ReductionConfig
+from .options import ReaderConfig, EOSConfig, ExperimentConfig, OutputConfig, ReductionConfig, Defaults
 
 
 def commandLineArgs():
@@ -16,20 +16,20 @@ def commandLineArgs():
     clas = argparse.ArgumentParser(description = msg)
 
     input_data = clas.add_argument_group('input data')
-    input_data.add_argument("-n", "--fileIdentifier",
-                            default = ['0'],
+    input_data.add_argument("-f", "--fileIdentifier",
+                            required = True,
                             nargs = '+',
-                            help = "file number(s) or offset (if negative)")
-    input_data.add_argument("-r", "--normalisationFileIdentifier",
-                            default = [],
+                            help = "file number(s) or offset (if < 1)")
+    input_data.add_argument("-n", "--normalisationFileIdentifier",
+                            default = Defaults.normalisationFileIdentifier,
                             nargs = '+',
                             help = "file number(s) of normalisation measurement")
     input_data.add_argument("-d", "--dataPath",
                             type = str,
-                            default = '.',
+                            default = Defaults.dataPath,
                             help = "relative path to directory with .hdf files")
     input_data.add_argument("-Y", "--year",
-                            default = date.today().year,
+                            default = Defaults.year,
                             type = int,
                             help = "year the measurement was performed")
     input_data.add_argument("-sub", "--subtract",
@@ -37,17 +37,18 @@ def commandLineArgs():
 
     output = clas.add_argument_group('output')
     output.add_argument("-o", "--outputName",
-                            default = "fromEOS",
+                            default = Defaults.outputName,
                             help = "output file name (withot suffix)")
     output.add_argument("-of", "--outputFormat",
                             nargs = '+',
-                            default = ['Rqz.ort'])
+                            default = Defaults.outputFormat,
+                            help = "one of [Rqz.ort, Rlt.ort]")
     output.add_argument("--offSpecular",
                             type = bool,
-                            default = False,
+                            default = Defaults.offSpecular,
                             )
-    output.add_argument("-a", "--qResolution",
-                            default = 0.01,
+    output.add_argument("-r", "--qResolution",
+                            default = Defaults.qResolution,
                             type = float,
                             help = "q_z resolution")
     output.add_argument("-ts", "--timeSlize",
@@ -56,7 +57,7 @@ def commandLineArgs():
                             help = "time slizing <interval> ,[<start> [,stop]]")
     output.add_argument("-s", "--scale",
                             nargs = '+',
-                            default = [1],
+                            default = Defaults.scale,
                             type = float,
                             help = "scaling factor for R(q_z)")
     output.add_argument("-S", "--autoscale",
@@ -66,56 +67,58 @@ def commandLineArgs():
 
     masks = clas.add_argument_group('masks')
     masks.add_argument("-l", "--lambdaRange",
-                            default = [2., 15.],
+                            default = Defaults.lambdaRange,
                             nargs = 2,
                             type = float,
                             help = "wavelength range")
     masks.add_argument("-t", "--thetaRange",
-                            default = [-12., 12.],
+                            default = Defaults.thetaRange,
                             nargs = 2,
                             type = float,
                             help = "absolute theta range")
     masks.add_argument("-T", "--thetaRangeR",
-                            default = [-12., 12.],
+                            default = Defaults.thetaRangeR,
                             nargs = 2,
                             type = float,
                             help = "relative theta range")
     masks.add_argument("-y", "--yRange",
-                            default = [11, 41],
+                            default = Defaults.yRange,
                             nargs = 2,
                             type = int,
                             help = "detector y range")
     masks.add_argument("-q", "--qzRange",
-                            default = [0.005, 0.30],
+                            default = Defaults.qzRange,
                             nargs = 2,
                             type = float,
                             help = "q_z range")
 
     overwrite = clas.add_argument_group('overwrite')
     overwrite.add_argument("-cs", "--chopperSpeed",
+                            default = Defaults.chopperSpeed,
                             type = float,
                             help = "chopper speed in rpm")
     overwrite.add_argument("-cp", "--chopperPhase",
-                            default = -13.5,
+                            default = Defaults.chopperPhase,
                             type = float,
                             help = "chopper phase")
     overwrite.add_argument("-co", "--chopperPhaseOffset",
-                            default = -5,
+                            default = Defaults.chopperPhaseOffset,
                             type = float,
                             help = "phase offset between chopper opening and trigger pulse")
     overwrite.add_argument("-m", "--muOffset",
-                            default = 0.,
+                            default = Defaults.muOffset,
                             type = float,
                             help = "mu offset")
     overwrite.add_argument("-mu", "--mu",
-                            default = 0,
+                            default = Defaults.mu,
                             type = float,
                             help ="value of mu")
     overwrite.add_argument("-nu", "--nu",
-                            default = 0,
+                            default = Defaults.nu,
                             type = float,
                             help = "value of nu")
     overwrite.add_argument("-sm", "--sampleModel",
+                            default = Defaults.sampleModel,
                             type = str,
                             help = "1-line orso sample model description")
 
