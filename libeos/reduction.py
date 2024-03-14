@@ -15,10 +15,12 @@ class AmorReduction:
     def __init__(self, config: EOSConfig):
         self.experiment_config = config.experiment
         self.reader_config = config.reader
-        self.reduction_config = config.reductoin
+        self.reduction_config = config.reduction
         self.output_config = config.output
-        self.grid = Grid(config.reductoin.qResolution)
-        self.header = Header(config)
+        self.grid = Grid(config.reduction.qResolution)
+        self.header = Header()
+
+        self.header.reduction.call = EOSConfig.call_string(self)
 
     def reduce(self):
         if not os.path.exists(f'{self.reader_config.dataPath}'):
@@ -211,13 +213,13 @@ class AmorReduction:
 
     def save_Rqz(self):
         fname = os.path.join(self.reader_config.dataPath, f'{self.output_config.outputName}.Rqz.ort')
-        logging.warning(f'  {fname}')
+        logging.warning(f'    {fname}')
         theSecondLine = f' {self.header.experiment.title} | {self.header.experiment.start_date} | sample {self.header.sample.name} | R(q_z)'
         fileio.save_orso(self.datasetsRqz, fname, data_separator='\n', comment=theSecondLine)
 
     def save_Rtl(self):
         fname = os.path.join(self.reader_config.dataPath, f'{self.output_config.outputName}.Rlt.ort')
-        logging.warning(f'  {fname}')
+        logging.warning(f'    {fname}')
         theSecondLine = f' {self.header.experiment.title} | {self.header.experiment.start_date} | sample {self.header.sample.name} | R(lambda, theta)'
         fileio.save_orso(self.datasetsRlt, fname, data_separator='\n', comment=theSecondLine)
 
@@ -229,7 +231,7 @@ class AmorReduction:
             if len(filter_q[filter_q]) > 0:
                 scale = np.sum(R_q[filter_q]**2/dR_q[filter_q]) / np.sum(R_q[filter_q]/dR_q[filter_q])
             else:
-                logging.warning('#     automatic scaling not possible')
+                logging.warning('      automatic scaling not possible')
                 scale = 1.
         else:
             filter_q  = np.where(np.isnan(pR_q*R_q), False, True)
@@ -239,11 +241,11 @@ class AmorReduction:
                 scale = np.sum(R_q[filter_q]**3 * pR_q[filter_q] / (dR_q[filter_q]**2 * pdR_q[filter_q]**2)) \
                       / np.sum(R_q[filter_q]**2 * pR_q[filter_q]**2 / (dR_q[filter_q]**2  * pdR_q[filter_q]**2))
             else:
-                logging.warning('#     automatic scaling not possible')
+                logging.warning('      automatic scaling not possible')
                 scale = 1.
         R_q  /= scale
         dR_q /= scale
-        logging.debug(f'#     scaling factor = {scale}')
+        logging.debug(f'      scaling factor = {scale}')
 
         return R_q, dR_q
 
@@ -296,7 +298,7 @@ class AmorReduction:
             name = f'{name}_{normalisation_list[i]}'
         n_path = os.path.join(dataPath, f'{name}.norm')
         if os.path.exists(n_path):
-            logging.info(f'# normalisation matrix: found and using {n_path}')
+            logging.warning(f'normalisation matrix: found and using {n_path}')
             #self.norm_lz = np.loadtxt(f'{dataPath}/{name}.norm')
             #with open(n_path, 'r') as fh:
             #    fh.readline()
@@ -310,7 +312,7 @@ class AmorReduction:
                  self.normFileList[i] = entry.split('/')[-1]
             self.header.measurement_additional_files = self.normFileList
         else:
-            logging.info(f'# normalisation matrix: using the files {normalisation_list}')
+            logging.warning(f'normalisation matrix: using the files {normalisation_list}')
             fromHDF = AmorData(header=self.header,
                                reader_config=self.reader_config,
                                config=self.experiment_config,

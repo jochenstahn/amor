@@ -132,7 +132,7 @@ class AmorData:
         if self.readHeaderInfo:
             self.read_header_info()
 
-        logging.info(f'#   data from file: {fileName}')
+        logging.warning(f'    data from file: {fileName}')
         self.read_individual_header()
 
         # add header content
@@ -151,7 +151,7 @@ class AmorData:
             self.header.measurement_additional_files.append(fileio.File(file=fileName.split('/')[-1], timestamp=self.fileDate))
         else:
             self.header.measurement_data_files.append(fileio.File(file=fileName.split('/')[-1], timestamp=self.fileDate))
-        logging.info(f'#     mu = {self.mu:6.3f}, nu = {self.nu:6.3f}, kap = {self.kap:6.3f}, kad = {self.kap:6.3f}')
+        logging.info(f'      mu = {self.mu:6.3f}, nu = {self.nu:6.3f}, kap = {self.kap:6.3f}, kad = {self.kap:6.3f}')
 
         # TODO: should extract monitor from counts or beam current times time
         self.monitor1 = self.ctime
@@ -177,7 +177,7 @@ class AmorData:
 
         self.filter_qz_range(norm)
 
-        logging.info(f'#     number of events: total = {totalNumber:7d}, filtered = {np.shape(self.lamda_e)[0]:7d}')
+        logging.info(f'      number of events: total = {totalNumber:7d}, filtered = {np.shape(self.lamda_e)[0]:7d}')
 
     def filter_qz_range(self, norm):
         if self.config.qzRange[1]<0.3 and not norm:
@@ -311,7 +311,7 @@ class AmorData:
 
     def read_header_info(self):
         # read general information and first data set
-        logging.info(f'#   meta data from: {self.file_list[0]}')
+        logging.info(f'    meta data from: {self.file_list[0]}')
         self.hdf = h5py.File(self.file_list[0], 'r', swmr=True)
         title = self.hdf['entry1/title'][0].decode('utf-8')
         proposal_id = self.hdf['entry1/proposal_id'][0].decode('utf-8')
