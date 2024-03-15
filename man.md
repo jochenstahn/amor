@@ -1,6 +1,6 @@
 ---
 author: Jochen Stahn
-date: 2024-02-29
+date: 2024-03-15
 title: \textbf{EOS} \linebreak
        python script to reduce reflectivity data \linebreak
        for Amor @ SINQ, PSI
@@ -63,9 +63,9 @@ it creates one or several reflectivity curves or intensity maps.
 
 ```
 input data:
-  -n FILEIDENTIFIER [FILEIDENTIFIER ...], --fileIdentifier FILEIDENTIFIER [FILEIDENTIFIER ...]
+  -f FILEIDENTIFIER [FILEIDENTIFIER ...], --fileIdentifier FILEIDENTIFIER [FILEIDENTIFIER ...]
                         file number(s) or offset (if negative)
-  -r NORMALISATIONFILEIDENTIFIER [NORMALISATIONFILEIDENTIFIER ...], --normalisationFileIdentifier NORMALISATIONFILEIDENTIFIER [NORMALISATIONFILEIDENTIFIER ...]
+  -n NORMALISATIONFILEIDENTIFIER [NORMALISATIONFILEIDENTIFIER ...], --normalisationFileIdentifier NORMALISATIONFILEIDENTIFIER [NORMALISATIONFILEIDENTIFIER ...]
                         file number(s) of normalisation measurement
   -d DATAPATH, --dataPath DATAPATH
                         relative path to directory with .hdf files
@@ -90,7 +90,7 @@ input data:
 
 #### example:
 
-`> python eos.py -n 456 -o foo`  
+`> python eos.py -f 456 -o foo`  
 looks for the file `amor<year>n000456.hdf` in one of the default locations
 (`./`, `./raw/`, `../raw`, local raw data directory on Amor) and
 writes the output to `foo.Rqz.ort`.
@@ -115,7 +115,7 @@ writes the output to `foo.Rqz.ort`.
 
 #### example:
 
-`> python eos.py -n 456 -r 123 -o foo`  
+`> python eos.py -f 456 -n 123 -o foo`  
 looks for the files `amor<year>n000456.hdf` (reflectivity) and `amor<year>n000123.hdf`
 (normalisation) in one of the default locations
 (`./`, `./raw/`, `../raw`, local raw data directory on Amor) and
@@ -125,7 +125,7 @@ writes the output to `foo.Rqz.ort`.
 
 - **for the same instrument parameter set**
 
-  The arguments of the keys `-n` and `-r` have the general form  
+  The arguments of the keys `-f` and `-n` have the general form  
   `<start1>[-<end1>[:<increment1]][,<start2>[-<end2>[:<increment2]],...]`  
   Each number range is defined by a start value, an optional stop value and an
   optional increment. Various ranges are separated by a ','.
@@ -143,7 +143,7 @@ writes the output to `foo.Rqz.ort`.
 
 - **for different parameter sets, or to prevent merging**
 
-  The key `-n` accepts more than one argument of the type defined above. The
+  The key `-f` accepts more than one argument of the type defined above. The
   (set of) data file(s) related to one argument are merged and give one
   reflectivity curve (one `data_set`) in the output file. The reflectivity
   curves for more than one argument are separated in the output file
@@ -151,13 +151,13 @@ writes the output to `foo.Rqz.ort`.
 
   #### example:  
   
-  `> python eos.py -n 20,21 30 -r 123 -o foo`   
+  `> python eos.py -f 20,21 30 -n 123 -o foo`   
   results in two reflectivity curves, the first made from files #20 and #21, 
   the second from file #30. Both are saved in `foo.Rqz.ort`. 
 
   #### warning:  
   
-  `-r` does accept only one argument! 
+  `-n` does accept only one argument! 
 
 ### misc.
 
@@ -191,7 +191,7 @@ output:
                         output file name (withot suffix)
   -of OUTPUTFORMAT [OUTPUTFORMAT ...], --outputFormat OUTPUTFORMAT [OUTPUTFORMAT ...]
   --offSpecular OFFSPECULAR
-  -a QRESOLUTION, --qResolution QRESOLUTION
+  -r QRESOLUTION, --qResolution QRESOLUTION
                         q_z resolution
   -ts TIMESLIZE [TIMESLIZE ...], --timeSlize TIMESLIZE [TIMESLIZE ...]
                         time slizing <interval> ,[<start> [,stop]]
@@ -229,7 +229,7 @@ $q_{z\,i} \in [0,\, a,\, 2a,\, 3a,\, \dots \hat\imath a] \qquad \forall \quad q_
 
 $q_{z\,\hat\imath+j} \in [q_\mathrm{base} \cdot (1+a), q_\mathrm{base} \cdot (1+a)^2, \dots q_\mathrm{base} \cdot (1+a)^j \dots \qquad \forall \quad  q_z  >q_\mathrm{base}$ 
 
-The **output resolution** $a$ can be chosen with `-a` among the values  
+The **output resolution** $a$ can be chosen with `-r` among the values  
 $a \in [0.005,\, 0.01,\, 0.02,\, 0.025,\, 0.04,\, 0.05,\, 0.1,\, 1]$  
 (this is restricted to ensure a *smooth* transition between the 
 linear and exponential regions). The best instrument resolution is $\sigma_{q_z} / q_z = 2.2\,\%$.
@@ -257,7 +257,7 @@ column is added with the start time of the respective slize.
 
 #### example:  
 
-`python -n 20-22 -r 123 -ts 60 1200 4000 -f foo`  
+`python -f 20-22 -n 123 -ts 60 1200 4000 -f foo`  
 The event streams of the measurements #20, #21 and #22 are merged. All events before
 $t = 1200\,\mathrm{s}$ with respect to the start of meausrement #20 are discarded.
 Then until $t = 4020\,\mathrm{s}$ (the starting time of the last slize is within the given
