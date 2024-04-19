@@ -258,19 +258,27 @@ class AmorReduction:
         dq_lzf    = dq_lz.flatten()[mask_lzf]
         norm_lzf  = norm_lz.flatten()[mask_lzf]
 
-        N_q       = np.histogram(q_lzf, bins = q_q, weights = norm_lzf )[0]
+        weights_lzf = norm_lzf
+        #weights_lzf = np.sqrt(norm_lzf)
+        #weights_lzf = 1 / dR_lzf
+
+        N_q       = np.histogram(q_lzf, bins = q_q, weights = weights_lzf )[0]
         N_q       = np.where(N_q > 0, N_q, np.nan)
 
-        R_q       = np.histogram(q_lzf, bins = q_q, weights = norm_lzf * R_lzf )[0]
+        R_q       = np.histogram(q_lzf, bins = q_q, weights = weights_lzf * R_lzf )[0]
         R_q       = R_q / N_q
 
-        dR_q      = np.histogram(q_lzf, bins = q_q, weights = (norm_lzf * dR_lzf)**2 )[0]
+        dR_q      = np.histogram(q_lzf, bins = q_q, weights = (weights_lzf * dR_lzf)**2 )[0]
         dR_q      = np.sqrt( dR_q ) / N_q
 
         # TODO: different error propagations for dR and dq!
-        N_q       = np.histogram(q_lzf, bins = q_q, weights = norm_lzf**2 )[0]
+        # this is what should work:
+        #dq_q      = np.histogram(q_lzf, bins = q_q, weights = (weights_lzf * dq_lzf)**2 )[0]
+        #dq_q      = np.sqrt( dq_q ) / N_q 
+        # and this actually works:
+        N_q       = np.histogram(q_lzf, bins = q_q, weights = weights_lzf**2 )[0]
         N_q       = np.where(N_q > 0, N_q, np.nan)
-        dq_q      = np.histogram(q_lzf, bins = q_q, weights = (norm_lzf * dq_lzf)**2 )[0]
+        dq_q      = np.histogram(q_lzf, bins = q_q, weights = (weights_lzf * dq_lzf)**2 )[0]
         dq_q      = np.sqrt( dq_q / N_q )
 
         q_q       = 0.5 * (q_q + np.roll(q_q, 1))
