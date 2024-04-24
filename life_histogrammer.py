@@ -1,12 +1,5 @@
 __version__ = '2024-03-15'
 
-# essential changes with regard to 2022 version 
-# - imprved orso header
-# - nexus compatible
-# - new theta grid
-# - new content in data_e (angleas rather than distances)
-# - bug fixes: tof correction within detector
-
 import os
 import sys
 import subprocess
@@ -20,7 +13,6 @@ import time
 import signal
 import logging
 from datetime import datetime
-from orsopy import fileio
 
 #==============================================================================
 #==============================================================================
@@ -87,7 +79,6 @@ def analyse_ev(event_e, tof_e, yMin, yMax, thetaMin, thetaMax):
     data_e = data_e[filter_e,:]
     
     # correct tof for beam size effect at chopper 
-    # t_cor = (delta / 180 deg) * tau 
     data_e[:,0] -= ( data_e[:,5] / 180. ) * tau
       
     # effective flight path length
@@ -98,7 +89,6 @@ def analyse_ev(event_e, tof_e, yMin, yMax, thetaMin, thetaMax):
     data_e[:,7] = 1.e13 * data_e[:,0] * hdm / ( chopperDetectorDistance + data_e[:,6] )
     
     # theta 
-    # data_e[:,8] = nu - mu + np.rad2deg( np.arctan2(data_e[:,5], detectorDistance) ) 
     data_e[:,8] = nu - mu + data_e[:,5] 
 
     # gravity compensation
@@ -193,30 +183,6 @@ class Meta:
         except (KeyError, IndexError):
             self.spin = '?'
 
-
-        # for .ort header
-
-        self.title                      = str(fh['entry1/title'][0].decode('utf-8'))
-
-        self.proposal_id                = str(fh['entry1/proposal_id'][0].decode('utf-8'))
-
-        self.userName                   = str(fh['entry1/user/name'][0].decode('utf-8'))
-        try:
-          self.userEmail                = str(fh['entry1/user/email'][0].decode('utf-8'))
-        except:
-          self.userEmail                = None
-
-        self.sampleName                 = str(fh['entry1/sample/name'][0].decode('utf-8'))
-        self.sampleModel                = str(fh['entry1/sample/model'][0].decode('utf-8'))
-
-        #!!! self.instrumentName             = str(fh['entry1/Amor/name'][0])
-        self.instrumentName             = 'Amor'
-        #!!! self.instrumentType             = str(fh['entry1/Amor/type'][0])
-        self.source                     = str(fh['entry1/Amor/source/name'][0])
-        #!!! self.sourceType                 = str(fh['entry1/Amor/source/type'][0])
-        #!!! self.sourceProbe                = str(fh['entry1/Amor/source/probe'][0])
-        self.sourceProbe                = 'neutron'
-
         fh.close()
 
 #==============================================================================
@@ -299,90 +265,6 @@ def selectTime(timeMin, timeMax, dataPacketTime_p, dataPacket_p, detPixelID_e, t
     return dataPacket_p, dataPacketTime_p, detPixelID_e, tof_e, 
     
 #==============================================================================
-def ort_header(fileName):
-
-    #print(fileName)
-    meta = Meta(fileName)
-    '''
-    Build information object for ORSO file headers.
-    '''
-
-    #for fidx in self.get_flist(self.Files):
-    #  fdata = data_vault['tmp%s'%fidx]
-    #  fdate = datetime.strptime(fdata['timestamp'], '%Y-%m-%d %H:%M:%S')
-    #  datafiles.append(fileio.File(file = fdata['srcname'], timestamp = fdate))
-
-    inst = fileio.InstrumentSettings(
-        incident_angle = fileio.ValueRange(
-            mu + meta.kap + meta.kad - meta.div/2,
-            mu + meta.kap + meta.kad + meta.div/2,
-            'deg'
-        ),
-        wavelength = fileio.ValueRange(
-            lamdaMin,
-            lamdaMax, 
-            'angstrom'
-        ),
-    )
-    inst.mu = fileio.Value(mu, 'deg', comment = 'sample angle to horizon')
-    inst.nu = fileio.Value(nu, 'deg', comment = 'detector angle to horizon')
-    inst.kap = fileio.Value(meta.kap, 'deg', comment = 'nominal beam inclination')
-    inst.kad = fileio.Value(meta.kad, 'deg', comment = 'offset of beam inclination')
-    inst.div = fileio.Value(meta.div, 'deg', comment = 'incoming beam divergence')
-    mess = fileio.Measurement(
-        instrument_settings = inst,
-        data_files = fileName.split('/')[-1],
-        counting_time = fileio.Value(meta.countingTime, 's'),
-        scheme = 'angle- and energy-dispersive')
-    se_dict = None
-    smpl = fileio.Sample(
-        name  = meta.sampleName,
-        model = meta.sampleModel,
-        sample_parameters = se_dict
-    )
-    experiment = fileio.Experiment(
-        title = meta.title,
-        instrument = meta.instrumentName,
-        #instrument_type = meta.instrumentType,
-        start_date = meta.startDate,
-        probe = meta.sourceProbe,
-        #facility = meta.sourceName,
-        #source_type = meta.sourceType,
-        proposalID = meta.proposal_id,
-    )
-    ds = fileio.DataSource(
-        fileio.Person(
-            meta.userName, 
-            None, 
-            contact = meta.userEmail
-        ),
-        experiment,
-        smpl,
-        mess
-    )
-    red = fileio.Reduction(
-        software = fileio.Software(
-             'events2histogram', 
-             version = __version__
-        ),
-        timestamp = datetime.now(),
-        creator = None, 
-        corrections = None,
-        computer = None,
-        call = 'python '+' '.join(sys.argv)
-    )
-    cols = [
-        fileio.Column('Qz', '1/angstrom'),
-        fileio.Column('R', comment = 'uncorrected intensity'),
-        fileio.Column('sR', comment = 'sigma of gaussian probability function'),
-        fileio.Column('sQz', '1/angstrom', comment = 'resolution based only on sigma_lambda!')
-    ]
-
-    header = fileio.Orso(ds, red, cols)
-
-    return header
-
-#==============================================================================
 class PlotSelection:
 
     # header / meta data
@@ -406,10 +288,7 @@ class PlotSelection:
 
     def lamda_grid(self):
         dldl      = 0.005 # Delta lambda / lambda
-        if foldback:
-            lamda_grid = lamdaMin*(1+dldl)**np.arange(int(np.log(lamdaMax/lamdaMin)/np.log(1+dldl)+1))
-        else:
-            lamda_grid = np.arange(0.01, 2.*lamdaMax-2.*lamdaMin, 0.1)
+        lamda_grid = lamdaMin*(1+dldl)**np.arange(int(np.log(lamdaMax/lamdaMin)/np.log(1+dldl)+1))
         return lamda_grid
     
     def theta_grid(self):
@@ -501,7 +380,6 @@ class PlotSelection:
         fig.colorbar(cb, ax=mlt)
         plt.subplots_adjust(hspace=0.6, wspace=0.1)
         plt.savefig(output, format='png', dpi=150)
-        #plt.close()
 
     # create PNG with one plot
 
@@ -513,14 +391,7 @@ class PlotSelection:
         y_grid = np.arange(64)
         z_grid = np.arange(det.nBlades*32)
         I_yz, bins_y, bins_z = np.histogram2d(data_e[:,4], (det.nBlades-data_e[:,2])*32-data_e[:,3], bins = (y_grid, z_grid))
-        if arg == 'file':
-            print('# y z conts')
-            for y in range(len(bins_y)-1):
-                for z in range(len(bins_z)-1):
-                    print(" %6.3f %6.4f %10.3e" %(bins_y[y], bins_z[z], I_yz[y,z]))
-                print("")
-            return
-        elif arg == 'log':
+        if arg == 'log':
             vmin = 0
             vmax = max(1, np.log(np.max(I_yt)+.1)/np.log(10)*1.05)
             plt.pcolormesh(bins_y[:],bins_z[:],(np.log(I_yz+6e-1)/np.log(10)).T, cmap=cmap, vmin=vmin, vmax=vmax)
@@ -532,21 +403,13 @@ class PlotSelection:
         plt.title(headline, loc='left', y=1.0, c='r')
         plt.colorbar()
         plt.savefig(output, format='png', dpi=150)
-        #plt.close()
 
     def Ilt(self, numberString, arg, data_e) :
         cmap = mpl.cm.gnuplot(np.arange(256))
         cmap[:1, :] = np.array([256/256, 255/256, 236/256, 1])
         cmap = mpl.colors.ListedColormap(cmap, name='myColorMap', N=cmap.shape[0])
         I_lt, bins_l, bins_t = np.histogram2d(data_e[:,7], data_e[:,8], bins = (self.lamda_grid(), self.theta_grid()))
-        if arg == 'file':
-            print('# lambda theta conts')
-            for l in range(len(bins_l)-1):
-                for t in range(len(bins_t)-1):
-                    print(" %6.3f %6.4f %10.3e" %(bins_l[l], bins_t[t], I_lt[l,t]/ bins_t[t]))
-                print("") 
-            return    
-        elif arg == 'log':
+        if arg == 'log':
             vmax = max(1, np.log(np.max(I_lt)+.1)/np.log(10)*1.05 )
             plt.pcolormesh(bins_l, bins_t, (np.log(I_lt+I_lt[I_lt>0].min()/2)/np.log(10.)).T, cmap=cmap, vmin=0, vmax=vmax)
         else :
@@ -567,28 +430,17 @@ class PlotSelection:
         plt.title(headline, loc='left', y=1.0, c='r')
         plt.colorbar()
         plt.savefig(output, format='png', dpi=150)
-        #plt.close()
     
     def Itz(self, numberString, arg, data_e):
         det = Detector()
         cmap = mpl.cm.gnuplot(np.arange(256))
         cmap[:1, :] = np.array([256/256, 255/256, 236/256, 1])
         cmap = mpl.colors.ListedColormap(cmap, name='myColorMap', N=cmap.shape[0])
-        if foldback:
-            time_grid = np.arange(0, tau, 0.0005)
-        else:
-            time_grid = np.arange(0, 2.*tau, 0.0005)
+        time_grid = np.arange(0, tau, 0.0005)
         z_grid = np.arange(det.nBlades*32+1)
      
         I_tz, bins_t, bins_z = np.histogram2d(data_e[:,0], 32*det.nBlades-data_e[:,2]*32-data_e[:,3], bins = (time_grid, z_grid))
-        if arg == 'file':
-            print('# time z conts')
-            for t in range(len(bins_t)-1):
-                for z in range(len(bins_z)-1):
-                    print(" %6.3f %6.4f %10.3e" %(bins_t[t], bins_z[z], I_tz[t,z]))
-                print("")
-            return    
-        elif arg == 'log':
+        if arg == 'log':
             vmax = max(2., np.log(np.max(I_tz)+.1)/np.log(10)*1.05 )
             plt.pcolormesh(bins_t, bins_z, (np.log(I_tz+5.e-1)/np.log(10.)).T, cmap=cmap, vmin=0, vmax=vmax)
         else :
@@ -603,20 +455,13 @@ class PlotSelection:
         plt.title(headline, loc='left', y=1.0, c='r')
         plt.colorbar()
         plt.savefig(output, format='png', dpi=150)
-        #plt.close()
     
     def Iq(self, numberString, arg, data_e):
         I_q, bins_q = np.histogram(data_e[:,9], bins = self.q_grid())
         err_q = np.sqrt(I_q+1)
         q_lim = 4*np.pi*np.array([ max( np.sin(self.theta_grid()[0]*np.pi/180.)/self.lamda_grid()[-1] , 1e-4 ),
                                    min( np.sin(self.theta_grid()[-1]*np.pi/180.)/self.lamda_grid()[0] , 0.03 )])
-        if arg == 'file':
-            header = '# q counts'
-            I_q =  np.vstack((bins_q[:-1], I_q, err_q))
-            np.savetxt(sys.stdout, I_q.T, header=header)
-            logging.info('     use `-p ort` instead of `-p Iq`!')
-            return
-        elif arg == 'log':
+        if arg == 'log':
             low_q = np.where(I_q-err_q>0, I_q-err_q, 0.1)
             plt.fill_between(bins_q[:-1], np.log(low_q)/np.log(10), np.log(I_q+err_q/2)/np.log(10), color='lightgrey')
             plt.plot(bins_q[:-1], np.log(I_q+5e-1)/np.log(10), color='blue', linewidth=0.5)
@@ -630,16 +475,10 @@ class PlotSelection:
         headline = self.headline(numberString, np.shape(data_e)[0])
         plt.title(headline, loc='left', y=1.0, c='r')
         plt.savefig(output, format='png', dpi=150)
-        #plt.close()
 
     def Il(self, numberString, arg, data_e):
         I_l, bins_l = np.histogram(data_e[:,7], bins = self.lamda_grid())
-        if arg == 'file':
-            header = '# lambda counts'
-            I_l = np.vstack((bins_l[:-1], I_l)) 
-            np.savetxt(sys.stdout, I_l.T, header=header)
-            return
-        elif arg == 'lin':
+        if arg == 'lin':
             plt.plot(bins_l[:-1], I_l)
             plt.ylabel('$I ~/~ \\mathrm{cnts}$')
         else:
@@ -649,36 +488,20 @@ class PlotSelection:
         headline = self.headline(numberString, np.shape(data_e)[0])
         plt.title(headline, loc='left', y=1.0, c='r')
         plt.savefig(output, format='png', dpi=150)
-        #plt.close()
     
     def It(self, numberString, arg, data_e):
         I_t, bins_t = np.histogram(data_e[:,8], bins = self.theta_grid())
-        if arg == 'file':
-            header = '# 2theta counts'
-            I_t = np.vstack((bins_t[:-1], I_t))
-            np.savetxt(sys.stdout, I_t.T, header=header)
-            return
-        else:
-            plt.plot( I_t, bins_t[:-1])
+        plt.plot( I_t, bins_t[:-1])
         plt.xlabel('$\\mathrm{cnts}$')
         plt.ylabel('$\\theta ~/~ \\mathrm{deg}$')
         headline = self.headline(numberString, np.shape(data_e)[0])
         plt.title(headline, loc='left', y=1.0, c='r')
         plt.savefig(output, format='png', dpi=150)
-        #plt.close()
 
     def tof(self, numberString, arg, data_e):
-        if foldback:
-            time_grid = np.arange(0, 1.3*tau, 0.0005)
-        else:
-            time_grid = np.arange(0, 2.*tau, 0.0005)
+        time_grid = np.arange(0, 1.3*tau, 0.0005)
         I_t, bins_t = np.histogram(data_e[:,0], bins = time_grid)
-        if arg == 'file':
-            header = '# time counts'
-            I_t = np.vstack((bins_t[:-1], I_t))
-            np.savetxt(sys.stdout, I_t.T, header=header)
-            return
-        elif arg == 'lin':
+        if arg == 'lin':
             plt.plot(bins_t[:-1]+tau, I_t)
             plt.plot(bins_t[:-1], I_t)
             plt.plot(bins_t[:-1]+2*tau, I_t)
@@ -692,20 +515,6 @@ class PlotSelection:
         headline = self.headline(numberString, np.shape(data_e)[0])
         plt.title(headline, loc='left', y=1.0, c='r')
         plt.savefig(output, format='png')
-
-    def ort(self, numberString, arg, data_e):
-        I_q, bins_q = np.histogram(data_e[:,9], bins = self.q_grid())
-        sI_q = np.sqrt(I_q)
-        sq_q = bins_q[:-1]*0.022
-        I_q =  np.vstack((bins_q[:-1], I_q, sI_q, sq_q))
-
-        datasets = []
-        fileNumber = get_flist(numberString)[-1]
-        fileName = fileNameCreator(dataPath, fileNumber)[0]
-        header = ort_header(fileName)
-        orso_data=fileio.OrsoDataset(header, I_q.T)
-        datasets.append(orso_data)
-        fileio.save_orso(datasets, 'e2h.ort', data_separator='\n')
 
 #==============================================================================
 #==============================================================================
@@ -775,8 +584,6 @@ def process(dataPath, ident, clas):
     yMax         = clas.yRange[1]
     qMin         = clas.qRange[0]
     qMax         = clas.qRange[1]
-    global foldback
-    foldback     = not clas.noTOFCorrection
 
     #================================
     # find and open input file 
@@ -873,9 +680,8 @@ def process(dataPath, ident, clas):
         #if filterThreshold:
         #    detPixelID_e, tof_e = filterTof(detPixelID_e, tof_e, dataPacket_p, filterThreshold)
  
-        if foldback:
-            tof_e  = np.where(tof_e<tofCut, tof_e+2.*tau, tof_e)
-            tof_e  = np.where(tof_e>tau+tofCut, tof_e-tau, tof_e)
+        tof_e  = np.where(tof_e<tofCut, tof_e+2.*tau, tof_e)
+        tof_e  = np.where(tof_e>tau+tofCut, tof_e-tau, tof_e)
 
         data_e = analyse_ev(detPixelID_e, tof_e, yMin, yMax, thetaMin, thetaMax)
 
@@ -917,9 +723,6 @@ def commandLineArgs():
            creates various histogrammed outputs or plots."
     clas = argparse.ArgumentParser(description = msg)
 
-    clas.add_argument("-b", "--noTOFCorrection", 
-                            action='store_true',                       
-                            help ="do not correct tof of seond neutron pulse")
     clas.add_argument("-c", "--chopperSpeed",
                             type=float,
                             help ="chopper speed in rpm")
@@ -965,12 +768,6 @@ def commandLineArgs():
                             nargs=2, 
                             type=float,
                             help ="q_z range")
-    clas.add_argument("-r", "--iDonno",          
-                            action='store_true',                       
-                            help ="no idea")
-    clas.add_argument("-s", "--spy",             
-                            action='store_true',                       
-                            help ="report a few key values, no plotting or writing")
     clas.add_argument("-T", "--TOFOffset",       
                             default=0.0,                    
                             type=float,
@@ -980,9 +777,6 @@ def commandLineArgs():
                             nargs=2, 
                             type=float,
                             help ="theta range to be used")
-    clas.add_argument("-u", "--update",          
-                            action='store_true', 
-                            help ="update output every 5 seconds")
     clas.add_argument("-Y", "--year",
                             default = str(datetime.today()).split('-')[0],
                             help = "year, the measurement was performed")
@@ -1011,15 +805,15 @@ def get_dataPath(clas):
 
 #==============================================================================   
 def get_directDataPath(clas):
-        #dataPath = clas.dataPath + '/'
-        year = str(datetime.today()).split('-')[0]
-        year_date = str(datetime.today()).split(' ')[0].replace("-", "/", 1)
-        pNr  = str(subprocess.getoutput('/usr/bin/grep "proposal\t" /home/amor/nicosdata/amor/cache/nicos-exp/'+year_date)[-1]).split('\'')[1]
-        dataPath = '/home/amor/nicosdata/amor/data/'+year+'/'+pNr+'/'
-        if not os.path.exists(dataPath):
-             sys.exit('# *** the directory "'+dataPath+'" does not exist ***')
+    #dataPath = clas.dataPath + '/'
+    year = str(datetime.today()).split('-')[0]
+    year_date = str(datetime.today()).split(' ')[0].replace("-", "/", 1)
+    pNr  = str(subprocess.getoutput('/usr/bin/grep "proposal\t" /home/amor/nicosdata/amor/cache/nicos-exp/'+year_date)[-1]).split('\'')[1]
+    dataPath = '/home/amor/nicosdata/amor/data/'+year+'/'+pNr+'/'
+    if not os.path.exists(dataPath):
+         sys.exit('# *** the directory "'+dataPath+'" does not exist ***')
 
-        return dataPath
+    return dataPath
 
 #==============================================================================
 def main():
@@ -1027,34 +821,14 @@ def main():
  
     clas = commandLineArgs()
 
-    if clas.update:
-        verbous = False
-        logging.basicConfig(level=logging.ERROR, format='# %(message)s')
-        logging.error('e2h: recreating "e2h_life.png" every 5 s')
-        delay = 5
-        output = 'e2h_life.png'
-        oldtime = 0
-        while True:
-            dataPath = get_directDataPath(clas)
-            fileName = fileNameCreator(dataPath, 0)[0]
-            newtime = os.path.getmtime(fileName)
-            if newtime-oldtime:
-                print('\r# processing   (press ^C to stop)', end='', flush=True)
-                process(dataPath, '0', clas)
-                oldtime = newtime 
-            for i in range(5):
-                print('\r# waiting'+'.'*i+' '*(5-i)+' (press ^C to stop)', end='', flush=True)
-                time.sleep(delay/5)
-            signal.signal(signal.SIGINT, endIt)
-    else:
-        dataPath = get_dataPath(clas)
-        logging.basicConfig(level=logging.INFO, format='# %(message)s')
-        verbous = True
-        output = 'e2h.png'
-        process(dataPath, clas.fileIdent, clas)
+    dataPath = get_dataPath(clas)
+    logging.basicConfig(level=logging.INFO, format='# %(message)s')
+    verbous = True
+    output = 'e2h.png'
+    process(dataPath, clas.fileIdent, clas)
 
 #==============================================================================
-#============================================================================== 
+#==============================================================================
 if __name__ == "__main__":
     main()     
 
