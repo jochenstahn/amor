@@ -10,7 +10,6 @@ import argparse
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import time
-import signal
 import logging
 from datetime import datetime
 
@@ -110,10 +109,10 @@ def analyse_ev(event_e, tof_e, yMin, yMax, thetaMin, thetaMax):
 #==============================================================================
 class Meta:
   # AMOR hdf dataset with associated properties from metadata
-    def __init__(self, filename):
-        self.filename = filename
+    def __init__(self, fileName):
+        self.fileName = fileName
 
-        fh = h5py.File(filename, 'r', swmr=True)
+        fh = h5py.File(fileName, 'r', swmr=True)
 
         # for processing
 
@@ -186,7 +185,7 @@ class Meta:
         fh.close()
 
 #==============================================================================
-def resolveNumbers(dataPath, ident):
+def resolveNumber(dataPath, ident):
     if ident == '0' or '-' in ident[0]:
         try: 
             nnr = int(ident)
@@ -197,91 +196,39 @@ def resolveNumbers(dataPath, ident):
         fileName  = fileNames[nnr-1] 
         fileName = fileName.split('/')[-1]
         fileNumber = fileName.split('n')[1].split('.')[0].lstrip('0')
-        numberString = fileNumber
-        numberList   = [int(fileNumber)]
-    elif 'a' in ident[0]:
-        fileNumber = fileName.split('n')[1].split('.')[0].lstrip('0')
-        numberString = fileNumber
-        numberList   = [int(fileNumber)]
     else:
-        if 'r' in ident: # substitute 'r' (recent) for the actual number
-            fileName = glob.glob(dataPath+'/*.hdf')[-1]
-            fileName = fileName.split('/')[-1]
-            fileNumber = fileName.split('n')[1].split('.')[0].lstrip('0')
-            ident = ident.replace('r', fileNumber, 1)
-        numberString = ident
-        numberList = get_flist(ident) 
+        fileNumber = ident
 
-    return numberString, numberList 
+    return fileNumber 
 
 #==============================================================================
 def fileNameCreator(dataPath, ident):
     clas = commandLineArgs()
-    # create path/filename
     ident=str(ident)
-    if 'a' in ident:
-        fileName = ident
-        
-    else:
-        try: 
-            nnr = int(ident)
-        except:
-            logging.error("ERROR: '{}' is no valid file identifier!".format(ident))
+    try: 
+        nnr = int(ident)
+    except:
+        logging.error("ERROR: '{}' is no valid file identifier!".format(ident))
 
-        if nnr <= 0 :
-            fileName = glob.glob(dataPath+'/*.hdf')[nnr-1]
-            fileName = fileName.split('/')[-1]
-        else:
-            fileName = f'amor{clas.year}n{ident:>06s}'
-            #fileName = 'amor2021n{:>06s}'.format(ident)
+    if nnr <= 0 :
+        fileName = glob.glob(dataPath+'/*.hdf')[nnr-1]
+        fileName = fileName.split('/')[-1]
+    else:
+        fileName = f'amor{clas.year}n{ident:>06s}'
         
     fileName = fileName.split('.')[0]
     fileName = fileName+'.hdf'
     fileName = dataPath+fileName
-    #filename = '/home/software/kafka-to-nexus/'+filename
-    #print(fileName)
     
-    fileNumber = fileName.split('n')[1].split('.')[0].lstrip('0')
+    fileNumber = fileName.split('n')[-1].split('.')[0].lstrip('0')
   
     return fileName, fileNumber
 
 #==============================================================================
-def selectTime(timeMin, timeMax, dataPacketTime_p, dataPacket_p, detPixelID_e, tof_e):
-    dataPacketTime_p = np.array(dataPacketTime_p)/1e9
-    dataPacket_p     = np.array(dataPacket_p)
-    detPixelID_e     = np.array(detPixelID_e)
-    tof_e            = np.array(tof_e)
-    startTime = dataPacketTime_p[0]
-    stopTime  = dataPacketTime_p[-1]
-    if timeMin > (stopTime-startTime): 
-        logging.error('ERROR: time interval [{} : {}] s outside measurement time range [0 : {}] s'.format(timeMin, timeMax, stopTime-startTime))
-        sys.exit()
-    dataPacket_p     = dataPacket_p[(dataPacketTime_p-startTime)<timeMax]
-    dataPacketTime_p = dataPacketTime_p[(dataPacketTime_p-startTime)<timeMax]
-    dataPacket_p     = dataPacket_p[(dataPacketTime_p-startTime)>=timeMin]
-    dataPacketTime_p = dataPacketTime_p[(dataPacketTime_p-startTime)>=timeMin]
-    detPixelID_e     = detPixelID_e[dataPacket_p[0]:dataPacket_p[-1]]
-    tof_e            = tof_e[dataPacket_p[0]:dataPacket_p[-1]]
-    return dataPacket_p, dataPacketTime_p, detPixelID_e, tof_e, 
-    
-#==============================================================================
 class PlotSelection:
 
-    # header / meta data
-    
-    def header(self, filename, mu, nu, totalCounts, countingTime, spin):
-        number = filename.split('n')[1].split('.')[0].lstrip('0')
-        if spin == 'p':
-            spin = '   <+|'
-        elif spin == 'm':
-            spin = '   <-|'
-        else:
-            spin = ''
-        header = "#{}   \u03bc={:>1.2f} \u03bd={:>1.2f} {} {:>10} cts   {:>8.1f} s".format(number, mu+5e-3, nu+5e-3, spin, totalCounts, countingTime)
-        return header
-
-    def headline(self, numberString, totalCounts):
-        headLine = "#{}   \u03bc={:>1.2f} \u03bd={:>1.2f} {:>12,} cts   {:>8.1f} s".format(numberString, mu+5e-3, nu+5e-3, totalCounts, countingTime)
+    def headline(self, fileNumber, totalCounts):
+        headLine = "#{}   \u03bc={:>1.2f} \u03bd={:>1.2f} {:>12,} cts   {:>8.1f} s".format(fileNumber, mu+5e-3, nu+5e-3, totalCounts, countingTime)
         return headLine
 
     # grids
@@ -321,7 +268,7 @@ class PlotSelection:
 
     # create PNG with several plots
 
-    def all(self, numberString, arg, data_e):
+    def all(self, fileNumber, arg, data_e):
         #cmap='gist_earth'
         cmap = mpl.cm.gnuplot(np.arange(256))
         cmap[:1, :] = np.array([256/256, 255/256, 236/256, 1])
@@ -375,7 +322,7 @@ class PlotSelection:
             lw = I_q[ ((q_lim[0] < bins_q[:-1]) & (bins_q[:-1] < q_lim[1])) ].min() 
             plt.ylim(max(-0.1, np.log(lw+.1)/np.log(10)-0.1), )
         #
-        headline = self.headline(numberString, np.shape(data_e)[0])
+        headline = self.headline(fileNumber, np.shape(data_e)[0])
         plt.title(headline, loc='left', y=2.8, c='r')
         fig.colorbar(cb, ax=mlt)
         plt.subplots_adjust(hspace=0.6, wspace=0.1)
@@ -383,7 +330,7 @@ class PlotSelection:
 
     # create PNG with one plot
 
-    def Iyz(self, numberString, arg, data_e):
+    def Iyz(self, fileNumber, arg, data_e):
         det = Detector()
         cmap = mpl.cm.gnuplot(np.arange(256))
         cmap[:1, :] = np.array([256/256, 255/256, 236/256, 1])
@@ -399,12 +346,12 @@ class PlotSelection:
             plt.pcolormesh(bins_y[:],bins_z[:],I_yz.T, cmap=cmap)
         plt.xlabel('$y ~/~ \\mathrm{bins}$')
         plt.ylabel('$z ~/~ \\mathrm{bins}$')
-        headline = self.headline(numberString, np.shape(data_e)[0])
+        headline = self.headline(fileNumber, np.shape(data_e)[0])
         plt.title(headline, loc='left', y=1.0, c='r')
         plt.colorbar()
         plt.savefig(output, format='png', dpi=150)
 
-    def Ilt(self, numberString, arg, data_e) :
+    def Ilt(self, fileNumber, arg, data_e) :
         cmap = mpl.cm.gnuplot(np.arange(256))
         cmap[:1, :] = np.array([256/256, 255/256, 236/256, 1])
         cmap = mpl.colors.ListedColormap(cmap, name='myColorMap', N=cmap.shape[0])
@@ -426,12 +373,12 @@ class PlotSelection:
             plt.ylim(top=np.max(bins_t))
         plt.xlabel('$\\lambda ~/~ \\mathrm{\\AA}$')
         plt.ylabel('$\\theta ~/~ \\mathrm{deg}$')
-        headline = self.headline(numberString, np.shape(data_e)[0])
+        headline = self.headline(fileNumber, np.shape(data_e)[0])
         plt.title(headline, loc='left', y=1.0, c='r')
         plt.colorbar()
         plt.savefig(output, format='png', dpi=150)
     
-    def Itz(self, numberString, arg, data_e):
+    def Itz(self, fileNumber, arg, data_e):
         det = Detector()
         cmap = mpl.cm.gnuplot(np.arange(256))
         cmap[:1, :] = np.array([256/256, 255/256, 236/256, 1])
@@ -451,12 +398,12 @@ class PlotSelection:
             plt.ylim(0,)
         plt.xlabel('$t ~/~ \\mathrm{s}$')
         plt.ylabel('$z$ pixel row')
-        headline = self.headline(numberString, np.shape(data_e)[0])
+        headline = self.headline(fileNumber, np.shape(data_e)[0])
         plt.title(headline, loc='left', y=1.0, c='r')
         plt.colorbar()
         plt.savefig(output, format='png', dpi=150)
     
-    def Iq(self, numberString, arg, data_e):
+    def Iq(self, fileNumber, arg, data_e):
         I_q, bins_q = np.histogram(data_e[:,9], bins = self.q_grid())
         err_q = np.sqrt(I_q+1)
         q_lim = 4*np.pi*np.array([ max( np.sin(self.theta_grid()[0]*np.pi/180.)/self.lamda_grid()[-1] , 1e-4 ),
@@ -472,11 +419,11 @@ class PlotSelection:
         plt.ylabel('$\\log_{10}(\\mathrm{cnts})$')
         plt.xlabel('$q_z ~/~ \\mathrm{\\AA}^{-1}$')
         plt.xlim(q_lim)
-        headline = self.headline(numberString, np.shape(data_e)[0])
+        headline = self.headline(fileNumber, np.shape(data_e)[0])
         plt.title(headline, loc='left', y=1.0, c='r')
         plt.savefig(output, format='png', dpi=150)
 
-    def Il(self, numberString, arg, data_e):
+    def Il(self, fileNumber, arg, data_e):
         I_l, bins_l = np.histogram(data_e[:,7], bins = self.lamda_grid())
         if arg == 'lin':
             plt.plot(bins_l[:-1], I_l)
@@ -485,20 +432,20 @@ class PlotSelection:
             plt.plot(bins_l[:-1], np.log(I_l+5.e-1)/np.log(10.))
             plt.ylabel('$\\log_{10} I ~/~ \\mathrm{cnts}$')
         plt.xlabel('$\\lambda ~/~ \\mathrm{\\AA}$')
-        headline = self.headline(numberString, np.shape(data_e)[0])
+        headline = self.headline(fileNumber, np.shape(data_e)[0])
         plt.title(headline, loc='left', y=1.0, c='r')
         plt.savefig(output, format='png', dpi=150)
     
-    def It(self, numberString, arg, data_e):
+    def It(self, fileNumber, arg, data_e):
         I_t, bins_t = np.histogram(data_e[:,8], bins = self.theta_grid())
         plt.plot( I_t, bins_t[:-1])
         plt.xlabel('$\\mathrm{cnts}$')
         plt.ylabel('$\\theta ~/~ \\mathrm{deg}$')
-        headline = self.headline(numberString, np.shape(data_e)[0])
+        headline = self.headline(fileNumber, np.shape(data_e)[0])
         plt.title(headline, loc='left', y=1.0, c='r')
         plt.savefig(output, format='png', dpi=150)
 
-    def tof(self, numberString, arg, data_e):
+    def tof(self, fileNumber, arg, data_e):
         time_grid = np.arange(0, 1.3*tau, 0.0005)
         I_t, bins_t = np.histogram(data_e[:,0], bins = time_grid)
         if arg == 'lin':
@@ -512,39 +459,9 @@ class PlotSelection:
             plt.plot(bins_t[:-1]+2*tau, lI_t)
         plt.ylabel('log(counts)')
         plt.xlabel('time / s')
-        headline = self.headline(numberString, np.shape(data_e)[0])
+        headline = self.headline(fileNumber, np.shape(data_e)[0])
         plt.title(headline, loc='left', y=1.0, c='r')
         plt.savefig(output, format='png')
-
-#==============================================================================
-#==============================================================================
-def endIt(signal, frame):
-    print('\n# e2h life mode stopped\n')
-    sys.exit(0)
-    
-#==============================================================================
-def get_flist(flist):
-    # resolve short notation of filenumbers into a list of filenumbers
-    #     e.g. '3,4-9:2,12-14' -> '3, 4, 6, 8, 12, 13, 14'
-    out_list=np.array([], dtype=int)
-    if ',' in flist:
-         fsublists = flist.split(',')
-    else: 
-        fsublists = [flist]
-    for fsublist in fsublists:
-        if '-' in fsublist:
-            if ':' in fsublist:
-                limits, step = fsublist.split(':', 1)
-            else:
-                step = 1
-                limits = fsublist
-            for number in range(int(limits.split('-', 1)[0]), 
-                                int(limits.split('-', 1)[1])+1, int(step)):
-                out_list = np.append(out_list, number)
-        else:
-            out_list = np.append(out_list, int(fsublist))
-
-    return out_list
 
 #==============================================================================
 def process(dataPath, ident, clas):
@@ -566,16 +483,6 @@ def process(dataPath, ident, clas):
     else:
         lamdaMin  = lamdaCut 
 
-    if clas.timeIntervalAbs:
-        timeMin   = clas.timeIntervalAbs[0]
-        timeMax   = clas.timeIntervalAbs[1]
-    elif clas.timeIntervalInc:
-        timeMin   = clas.timeIntervalInc[0] * clas.timeIntervalInc[1]
-        timeMax   = clas.timeIntervalInc[0] * (clas.timeIntervalInc[1] + 1.)
-    else:
-        timeMin = 0
-        timeMax = 0
-
     chopperPhase = clas.chopperPhase
     tofOffset    = clas.TOFOffset
     thetaMin     = clas.thetaRange[0]
@@ -592,113 +499,92 @@ def process(dataPath, ident, clas):
     data_eSum = np.array([[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
     sumTime = 0
 
-    numberString, numberList = resolveNumbers(dataPath, ident)
+    number = resolveNumber(dataPath, ident)
+    print(ident, number)
+    fileName, fileNumber = fileNameCreator(dataPath, str(number))
 
-    for number in numberList:
-        number= str(number)
-    
-        filename, fileNumber = fileNameCreator(dataPath, number)
+    if verbous:
+        logging.info('events2histogram processing file ->\033[1m {} \033[0m<-'.format(fileNumber))
 
-        if verbous:
-            logging.info('events2histogram processing file ->\033[1m {} \033[0m<-'.format(fileNumber))
-    
-        for i in range(6):
-            ev = h5py.File(filename, 'r', swmr=True)
-            try:
-                ev['/entry1/Amor/detector/data/event_time_zero'][-1]
-                break 
-            except (KeyError, IndexError):
-                ev.close()
-                if i < 5:
-                    if verbous:
-                        print("no data yet, retrying ({})    ".format(10-2*i), end='\r')
-                    time.sleep(2)
-                    continue
-                else:
-                    if verbous:
-                        print("# time-out: no longer waiting for data!\a")
-                    return
-        
-        # get and process data
-        meta = Meta(filename)
-
-        global mu, nu, tau
-
-        if clas.mu < 98.: 
-            mu = clas.mu 
-        else:
-            mu = meta.mu + clas.muOffset
-
-        if clas.nu < 98.:
-            nu = clas.nu
-        else:
-            nu = meta.nu
-
-        if clas.chopperSpeed:
-            tau = 30./ clas.chopperSpeed
-        else:
-            tau = meta.tau
-
+    for i in range(6):
+        ev = h5py.File(fileName, 'r', swmr=True)
         try:
-            chPh
-        except NameError:
-            chPh = meta.chPh
-        spin = meta.spin
+            ev['/entry1/Amor/detector/data/event_time_zero'][-1]
+            break 
+        except (KeyError, IndexError):
+            ev.close()
+            if i < 5:
+                if verbous:
+                    print("no data yet, retrying ({})    ".format(10-2*i), end='\r')
+                time.sleep(2)
+                continue
+            else:
+                if verbous:
+                    print("# time-out: no longer waiting for data!\a")
+                return
+        
+    # get and process data
+    meta = Meta(fileName)
 
-        global countingTime, detectorDistance, chopperDetectorDistance
-        detectorDistance = meta.detectorDistance
-        chopperDetectorDistance = meta.chopperDetectorDistance
-        countingTime = meta.countingTime
+    global mu, nu, tau
 
-        if verbous:
-            logging.info("   mu = {:>4.2f} deg,  nu = {:>4.2f} deg".format(mu, nu))
-            if spin == 'u':
-                logging.info('   spin <+|')
-            elif spin == 'd':
-                logging.info('   spin <-|')
+    if clas.mu < 98.: 
+        mu = clas.mu 
+    else:
+        mu = meta.mu + clas.muOffset
 
-        try: lamdaMax
-        except NameError: lamdaMax = lamdaMin + tau * hdm/chopperDetectorDistance * 1e13
+    if clas.nu < 98.:
+        nu = clas.nu
+    else:
+        nu = meta.nu
+
+    if clas.chopperSpeed:
+        tau = 30./ clas.chopperSpeed
+    else:
+        tau = meta.tau
+
+    try:
+        chPh
+    except NameError:
+        chPh = meta.chPh
+    spin = meta.spin
+
+    global countingTime, detectorDistance, chopperDetectorDistance
+    detectorDistance = meta.detectorDistance
+    chopperDetectorDistance = meta.chopperDetectorDistance
+    countingTime = meta.countingTime
+
+    if verbous:
+        logging.info("   mu = {:>4.2f} deg,  nu = {:>4.2f} deg".format(mu, nu))
+        if spin == 'u':
+            logging.info('   spin <+|')
+        elif spin == 'd':
+            logging.info('   spin <-|')
+
+    try: lamdaMax
+    except NameError: lamdaMax = lamdaMin + tau * hdm/chopperDetectorDistance * 1e13
     
-        tofOffset = tau * chopperPhase / 180.                       # mismatch of chopper pulse and time-zero
-        tofCut = lamdaCut * chopperDetectorDistance / hdm * 1.e-13  # tof of frame start
+    tofOffset = tau * chopperPhase / 180.                       # mismatch of chopper pulse and time-zero
+    tofCut = lamdaCut * chopperDetectorDistance / hdm * 1.e-13  # tof of frame start
 
-        tof_e  = np.array(ev['/entry1/Amor/detector/data/event_time_offset'][:], dtype=np.uint64)/1.e9 + tofOffset # tof 
+    tof_e  = np.array(ev['/entry1/Amor/detector/data/event_time_offset'][:], dtype=np.uint64)/1.e9 + tofOffset # tof 
     
-        detPixelID_e = np.array(ev['/entry1/Amor/detector/data/event_id'][:], dtype=np.uint64)  # pixel index
-        #totalCounts = len(detPixelID_e)
+    detPixelID_e = np.array(ev['/entry1/Amor/detector/data/event_id'][:], dtype=np.uint64)  # pixel index
     
-        dataPacket_p = np.array(ev['/entry1/Amor/detector/data/event_index'][:], dtype=np.uint64)  # data packet index
+    dataPacket_p = np.array(ev['/entry1/Amor/detector/data/event_index'][:], dtype=np.uint64)  # data packet index
 
-        if timeMax>0: # pick only the time interval defined by `-i` or `-I`
-            dataPacketTime_p = np.array(ev['/entry1/Amor/detector/data/event_time_zero'][:], dtype=np.uint64)  # data packet index
-            dataPacket_p, dataPacketTime_p, detPixelID_e, tof_e = selectTime(timeMin, timeMax, dataPacketTime_p, dataPacket_p, detPixelID_e, tof_e)
-            countingTime = dataPacketTime_p[-1]-dataPacketTime_p[0]+1
+    tof_e  = np.where(tof_e<tofCut, tof_e+2.*tau, tof_e)
+    tof_e  = np.where(tof_e>tau+tofCut, tof_e-tau, tof_e)
 
-        # command line argument not yet defined
-        #filterThreshold = 0
-        #if filterThreshold:
-        #    detPixelID_e, tof_e = filterTof(detPixelID_e, tof_e, dataPacket_p, filterThreshold)
- 
-        tof_e  = np.where(tof_e<tofCut, tof_e+2.*tau, tof_e)
-        tof_e  = np.where(tof_e>tau+tofCut, tof_e-tau, tof_e)
+    data_e = analyse_ev(detPixelID_e, tof_e, yMin, yMax, thetaMin, thetaMax)
 
-        data_e = analyse_ev(detPixelID_e, tof_e, yMin, yMax, thetaMin, thetaMax)
+    ev.close()
 
-        ev.close()
-
-        data_eSum = np.append(data_eSum, data_e, axis=0)
-        sumTime += countingTime
+    data_eSum = np.append(data_eSum, data_e, axis=0)
+    sumTime += countingTime
 
     if verbous:
         logging.info("   total counts = {} in {:6.1f} s".format(np.shape(data_e)[0], sumTime))
-
-    if clas.spy:
-        number = filename.split('n')[1].split('.')[0].lstrip('0')
-        logging.info('chopper speed={:>4.0f} rpm, phase={:>5.3f} deg, tau={} s'.format(30/tau, chPh, tau))
-        logging.info('nr={}, spn={}, cnt={}, tme={}'.format(number, spin, np.shape(data_eSum)[0], sumTime))
-        logging.info('mu={:>1.2f}, nu={:>1.2f}, kap={:>1.2f}, kad={:>1.2f}, div={:>1.2f}'.format(mu, nu, kap, kad, div))
-        sys.exit()
 
     #================================
     # plotting data
@@ -708,10 +594,9 @@ def process(dataPath, ident, clas):
     except IndexError:
         arg = 'def'
     plott = PlotSelection()
-    #string = f"plott.{plotType} (numberString, '{arg}', data_e)"
     try:
         plotFunction = getattr(plott, plotType)
-        plotFunction(numberString, arg, data_e)
+        plotFunction(fileNumber, arg, data_e)
         plt.close()
     except Exception as e:
         logging.error(f"ERROR: '{plotType}' is no known output format!")
@@ -731,14 +616,6 @@ def commandLineArgs():
     clas.add_argument("-f", "--fileIdent",       
                             default='0',                               
                             help ="file number or offset (if negative)")
-    clas.add_argument("-I", "--timeIntervalInc", 
-                            nargs=2, 
-                            type=float,
-                            help ="time interval length and increment")
-    clas.add_argument("-i", "--timeIntervalAbs",
-                            nargs=2, 
-                            type=float,
-                            help ="absolute time interval to be processed")
     clas.add_argument("-l", "--lambdaRange",                            
                             nargs=2, 
                             type=float,
