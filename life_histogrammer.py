@@ -233,9 +233,14 @@ class PlotSelection:
 
     # grids
 
+    def y_grid(self):
+        y_grid = np.arange(yMin, yMax+1, 1)
+        return y_grid 
+
     def lamda_grid(self):
         dldl      = 0.005 # Delta lambda / lambda
-        lamda_grid = lamdaMin*(1+dldl)**np.arange(int(np.log(lamdaMax/lamdaMin)/np.log(1+dldl)+1))
+        lMin = max(2, lamdaMin)
+        lamda_grid = lMin*(1+dldl)**np.arange(int(np.log(lamdaMax/lMin)/np.log(1+dldl)+1))
         return lamda_grid
     
     def theta_grid(self):
@@ -273,8 +278,7 @@ class PlotSelection:
         cmap = mpl.cm.gnuplot(np.arange(256))
         cmap[:1, :] = np.array([256/256, 255/256, 236/256, 1])
         cmap = mpl.colors.ListedColormap(cmap, name='myColorMap', N=cmap.shape[0])
-        y_grid = np.arange(64)
-        I_yt, bins_y, bins_t = np.histogram2d(data_e[:,4], data_e[:,8], bins = (y_grid, self.theta_grid()))
+        I_yt, bins_y, bins_t = np.histogram2d(data_e[:,4], data_e[:,8], bins = (self.y_grid(), self.theta_grid()))
         I_lt, bins_l, bins_t = np.histogram2d(data_e[:,7], data_e[:,8], bins = (self.lamda_grid(), self.theta_grid()))
         I_q, bins_q = np.histogram(data_e[:,9], bins = self.q_grid())
         q_lim = 4*np.pi*np.array([ max( np.sin(self.theta_grid()[0]*np.pi/180.)/self.lamda_grid()[-1] , 1e-4 ),
@@ -335,9 +339,8 @@ class PlotSelection:
         cmap = mpl.cm.gnuplot(np.arange(256))
         cmap[:1, :] = np.array([256/256, 255/256, 236/256, 1])
         cmap = mpl.colors.ListedColormap(cmap, name='myColorMap', N=cmap.shape[0])
-        y_grid = np.arange(64)
         z_grid = np.arange(det.nBlades*32)
-        I_yz, bins_y, bins_z = np.histogram2d(data_e[:,4], (det.nBlades-data_e[:,2])*32-data_e[:,3], bins = (y_grid, z_grid))
+        I_yz, bins_y, bins_z = np.histogram2d(data_e[:,4], (det.nBlades-data_e[:,2])*32-data_e[:,3], bins = (self.y_grid(), z_grid))
         if arg == 'log':
             vmin = 0
             vmax = max(1, np.log(np.max(I_yt)+.1)/np.log(10)*1.05)
@@ -363,14 +366,16 @@ class PlotSelection:
             vmax = max(np.max(I_lt), 5)
             plt.pcolormesh(bins_l, bins_t, I_lt.T, cmap=cmap, vmin=0, vmax=vmax)
         plt.xlim(0,)
-        if np.min(bins_t) > 0.01 :
-            plt.ylim(bottom=0)
-        else:
-            plt.ylim(bottom=np.min(bins_t))
-        if np.max(bins_t) < -0.01:
-            plt.ylim(top=0)
-        else:
-            plt.ylim(top=np.max(bins_t))
+        #if np.min(bins_t) > 0.01 :
+        #    plt.ylim(bottom=0)
+        #else:
+        #    plt.ylim(bottom=np.min(bins_t))
+        #if np.max(bins_t) < -0.01:
+        #    plt.ylim(top=0)
+        #else:
+        #    plt.ylim(top=np.max(bins_t))
+        plt.xlim(lamdaMin, lamdaMax)
+        plt.ylim(thetaMin, thetaMax)
         plt.xlabel('$\\lambda ~/~ \\mathrm{\\AA}$')
         plt.ylabel('$\\theta ~/~ \\mathrm{deg}$')
         headline = self.headline(fileNumber, np.shape(data_e)[0])
@@ -471,7 +476,7 @@ def process(dataPath, ident, clas):
     #================================
     # instrument specific parameters
     #================================
-    global lamdaMin, lamdaMax, qMin, qMax, thetaMin, thetaMax
+    global lamdaMin, lamdaMax, qMin, qMax, thetaMin, thetaMax, yMin, yMax
     # defaults   
     lamdaCut  = 2.5     # Aa  used to reshuffle tof
     # data filtering and folding 
@@ -500,11 +505,10 @@ def process(dataPath, ident, clas):
     sumTime = 0
 
     number = resolveNumber(dataPath, ident)
-    print(ident, number)
     fileName, fileNumber = fileNameCreator(dataPath, str(number))
 
     if verbous:
-        logging.info('events2histogram processing file ->\033[1m {} \033[0m<-'.format(fileNumber))
+        logging.info('life_histogrammer processing file ->\033[1m {} \033[0m<-'.format(fileNumber))
 
     for i in range(6):
         ev = h5py.File(fileName, 'r', swmr=True)
