@@ -1,4 +1,4 @@
-__version__ = '2024-03-15'
+__version__ = '2024-03-30'
 
 import os
 import sys
@@ -35,26 +35,26 @@ def pixel2quantity():
     x                 = (31 - bZ) * det.dX 
     bladeAngle        = np.rad2deg( 2. * np.arcsin(0.5*det.bladeZ / detectorDistance) )
     delta             = (det.nBlades/2. - bladeNr) * bladeAngle - np.rad2deg( np.arctan(bZ*det.dZ / ( detectorDistance + bZ * det.dX) ) )
-    quantity = np.vstack((bladeNr.T, bZ.T, bY.T, delta.T, x.T)).T
+    dZ                = bladeNr * 32 + bZ
+    quantity = np.vstack((dZ.T, bY.T, delta.T, x.T)).T
     
     return quantity
 
 #==============================================================================
 def analyse_ev(event_e, tof_e, yMin, yMax, thetaMin, thetaMax):
     
-    data_e = np.zeros((len(event_e), 10), dtype=float)
+    data_e = np.zeros((len(event_e), 9), dtype=float)
     
     # data_e column description:
     #    0: wall time / s
     #    1: pixelID
-    #    2: blade number
-    #    3: z on blade
-    #    4: y on blade
-    #    5: delta / deg  = angle on detector
-    #    6: path within detector / mm
-    #    7: lambda / angstrom
-    #    8: theta / deg
-    #    9: q_z / angstrom^-1
+    #    2: z on detector
+    #    3: y on detector
+    #    4: delta / deg  = angle on detector
+    #    5: path within detector / mm
+    #    6: lambda / angstrom
+    #    7: theta / deg
+    #    8: q_z / angstrom^-1
     
     data_e[:,0]   = tof_e[:]
     data_e[:,1]   = event_e[:]
@@ -69,39 +69,39 @@ def analyse_ev(event_e, tof_e, yMin, yMax, thetaMin, thetaMax):
             logging.warning(f'##   strange times: {np.shape(filter_e)[0]-np.shape(data_e)[0]}')
 
     pixelLookUp = pixel2quantity()
-    data_e[:,2:7] = pixelLookUp[np.int_(data_e[:,1])-1,:]
+    data_e[:,2:6] = pixelLookUp[np.int_(data_e[:,1])-1,:]
 
     #================================
 
     # filter y range
-    filter_e = (yMin <= data_e[:,4]) & (data_e[:,4] <= yMax) 
+    filter_e = (yMin <= data_e[:,3]) & (data_e[:,3] <= yMax) 
     data_e = data_e[filter_e,:]
     
     # correct tof for beam size effect at chopper 
-    data_e[:,0] -= ( data_e[:,5] / 180. ) * tau
+    data_e[:,0] -= ( data_e[:,4] / 180. ) * tau
       
     # effective flight path length
-    #data_e[:,6] = chopperDetectorDistance + data_e[:,6] 
+    #data_e[:,5] = chopperDetectorDistance + data_e[:,5] 
     
     # calculate lambda
     hdm       = 6.626176e-34/1.674928e-27               # h / m
-    data_e[:,7] = 1.e13 * data_e[:,0] * hdm / ( chopperDetectorDistance + data_e[:,6] )
+    data_e[:,6] = 1.e13 * data_e[:,0] * hdm / ( chopperDetectorDistance + data_e[:,5] )
     
     # theta 
-    data_e[:,8] = nu - mu + data_e[:,5] 
+    data_e[:,7] = nu - mu + data_e[:,4] 
 
     # gravity compensation
-    data_e[:,8] += np.rad2deg( np.arctan( 3.07e-10 * ( detectorDistance +  data_e[:,6]) * data_e[:,7] * data_e[:,7] ) )
+    data_e[:,7] += np.rad2deg( np.arctan( 3.07e-10 * ( detectorDistance +  data_e[:,5]) * data_e[:,6] * data_e[:,6] ) )
 
     # filter theta range
-    filter_l = (thetaMin <= data_e[:,8]) & (data_e[:,8] <= thetaMax) 
+    filter_l = (thetaMin <= data_e[:,7]) & (data_e[:,7] <= thetaMax) 
     data_e = data_e[filter_l,:]
     
     # q_z
-    data_e[:,9] = 4*np.pi * np.sin( np.deg2rad( data_e[:,8] ) ) / data_e[:,7]
+    data_e[:,8] = 4*np.pi * np.sin( np.deg2rad( data_e[:,7] ) ) / data_e[:,6]
     
     # filter q_z range
-    #filter_e = (qMin < data_e[:,I7]) & (data_e[:,7] < qMax)
+    #filter_e = (qMin < data_e[:,6]) & (data_e[:,6] < qMax)
     #data_e = data_e[filter_e,:]
 
     return data_e
@@ -278,9 +278,9 @@ class PlotSelection:
         cmap = mpl.cm.gnuplot(np.arange(256))
         cmap[:1, :] = np.array([256/256, 255/256, 236/256, 1])
         cmap = mpl.colors.ListedColormap(cmap, name='myColorMap', N=cmap.shape[0])
-        I_yt, bins_y, bins_t = np.histogram2d(data_e[:,4], data_e[:,8], bins = (self.y_grid(), self.theta_grid()))
-        I_lt, bins_l, bins_t = np.histogram2d(data_e[:,7], data_e[:,8], bins = (self.lamda_grid(), self.theta_grid()))
-        I_q, bins_q = np.histogram(data_e[:,9], bins = self.q_grid())
+        I_yt, bins_y, bins_t = np.histogram2d(data_e[:,3], data_e[:,7], bins = (self.y_grid(), self.theta_grid()))
+        I_lt, bins_l, bins_t = np.histogram2d(data_e[:,6], data_e[:,7], bins = (self.lamda_grid(), self.theta_grid()))
+        I_q, bins_q = np.histogram(data_e[:,8], bins = self.q_grid())
         q_lim = 4*np.pi*np.array([ max( np.sin(self.theta_grid()[0]*np.pi/180.)/self.lamda_grid()[-1] , 1e-4 ),
                                    min( np.sin(self.theta_grid()[-1]*np.pi/180.)/self.lamda_grid()[0] , 0.03 )])
         if arg == 'lin':
@@ -340,7 +340,7 @@ class PlotSelection:
         cmap[:1, :] = np.array([256/256, 255/256, 236/256, 1])
         cmap = mpl.colors.ListedColormap(cmap, name='myColorMap', N=cmap.shape[0])
         z_grid = np.arange(det.nBlades*32)
-        I_yz, bins_y, bins_z = np.histogram2d(data_e[:,4], (det.nBlades-data_e[:,2])*32-data_e[:,3], bins = (self.y_grid(), z_grid))
+        I_yz, bins_y, bins_z = np.histogram2d(data_e[:,3], data_e[:,2], bins = (self.y_grid(), z_grid))
         if arg == 'log':
             vmin = 0
             vmax = max(1, np.log(np.max(I_yt)+.1)/np.log(10)*1.05)
@@ -358,7 +358,7 @@ class PlotSelection:
         cmap = mpl.cm.gnuplot(np.arange(256))
         cmap[:1, :] = np.array([256/256, 255/256, 236/256, 1])
         cmap = mpl.colors.ListedColormap(cmap, name='myColorMap', N=cmap.shape[0])
-        I_lt, bins_l, bins_t = np.histogram2d(data_e[:,7], data_e[:,8], bins = (self.lamda_grid(), self.theta_grid()))
+        I_lt, bins_l, bins_t = np.histogram2d(data_e[:,6], data_e[:,7], bins = (self.lamda_grid(), self.theta_grid()))
         if arg == 'log':
             vmax = max(1, np.log(np.max(I_lt)+.1)/np.log(10)*1.05 )
             plt.pcolormesh(bins_l, bins_t, (np.log(I_lt+I_lt[I_lt>0].min()/2)/np.log(10.)).T, cmap=cmap, vmin=0, vmax=vmax)
@@ -391,7 +391,7 @@ class PlotSelection:
         time_grid = np.arange(0, tau, 0.0005)
         z_grid = np.arange(det.nBlades*32+1)
      
-        I_tz, bins_t, bins_z = np.histogram2d(data_e[:,0], 32*det.nBlades-data_e[:,2]*32-data_e[:,3], bins = (time_grid, z_grid))
+        I_tz, bins_t, bins_z = np.histogram2d(data_e[:,0], data_e[:,2], bins = (time_grid, z_grid))
         if arg == 'log':
             vmax = max(2., np.log(np.max(I_tz)+.1)/np.log(10)*1.05 )
             plt.pcolormesh(bins_t, bins_z, (np.log(I_tz+5.e-1)/np.log(10.)).T, cmap=cmap, vmin=0, vmax=vmax)
@@ -409,7 +409,7 @@ class PlotSelection:
         plt.savefig(output, format='png', dpi=150)
     
     def Iq(self, fileNumber, arg, data_e):
-        I_q, bins_q = np.histogram(data_e[:,9], bins = self.q_grid())
+        I_q, bins_q = np.histogram(data_e[:,8], bins = self.q_grid())
         err_q = np.sqrt(I_q+1)
         q_lim = 4*np.pi*np.array([ max( np.sin(self.theta_grid()[0]*np.pi/180.)/self.lamda_grid()[-1] , 1e-4 ),
                                    min( np.sin(self.theta_grid()[-1]*np.pi/180.)/self.lamda_grid()[0] , 0.03 )])
@@ -429,7 +429,7 @@ class PlotSelection:
         plt.savefig(output, format='png', dpi=150)
 
     def Il(self, fileNumber, arg, data_e):
-        I_l, bins_l = np.histogram(data_e[:,7], bins = self.lamda_grid())
+        I_l, bins_l = np.histogram(data_e[:,6], bins = self.lamda_grid())
         if arg == 'lin':
             plt.plot(bins_l[:-1], I_l)
             plt.ylabel('$I ~/~ \\mathrm{cnts}$')
@@ -442,7 +442,7 @@ class PlotSelection:
         plt.savefig(output, format='png', dpi=150)
     
     def It(self, fileNumber, arg, data_e):
-        I_t, bins_t = np.histogram(data_e[:,8], bins = self.theta_grid())
+        I_t, bins_t = np.histogram(data_e[:,7], bins = self.theta_grid())
         plt.plot( I_t, bins_t[:-1])
         plt.xlabel('$\\mathrm{cnts}$')
         plt.ylabel('$\\theta ~/~ \\mathrm{deg}$')
@@ -501,7 +501,7 @@ def process(dataPath, ident, clas):
     # find and open input file 
     global ev
 
-    data_eSum = np.array([[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
+    data_eSum = np.array([[0, 0, 0, 0, 0, 0, 0, 0, 0]])
     sumTime = 0
 
     number = resolveNumber(dataPath, ident)
@@ -705,7 +705,7 @@ def main():
     dataPath = get_dataPath(clas)
     logging.basicConfig(level=logging.INFO, format='# %(message)s')
     verbous = True
-    output = 'e2h.png'
+    output = 'life_plot.png'
     process(dataPath, clas.fileIdent, clas)
 
 #==============================================================================
