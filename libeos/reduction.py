@@ -340,21 +340,11 @@ class AmorReduction:
             Rsm_lz   = np.where(qz_lz>0.0217, 1-(qz_lz-0.0217)*(0.0625/0.0217), Rsm_lz)
             Rsm_lz   = np.where(qz_lz>0.0217*5, np.nan, Rsm_lz)
             self.norm_lz  = self.norm_lz / Rsm_lz
-            #if len(lamda_e) > 1e6:
-            #    head = ('normalisation matrix based on the measurements\n'
-            #           f'{fromHDF.file_list}\n'
-            #           f'nu - mu = {self.normAngle}\n'
-            #           f'shape= {np.shape(self.norm_lz)} (lambda, z)\n'
-            #           f'measured at mu = {fromHDF.mu:6.3f} deg\n'
-            #           f'N(l_lambda, z) = theta(z) / sum_i=-1..1 I(l_lambda+i, z)')
-            #    head = head.replace('../', '')
-            #    head = head.replace('./', '')
-            #    head = head.replace('raw/', '')
-            #    np.savetxt(f'{dataPath}/{name}.norm', self.norm_lz, header = head)
+
             if len(lamda_e) > 1e6:
                 with open(n_path, 'wb') as fh:
                     np.save(fh, np.array(fromHDF.file_list), allow_pickle=False)
-                    np.save(fh, np.array(fromHDF.mu), allow_pickle=False)
+                    np.save(fh, np.array(self.normAngle), allow_pickle=False)
                     np.save(fh, self.norm_lz, allow_pickle=False)
             self.normFileList = fromHDF.file_list
         self.header.reduction.corrections.append('normalisation with \'additional files\'')
