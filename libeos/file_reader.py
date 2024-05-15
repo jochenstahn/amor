@@ -227,7 +227,10 @@ class AmorData:
 
     def merge_frames(self):
         total_offset = self.tofCut+self.tau*self.config.chopperPhaseOffset/180.
-        if nb_helpers:
+        print(self.tau*self.config.chopperPhaseOffset/180)
+        #if nb_helpers:
+        if False:
+            # TODO: this routine seems to ignore total_offset
             self.tof_e = nb_helpers.merge_frames(self.tof_e, self.tofCut, self.tau, total_offset)
         else:
             self.tof_e = np.remainder(self.tof_e-(self.tofCut-self.tau), self.tau)+total_offset  # tof shifted to 1 frame
