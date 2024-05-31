@@ -169,7 +169,6 @@ class AmorData:
         self.filter_project_x()
 
         # correct tof for beam size effect at chopper:  t_cor = (delta / 180 deg) * tau
-        # TODO: check for correctness
         if not self.config.offSpecular:
             self.tof_e    -= ( self.delta_e / 180. ) * self.tau
 
@@ -227,7 +226,6 @@ class AmorData:
 
     def merge_frames(self):
         total_offset = self.tofCut+self.tau*self.config.chopperPhaseOffset/180.
-        print(self.tau*self.config.chopperPhaseOffset/180)
         #if nb_helpers:
         if False:
             # TODO: this routine seems to ignore total_offset

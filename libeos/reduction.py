@@ -90,8 +90,8 @@ class AmorReduction:
             # projection on q-grid
             q_q, R_q, dR_q, dq_q = self.project_on_qz(qz_lz, ref_lz, err_lz, res_lz, self.norm_lz, self.mask_lz)
 
-            filter_q = np.where((self.experiment_config.qzRange[0]<q_q) & (q_q<self.experiment_config.qzRange[1]),
-                                True, False)
+            filter_q = np.where((self.experiment_config.qzRange[0]>q_q) & (q_q>self.experiment_config.qzRange[1]),
+                                False, True)
             q_q = q_q[filter_q]
             R_q = R_q[filter_q]
             dR_q = dR_q[filter_q]
@@ -307,11 +307,6 @@ class AmorReduction:
         n_path = os.path.join(dataPath, f'{name}.norm')
         if os.path.exists(n_path):
             logging.warning(f'normalisation matrix: found and using {n_path}')
-            #self.norm_lz = np.loadtxt(f'{dataPath}/{name}.norm')
-            #with open(n_path, 'r') as fh:
-            #    fh.readline()
-            #    self.normFileList = fh.readline().split('[')[1].split(']')[0].replace('\'', '').split(', ')
-            #    self.normAngle = float(fh.readline().split('= ')[1])
             with open(n_path, 'rb') as fh:
                 self.normFileList = np.load(fh, allow_pickle=True)
                 self.normAngle    = np.load(fh, allow_pickle=True)
@@ -329,7 +324,7 @@ class AmorReduction:
             lamda_e       = fromHDF.lamda_e
             detZ_e        = fromHDF.detZ_e
             self.norm_lz, bins_l, bins_z = np.histogram2d(lamda_e, detZ_e, bins = (self.grid.lamda(), self.grid.z()))
-            self.norm_lz = np.where(self.norm_lz>0, self.norm_lz, np.nan)
+            self.norm_lz = np.where(self.norm_lz>2, self.norm_lz, np.nan)
             # correct for the SM reflectivity
             lamda_l  = self.grid.lamda()
             theta_z  = self.normAngle + fromHDF.delta_z
@@ -338,6 +333,7 @@ class AmorReduction:
             qz_lz    = 4.0*np.pi * np.sin(np.deg2rad(theta_lz)) / lamda_lz
             Rsm_lz   = np.ones(np.shape(qz_lz))
             Rsm_lz   = np.where(qz_lz>0.0217, 1-(qz_lz-0.0217)*(0.0625/0.0217), Rsm_lz)
+            # TODO: introduce variable for `m` and propably for the decay
             Rsm_lz   = np.where(qz_lz>0.0217*5, np.nan, Rsm_lz)
             self.norm_lz  = self.norm_lz / Rsm_lz
 
