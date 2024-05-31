@@ -181,6 +181,7 @@ def command_line_options():
         )
     reduction_config = ReductionConfig(
         qResolution                  = clas.qResolution,
+        qzRange                      = clas.qzRange,
         autoscale                    = clas.autoscale,
         thetaRange                   = clas.thetaRange,
         thetaRangeR                  = clas.thetaRangeR,

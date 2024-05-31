@@ -58,6 +58,7 @@ class ExperimentConfig:
 @dataclass
 class ReductionConfig:
     qResolution: float
+    qzRange: Tuple[float, float]
     thetaRange: Tuple[float, float]
     thetaRangeR: Tuple[float, float]
 

@@ -17,7 +17,7 @@ class AmorReduction:
         self.reader_config = config.reader
         self.reduction_config = config.reduction
         self.output_config = config.output
-        self.grid = Grid(config.reduction.qResolution)
+        self.grid = Grid(config.reduction.qResolution, config.experiment.qzRange)
         self.header = Header()
 
         self.header.reduction.call = EOSConfig.call_string(self)
@@ -87,15 +87,16 @@ class AmorReduction:
             headerRqz = self.header.orso_header()
             headerRqz.data_set = f'Nr {i} : mu = {self.file_reader.mu:6.3f} deg'
 
-            # projection on q-grid
+            # projection on qz-grid
             q_q, R_q, dR_q, dq_q = self.project_on_qz(qz_lz, ref_lz, err_lz, res_lz, self.norm_lz, self.mask_lz)
 
-            filter_q = np.where((self.experiment_config.qzRange[0]>q_q) & (q_q>self.experiment_config.qzRange[1]),
-                                False, True)
-            q_q = q_q[filter_q]
-            R_q = R_q[filter_q]
-            dR_q = dR_q[filter_q]
-            dq_q = dq_q[filter_q]
+            # The filtering is now done by restricting the qz-grid
+            #filter_q = np.where((self.experiment_config.qzRange[0]>q_q) & (q_q>self.experiment_config.qzRange[1]),
+            #                    False, True)
+            #q_q = q_q[filter_q]
+            #R_q = R_q[filter_q]
+            #dR_q = dR_q[filter_q]
+            #dq_q = dq_q[filter_q]
 
             if self.reduction_config.autoscale:
                 if i==0:
