@@ -523,7 +523,7 @@ class PlotSelection:
             return
         elif arg == 'log':
             vmin = 0
-            vmax = max(1, np.log(np.max(I_yt)+.1)/np.log(10)*1.05)
+            vmax = max(1, np.log(np.max(I_yz)+.1)/np.log(10)*1.05)
             plt.pcolormesh(bins_y[:],bins_z[:],(np.log(I_yz+6e-1)/np.log(10)).T, cmap=cmap, vmin=vmin, vmax=vmax)
         else:
             plt.pcolormesh(bins_y[:],bins_z[:],I_yz.T, cmap=cmap)
