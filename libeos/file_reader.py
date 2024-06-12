@@ -280,7 +280,8 @@ class AmorData:
             logging.warning("     using parameters from nicos cache")
             year_date = str(self.start_date).replace('-', '/', 1)
             #cachePath = '/home/amor/nicosdata/amor/cache/'
-            cachePath = '/home/nicos/amorcache/'
+            #cachePath = '/home/nicos/amorcache/'
+            cachePath = '/home/nicos/cache/'
             value = str(subprocess.getoutput(f'/usr/bin/grep "value" {cachePath}nicos-mu/{year_date}')).split('\t')[-1]
             self.mu = float(value)
             value = str(subprocess.getoutput(f'/usr/bin/grep "value" {cachePath}nicos-nu/{year_date}')).split('\t')[-1]
