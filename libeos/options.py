@@ -14,8 +14,9 @@ class Defaults:
     #subtract
     outputName                  = "fromEOS"
     outputFormat                = ['Rqz.ort']
-    offSpecular                 = False
+    incidentAngle               = 'alphaF'
     qResolution                 = 0.01
+    incidentAngle               = 'alphaF'
     #timeSlize
     scale                       = [1]
     #autoscale
@@ -43,6 +44,7 @@ class ReaderConfig:
 
 @dataclass
 class ExperimentConfig:
+    incidentAngle: str 
     chopperPhase: float
     yRange: Tuple[float, float]
     lambdaRange: Tuple[float, float]
@@ -53,7 +55,6 @@ class ExperimentConfig:
     mu: Optional[float] = None
     nu: Optional[float] = None
     muOffset: Optional[float] = None
-    offSpecular: bool = False
 
 @dataclass
 class ReductionConfig:
@@ -152,10 +153,6 @@ class EOSConfig:
         if self.reduction_config.timeSlize:
             acts += f' --timeSlize {" ".join(str(ff) for ff in self.reduction_config.timeSlize)}'
 
-        # TODO: experiment_config = ExperimentConfig(
-        #    offSpecular                  = clas.offSpecular,
-        #    )
-        
         mlst = base + inpt + otpt 
         if mask:
             mlst += mask

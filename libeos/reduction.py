@@ -349,7 +349,12 @@ class AmorReduction:
     def project_on_lz(self, fromHDF, norm_lz, normAngle, lamda_e, detZ_e):
         # projection on lambda-z-grid
         lamda_l  = self.grid.lamda()
-        theta_z  = fromHDF.nu - fromHDF.mu + fromHDF.delta_z
+        if self.experiment_config.incidentAngle == 'alphaF':
+          theta_z  = fromHDF.nu - fromHDF.mu + fromHDF.delta_z
+        elif self.experiment_config.incidentAngle == 'nu':
+          theta_z  = (fromHDF.nu + fromHDF.delta_z + fromHDF.kap + fromHDF.kad) / 2.
+        else:
+          pass
         lamda_lz = (self.grid.lz().T*lamda_l[:-1]).T
         theta_lz = self.grid.lz()*theta_z
 
@@ -380,7 +385,7 @@ class AmorReduction:
         int_lz, bins_l, bins_z  = np.histogram2d(lamda_e, detZ_e, bins = (lamda_l, self.grid.z()))
         #           cut normalisation sample horizon
         int_lz    = np.where(mask_lz, int_lz, np.nan)
-        thetaF_lz  = np.where(mask_lz, theta_lz, np.nan)
+        thetaF_lz = np.where(mask_lz, theta_lz, np.nan)
 
         ref_lz    = (int_lz * np.absolute(thetaN_lz)) / (norm_lz * np.absolute(thetaF_lz))
         err_lz    = ref_lz * np.sqrt( 1/(int_lz+.1) + 1/norm_lz )

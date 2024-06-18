@@ -43,9 +43,10 @@ def commandLineArgs():
                             nargs = '+',
                             default = Defaults.outputFormat,
                             help = "one of [Rqz.ort, Rlt.ort]")
-    output.add_argument("--offSpecular",
-                            type = bool,
-                            default = Defaults.offSpecular,
+    output.add_argument("-ai", "--incidentAngle",
+                            type = str,
+                            default = Defaults.incidentAngle,
+                            help = "calulate alpha_i from [alphaF, mu, nu]",
                             )
     output.add_argument("-r", "--qResolution",
                             default = Defaults.qResolution,
@@ -174,7 +175,7 @@ def command_line_options():
         yRange                       = clas.yRange,
         lambdaRange                  = clas.lambdaRange,
         qzRange                      = clas.qzRange,
-        offSpecular                  = clas.offSpecular,
+        incidentAngle                = clas.incidentAngle,
         mu                           = clas.mu,
         nu                           = clas.nu,
         muOffset                     = clas.muOffset
