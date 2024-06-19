@@ -27,7 +27,7 @@ class Defaults:
     qzRange                     = [0.005, 0.30]
     chopperSpeed                = 500
     chopperPhase                = -13.5
-    chopperPhaseOffset          = -5
+    chopperPhaseOffset          = 7
     muOffset                    = 0
     mu                          = 0
     nu                          = 0
