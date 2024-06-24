@@ -10,6 +10,7 @@ class Defaults:
     #fileIdentifier
     normalisationFileIdentifier = []
     dataPath                    = '.'
+    raw                         = ['.', './raw', '../raw', '../../raw']
     year                        = datetime.now().year
     #subtract
     outputName                  = "fromEOS"
@@ -40,6 +41,7 @@ class Defaults:
 class ReaderConfig:
     year: int
     dataPath: str
+    raw: Tuple[str]
     startTime: Optional[float] = 0
 
 @dataclass
@@ -102,6 +104,8 @@ class EOSConfig:
             inpt += f' -Y {datetime.now().year}'
         if self.reader_config.dataPath != '.':
             inpt += f' --dataPath {self.reader_config.dataPath}'
+        if self.reader_config.raw != '.':
+            inpt  = f' --rawd {self.reader_config.raw}'
         if self.reduction_config.subtract:
             inpt += f' -subtract {self.reduction_config.subtract}'
         if self.reduction_config.normalisationFileIdentifier:

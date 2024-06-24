@@ -24,10 +24,14 @@ def commandLineArgs():
                             default = Defaults.normalisationFileIdentifier,
                             nargs = '+',
                             help = "file number(s) of normalisation measurement")
+    input_data.add_argument("--raw", 
+                            type = str,
+                            default = Defaults.raw,
+                            help = "relative path to directory with .hdf files")
     input_data.add_argument("-d", "--dataPath",
                             type = str,
                             default = Defaults.dataPath,
-                            help = "relative path to directory with .hdf files")
+                            help = "relative path for output")
     input_data.add_argument("-Y", "--year",
                             default = Defaults.year,
                             type = int,
@@ -166,6 +170,7 @@ def command_line_options():
 
     reader_config = ReaderConfig(
         year                         = clas.year,
+        raw                          = clas.raw,
         dataPath                     = clas.dataPath
         )
     experiment_config = ExperimentConfig(

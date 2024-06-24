@@ -79,20 +79,34 @@ class AmorData:
         self.wallTime_e    = _wallTime_e
 
     #-------------------------------------------------------------------------------------------------
+    #def path_generator(self, number):
+    #    fileName = f'amor{self.reader_config.year}n{number:06d}.hdf'
+    #    if os.path.exists(os.path.join(self.reader_config.dataPath,fileName)):
+    #        path = self.reader_config.dataPath
+    #    elif os.path.exists(fileName):
+    #        path = '.'
+    #    elif os.path.exists(os.path.join('.','raw', fileName)):
+    #        path = os.path.join('.','raw')
+    #    elif os.path.exists(os.path.join('..','raw', fileName)):
+    #        path = os.path.join('..','raw')
+    #    elif os.path.exists(f'/afs/psi.ch/project/sinqdata/{self.reader_config.year}/amor/{int(number/1000)}/{fileName}'):
+    #        path = f'/afs/psi.ch/project/sinqdata/{self.reader_config.year}/amor/{int(number/1000)}'
+    #    else:
+    #        sys.exit(f'# ERROR: the file {fileName} is nowhere to be found!')
+    #    return os.path.join(path, fileName)
+    #-------------------------------------------------------------------------------------------------
     def path_generator(self, number):
         fileName = f'amor{self.reader_config.year}n{number:06d}.hdf'
-        if os.path.exists(os.path.join(self.reader_config.dataPath,fileName)):
-            path = self.reader_config.dataPath
-        elif os.path.exists(fileName):
-            path = '.'
-        elif os.path.exists(os.path.join('.','raw', fileName)):
-            path = os.path.join('.','raw')
-        elif os.path.exists(os.path.join('..','raw', fileName)):
-            path = os.path.join('..','raw')
-        elif os.path.exists(f'/afs/psi.ch/project/sinqdata/{self.reader_config.year}/amor/{int(number/1000)}/{fileName}'):
-            path = f'/afs/psi.ch/project/sinqdata/{self.reader_config.year}/amor/{int(number/1000)}'
-        else:
-            sys.exit(f'# ERROR: the file {fileName} is nowhere to be found!')
+        path = ''
+        for rawd in self.reader_config.raw:
+            if os.path.exists(os.path.join(rawd,fileName)):
+                path = rawd
+                break
+        if not path:
+            if os.path.exists(f'/afs/psi.ch/project/sinqdata/{self.reader_config.year}/amor/{int(number/1000)}/{fileName}'):
+                path = f'/afs/psi.ch/project/sinqdata/{self.reader_config.year}/amor/{int(number/1000)}'
+            else:
+                sys.exit(f'# ERROR: the file {fileName} can not be found in {self.reader_config.raw}!')
         return os.path.join(path, fileName)
     #-------------------------------------------------------------------------------------------------
     def expand_file_list(self, short_notation):
