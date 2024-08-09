@@ -79,20 +79,34 @@ class AmorData:
         self.wallTime_e    = _wallTime_e
 
     #-------------------------------------------------------------------------------------------------
+    #def path_generator(self, number):
+    #    fileName = f'amor{self.reader_config.year}n{number:06d}.hdf'
+    #    if os.path.exists(os.path.join(self.reader_config.dataPath,fileName)):
+    #        path = self.reader_config.dataPath
+    #    elif os.path.exists(fileName):
+    #        path = '.'
+    #    elif os.path.exists(os.path.join('.','raw', fileName)):
+    #        path = os.path.join('.','raw')
+    #    elif os.path.exists(os.path.join('..','raw', fileName)):
+    #        path = os.path.join('..','raw')
+    #    elif os.path.exists(f'/afs/psi.ch/project/sinqdata/{self.reader_config.year}/amor/{int(number/1000)}/{fileName}'):
+    #        path = f'/afs/psi.ch/project/sinqdata/{self.reader_config.year}/amor/{int(number/1000)}'
+    #    else:
+    #        sys.exit(f'# ERROR: the file {fileName} is nowhere to be found!')
+    #    return os.path.join(path, fileName)
+    #-------------------------------------------------------------------------------------------------
     def path_generator(self, number):
         fileName = f'amor{self.reader_config.year}n{number:06d}.hdf'
-        if os.path.exists(os.path.join(self.reader_config.dataPath,fileName)):
-            path = self.reader_config.dataPath
-        elif os.path.exists(fileName):
-            path = '.'
-        elif os.path.exists(os.path.join('.','raw', fileName)):
-            path = os.path.join('.','raw')
-        elif os.path.exists(os.path.join('..','raw', fileName)):
-            path = os.path.join('..','raw')
-        elif os.path.exists(f'/afs/psi.ch/project/sinqdata/{self.reader_config.year}/amor/{int(number/1000)}/{fileName}'):
-            path = f'/afs/psi.ch/project/sinqdata/{self.reader_config.year}/amor/{int(number/1000)}'
-        else:
-            sys.exit(f'# ERROR: the file {fileName} is nowhere to be found!')
+        path = ''
+        for rawd in self.reader_config.raw:
+            if os.path.exists(os.path.join(rawd,fileName)):
+                path = rawd
+                break
+        if not path:
+            if os.path.exists(f'/afs/psi.ch/project/sinqdata/{self.reader_config.year}/amor/{int(number/1000)}/{fileName}'):
+                path = f'/afs/psi.ch/project/sinqdata/{self.reader_config.year}/amor/{int(number/1000)}'
+            else:
+                sys.exit(f'# ERROR: the file {fileName} can not be found in {self.reader_config.raw}!')
         return os.path.join(path, fileName)
     #-------------------------------------------------------------------------------------------------
     def expand_file_list(self, short_notation):
@@ -169,9 +183,11 @@ class AmorData:
         self.filter_project_x()
 
         # correct tof for beam size effect at chopper:  t_cor = (delta / 180 deg) * tau
-        # TODO: check for correctness
-        if not self.config.offSpecular:
+        if self.config.incidentAngle == 'alphaF':
             self.tof_e    -= ( self.delta_e / 180. ) * self.tau
+        else:
+            # TODO: check sign of correction
+            self.tof_e    -= ( self.kad / 180. ) * self.tau
 
         self.calculate_derived_properties()
 
@@ -189,7 +205,7 @@ class AmorData:
 
     def calculate_derived_properties(self):
         self.lamdaMax = const.lamdaCut+1.e13*self.tau*const.hdm/(self.chopperDetectorDistance+124.)
-        if nb_helpers and not self.config.offSpecular:
+        if nb_helpers:
             self.lamda_e, self.qz_e, self.mask_e = nb_helpers.calculate_derived_properties_focussing(
                     self.tof_e, self.detXdist_e, self.delta_e, self.mask_e,
                     self.config.lambdaRange[0], self.config.lambdaRange[1], self.nu, self.mu,
@@ -201,17 +217,23 @@ class AmorData:
         self.mask_e = np.logical_and(self.mask_e, (self.config.lambdaRange[0]<=self.lamda_e) & (
                     self.lamda_e<=self.config.lambdaRange[1]))
         # alpha_f
-        alphaF_e = self.nu-self.mu+self.delta_e
         # q_z
-        if self.config.offSpecular:
-            alphaI = self.kap+self.kad+self.mu
-            self.qz_e = 2*np.pi*((np.sin(np.deg2rad(alphaF_e))+np.sin(np.deg2rad(alphaI)))/self.lamda_e)
-            self.qx_e = 2*np.pi*((np.cos(np.deg2rad(alphaF_e))-np.cos(np.deg2rad(alphaI)))/self.lamda_e)
-            self.header.measurement_scheme = 'energy-dispersive',
-        else:
+        if self.config.incidentAngle == 'alphaF':
+            alphaF_e  = self.nu - self.mu + self.delta_e
             self.qz_e = 4*np.pi*(np.sin(np.deg2rad(alphaF_e))/self.lamda_e)
-            # qx_e = 0.
+            # qx_e    = 0.
             self.header.measurement_scheme = 'angle- and energy-dispersive'
+        elif self.config.incidentAngle == 'nu':
+            alphaF_e  = (self.nu + self.delta_e + self.kap + self.kad) / 2.
+            self.qz_e = 4*np.pi*(np.sin(np.deg2rad(alphaF_e))/self.lamda_e)
+            # qx_e    = 0.
+            self.header.measurement_scheme = 'energy-dispersive'
+        else:
+            alphaF_e  = self.nu - self.mu + self.delta_e
+            alphaI    = self.kap + self.kad + self.mu
+            self.qz_e = 2*np.pi * ((np.sin(np.deg2rad(alphaF_e)) + np.sin(np.deg2rad(alphaI)))/self.lamda_e)
+            self.qx_e = 2*np.pi * ((np.cos(np.deg2rad(alphaF_e)) - np.cos(np.deg2rad(alphaI)))/self.lamda_e)
+            self.header.measurement_scheme = 'energy-dispersive'
 
     def filter_project_x(self):
         pixelLookUp = self.resolve_pixels()
@@ -279,7 +301,8 @@ class AmorData:
             logging.warning("     using parameters from nicos cache")
             year_date = str(self.start_date).replace('-', '/', 1)
             #cachePath = '/home/amor/nicosdata/amor/cache/'
-            cachePath = '/home/nicos/amorcache/'
+            #cachePath = '/home/nicos/amorcache/'
+            cachePath = '/home/amor/cache/'
             value = str(subprocess.getoutput(f'/usr/bin/grep "value" {cachePath}nicos-mu/{year_date}')).split('\t')[-1]
             self.mu = float(value)
             value = str(subprocess.getoutput(f'/usr/bin/grep "value" {cachePath}nicos-nu/{year_date}')).split('\t')[-1]

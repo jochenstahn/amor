@@ -7,19 +7,20 @@ from datetime import datetime
 
 
 class Defaults:
-    #fileIdentifier
+    # fileIdentifier
     normalisationFileIdentifier = []
     normalisationMethod         = 'overilumination'
     dataPath                    = '.'
+    raw                         = ['.', './raw', '../raw', '../../raw']
     year                        = datetime.now().year
-    #subtract
+    # subtract
     outputName                  = "fromEOS"
     outputFormat                = ['Rqz.ort']
-    offSpecular                 = False
+    incidentAngle               = 'alphaF'
     qResolution                 = 0.01
     #timeSlize
     scale                       = [1]
-    #autoscale
+    # autoscale
     lambdaRange                 = [2., 15.]
     thetaRange                  = [-12., 12.]
     thetaRangeR                 = [-0.7, 0.7]
@@ -27,7 +28,7 @@ class Defaults:
     qzRange                     = [0.005, 0.30]
     chopperSpeed                = 500
     chopperPhase                = -13.5
-    chopperPhaseOffset          = -5
+    chopperPhaseOffset          = 7
     muOffset                    = 0
     mu                          = 0
     nu                          = 0
@@ -40,10 +41,12 @@ class Defaults:
 class ReaderConfig:
     year: int
     dataPath: str
+    raw: Tuple[str]
     startTime: Optional[float] = 0
 
 @dataclass
 class ExperimentConfig:
+    incidentAngle: str 
     chopperPhase: float
     yRange: Tuple[float, float]
     lambdaRange: Tuple[float, float]
@@ -54,11 +57,11 @@ class ExperimentConfig:
     mu: Optional[float] = None
     nu: Optional[float] = None
     muOffset: Optional[float] = None
-    offSpecular: bool = False
 
 @dataclass
 class ReductionConfig:
     qResolution: float
+    qzRange: Tuple[float, float]
     thetaRange: Tuple[float, float]
     thetaRangeR: Tuple[float, float]
 
@@ -102,6 +105,8 @@ class EOSConfig:
             inpt += f' -Y {datetime.now().year}'
         if self.reader_config.dataPath != '.':
             inpt += f' --dataPath {self.reader_config.dataPath}'
+        if self.reader_config.raw != '.':
+            inpt  = f' --rawd {self.reader_config.raw}'
         if self.reduction_config.subtract:
             inpt += f' -subtract {self.reduction_config.subtract}'
         if self.reduction_config.normalisationFileIdentifier:
@@ -153,10 +158,6 @@ class EOSConfig:
         if self.reduction_config.timeSlize:
             acts += f' --timeSlize {" ".join(str(ff) for ff in self.reduction_config.timeSlize)}'
 
-        # TODO: experiment_config = ExperimentConfig(
-        #    offSpecular                  = clas.offSpecular,
-        #    )
-        
         mlst = base + inpt + otpt 
         if mask:
             mlst += mask

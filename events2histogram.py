@@ -156,7 +156,8 @@ class Meta:
         except (KeyError, IndexError):
             logging.warning(f"     using parameters from nicos cache")
             #cachePath = '/home/amor/nicosdata/amor/cache/'
-            cachePath = '/home/nicos/amorcache/'
+            #cachePath = '/home/nicos/amorcache/'
+            cachePath = '/home/amor/cache/'
             value = str(subprocess.getoutput('/usr/bin/grep "value" '+cachePath+'nicos-mu/'+year_date)).split('\t')[-1]
             self.mu = float(value)
             value = str(subprocess.getoutput('/usr/bin/grep "value" '+cachePath+'nicos-nu/'+year_date)).split('\t')[-1]
@@ -522,7 +523,7 @@ class PlotSelection:
             return
         elif arg == 'log':
             vmin = 0
-            vmax = max(1, np.log(np.max(I_yt)+.1)/np.log(10)*1.05)
+            vmax = max(1, np.log(np.max(I_yz)+.1)/np.log(10)*1.05)
             plt.pcolormesh(bins_y[:],bins_z[:],(np.log(I_yz+6e-1)/np.log(10)).T, cmap=cmap, vmin=vmin, vmax=vmax)
         else:
             plt.pcolormesh(bins_y[:],bins_z[:],I_yz.T, cmap=cmap)
@@ -953,7 +954,7 @@ def commandLineArgs():
                             type=float,
                             help ="value of nu")
     clas.add_argument("-P", "--chopperPhase",    
-                            default=-5.,                     
+                            default=7.5,                     
                             type=float,
                             help ="chopper phase offset")
     clas.add_argument("-p", "--plot",            

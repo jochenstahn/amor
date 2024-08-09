@@ -9,7 +9,7 @@ def merge_frames(tof_e, tofCut, tau, total_offset):
     dt = (tofCut-tau)
     for ti in nb.prange(tof_e.shape[0]):
         tof_e_out[ti] = ((tof_e[ti]-dt)%tau)+total_offset  # tof shifted to 1 frame
-    return tof_e
+    return tof_e_out
 
 @nb.jit(nb.float64[:](nb.float64[:], nb.uint64[:], nb.float64[:]),
         nopython=True, parallel=True, cache=True)

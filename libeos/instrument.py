@@ -20,10 +20,11 @@ class Detector:
 
 class Grid:
 
-    def __init__(self, qResolution):
+    def __init__(self, qResolution, qzRange):
         self.lamdaCut = const.lamdaCut
         self.dldl = 0.005     # Delta lambda / lambda
         self.qResolution = qResolution
+        self.qzRange = qzRange
 
     def q(self):
         resolutions = [0.005, 0.01, 0.02, 0.025, 0.04, 0.05, 0.1, 1]
@@ -35,7 +36,8 @@ class Grid:
         # linear up to qq
         q_grid = np.arange(0, qq, qq*dqdq)
         # exponential from qq on
-        q_grid = np.append(q_grid, qq*(1.+dqdq)**np.arange(int(np.log(0.3/qq)/np.log(1+dqdq))))
+        q_grid = np.append(q_grid, qq*(1.+dqdq)**np.arange(int(np.log(self.qzRange[1]/qq)/np.log(1+dqdq))))
+        q_grid = q_grid[q_grid>=self.qzRange[0]]
         return q_grid
 
     def lamda(self):

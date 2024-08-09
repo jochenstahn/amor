@@ -17,7 +17,7 @@ class AmorReduction:
         self.reader_config = config.reader
         self.reduction_config = config.reduction
         self.output_config = config.output
-        self.grid = Grid(config.reduction.qResolution)
+        self.grid = Grid(config.reduction.qResolution, config.experiment.qzRange)
         self.header = Header()
 
         self.header.reduction.call = EOSConfig.call_string(self)
@@ -87,15 +87,16 @@ class AmorReduction:
             headerRqz = self.header.orso_header()
             headerRqz.data_set = f'Nr {i} : mu = {self.file_reader.mu:6.3f} deg'
 
-            # projection on q-grid
+            # projection on qz-grid
             q_q, R_q, dR_q, dq_q = self.project_on_qz(qz_lz, ref_lz, err_lz, res_lz, self.norm_lz, self.mask_lz)
 
-            filter_q = np.where((self.experiment_config.qzRange[0]<q_q) & (q_q<self.experiment_config.qzRange[1]),
-                                True, False)
-            q_q = q_q[filter_q]
-            R_q = R_q[filter_q]
-            dR_q = dR_q[filter_q]
-            dq_q = dq_q[filter_q]
+            # The filtering is now done by restricting the qz-grid
+            #filter_q = np.where((self.experiment_config.qzRange[0]>q_q) & (q_q>self.experiment_config.qzRange[1]),
+            #                    False, True)
+            #q_q = q_q[filter_q]
+            #R_q = R_q[filter_q]
+            #dR_q = dR_q[filter_q]
+            #dq_q = dq_q[filter_q]
 
             if self.reduction_config.autoscale:
                 if i==0:
@@ -307,11 +308,6 @@ class AmorReduction:
         n_path = os.path.join(dataPath, f'{name}.norm')
         if os.path.exists(n_path):
             logging.warning(f'normalisation matrix: found and using {n_path}')
-            #self.norm_lz = np.loadtxt(f'{dataPath}/{name}.norm')
-            #with open(n_path, 'r') as fh:
-            #    fh.readline()
-            #    self.normFileList = fh.readline().split('[')[1].split(']')[0].replace('\'', '').split(', ')
-            #    self.normAngle = float(fh.readline().split('= ')[1])
             with open(n_path, 'rb') as fh:
                 self.normFileList = np.load(fh, allow_pickle=True)
                 self.normAngle    = np.load(fh, allow_pickle=True)
@@ -329,7 +325,7 @@ class AmorReduction:
             lamda_e       = fromHDF.lamda_e
             detZ_e        = fromHDF.detZ_e
             self.norm_lz, bins_l, bins_z = np.histogram2d(lamda_e, detZ_e, bins = (self.grid.lamda(), self.grid.z()))
-            self.norm_lz = np.where(self.norm_lz>0, self.norm_lz, np.nan)
+            self.norm_lz = np.where(self.norm_lz>2, self.norm_lz, np.nan)
             # correct for the SM reflectivity
             lamda_l  = self.grid.lamda()
             theta_z  = self.normAngle + fromHDF.delta_z
@@ -338,23 +334,14 @@ class AmorReduction:
             qz_lz    = 4.0*np.pi * np.sin(np.deg2rad(theta_lz)) / lamda_lz
             Rsm_lz   = np.ones(np.shape(qz_lz))
             Rsm_lz   = np.where(qz_lz>0.0217, 1-(qz_lz-0.0217)*(0.0625/0.0217), Rsm_lz)
+            # TODO: introduce variable for `m` and propably for the decay
             Rsm_lz   = np.where(qz_lz>0.0217*5, np.nan, Rsm_lz)
             self.norm_lz  = self.norm_lz / Rsm_lz
-            #if len(lamda_e) > 1e6:
-            #    head = ('normalisation matrix based on the measurements\n'
-            #           f'{fromHDF.file_list}\n'
-            #           f'nu - mu = {self.normAngle}\n'
-            #           f'shape= {np.shape(self.norm_lz)} (lambda, z)\n'
-            #           f'measured at mu = {fromHDF.mu:6.3f} deg\n'
-            #           f'N(l_lambda, z) = theta(z) / sum_i=-1..1 I(l_lambda+i, z)')
-            #    head = head.replace('../', '')
-            #    head = head.replace('./', '')
-            #    head = head.replace('raw/', '')
-            #    np.savetxt(f'{dataPath}/{name}.norm', self.norm_lz, header = head)
+
             if len(lamda_e) > 1e6:
                 with open(n_path, 'wb') as fh:
                     np.save(fh, np.array(fromHDF.file_list), allow_pickle=False)
-                    np.save(fh, np.array(fromHDF.mu), allow_pickle=False)
+                    np.save(fh, np.array(self.normAngle), allow_pickle=False)
                     np.save(fh, self.norm_lz, allow_pickle=False)
             self.normFileList = fromHDF.file_list
         self.header.reduction.corrections.append('normalisation with \'additional files\'')
@@ -362,7 +349,12 @@ class AmorReduction:
     def project_on_lz(self, fromHDF, norm_lz, normAngle, lamda_e, detZ_e):
         # projection on lambda-z-grid
         lamda_l  = self.grid.lamda()
-        theta_z  = fromHDF.nu - fromHDF.mu + fromHDF.delta_z
+        if self.experiment_config.incidentAngle == 'alphaF':
+          theta_z  = fromHDF.nu - fromHDF.mu + fromHDF.delta_z
+        elif self.experiment_config.incidentAngle == 'nu':
+          theta_z  = (fromHDF.nu + fromHDF.delta_z + fromHDF.kap + fromHDF.kad) / 2.
+        else:
+          pass
         lamda_lz = (self.grid.lz().T*lamda_l[:-1]).T
         theta_lz = self.grid.lz()*theta_z
 
@@ -393,7 +385,7 @@ class AmorReduction:
         int_lz, bins_l, bins_z  = np.histogram2d(lamda_e, detZ_e, bins = (lamda_l, self.grid.z()))
         #           cut normalisation sample horizon
         int_lz    = np.where(mask_lz, int_lz, np.nan)
-        thetaF_lz  = np.where(mask_lz, theta_lz, np.nan)
+        thetaF_lz = np.where(mask_lz, theta_lz, np.nan)
 
         ref_lz    = (int_lz * np.absolute(thetaN_lz)) / (norm_lz * np.absolute(thetaF_lz))
         err_lz    = ref_lz * np.sqrt( 1/(int_lz+.1) + 1/norm_lz )

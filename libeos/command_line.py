@@ -27,10 +27,14 @@ def commandLineArgs():
     input_data.add_argument("-nm", "--normalisationMethod",
                             default = Defaults.normalisationMethod,
                             help = "normalisation method: overilumination, underillumination, direct_beam")
+    input_data.add_argument("--raw", 
+                            type = str,
+                            default = Defaults.raw,
+                            help = "relative path to directory with .hdf files")
     input_data.add_argument("-d", "--dataPath",
                             type = str,
                             default = Defaults.dataPath,
-                            help = "relative path to directory with .hdf files")
+                            help = "relative path for output")
     input_data.add_argument("-Y", "--year",
                             default = Defaults.year,
                             type = int,
@@ -46,9 +50,10 @@ def commandLineArgs():
                             nargs = '+',
                             default = Defaults.outputFormat,
                             help = "one of [Rqz.ort, Rlt.ort]")
-    output.add_argument("--offSpecular",
-                            type = bool,
-                            default = Defaults.offSpecular,
+    output.add_argument("-ai", "--incidentAngle",
+                            type = str,
+                            default = Defaults.incidentAngle,
+                            help = "calulate alpha_i from [alphaF, mu, nu]",
                             )
     output.add_argument("-r", "--qResolution",
                             default = Defaults.qResolution,
@@ -168,6 +173,7 @@ def command_line_options():
 
     reader_config = ReaderConfig(
         year                         = clas.year,
+        raw                          = clas.raw,
         dataPath                     = clas.dataPath
         )
     experiment_config = ExperimentConfig(
@@ -177,13 +183,14 @@ def command_line_options():
         yRange                       = clas.yRange,
         lambdaRange                  = clas.lambdaRange,
         qzRange                      = clas.qzRange,
-        offSpecular                  = clas.offSpecular,
+        incidentAngle                = clas.incidentAngle,
         mu                           = clas.mu,
         nu                           = clas.nu,
         muOffset                     = clas.muOffset
         )
     reduction_config = ReductionConfig(
         qResolution                  = clas.qResolution,
+        qzRange                      = clas.qzRange,
         autoscale                    = clas.autoscale,
         thetaRange                   = clas.thetaRange,
         thetaRangeR                  = clas.thetaRangeR,
