@@ -24,6 +24,9 @@ def commandLineArgs():
                             default = Defaults.normalisationFileIdentifier,
                             nargs = '+',
                             help = "file number(s) of normalisation measurement")
+    input_data.add_argument("-nm", "--normalisationMethod",
+                            default = Defaults.normalisationMethod,
+                            help = "normalisation method: overilumination, underillumination, direct_beam")
     input_data.add_argument("-d", "--dataPath",
                             type = str,
                             default = Defaults.dataPath,

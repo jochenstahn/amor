@@ -9,6 +9,7 @@ from datetime import datetime
 class Defaults:
     #fileIdentifier
     normalisationFileIdentifier = []
+    normalisationMethod         = 'overilumination'
     dataPath                    = '.'
     year                        = datetime.now().year
     #subtract
@@ -67,6 +68,7 @@ class ReductionConfig:
     autoscale: Optional[Tuple[bool, bool]] = None
     subtract: Optional[str] = None
     normalisationFileIdentifier: Optional[list] = None
+    normalisationMethod: str
     timeSlize: Optional[list] = None
 
 @dataclass
