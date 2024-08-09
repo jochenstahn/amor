@@ -15,29 +15,29 @@
   
   > computer: `amor.psi.ch`  
   > username: `amorlnsg`  
-  > password: `<YY>lns1` where `<YY>` is the present year
+  > password: ask beamline scientist
 
 - create a local subdirectory for the actual campagne:
 
   1. Open a terminal and enter your name. Probably create a new directory with your name.
      You will end up in this directory.
-  1. Create a sub-directory: `> mkdir <year>-<month>` (or the like).
-  1. `> cd <year>-<month>`
+  1. Create a sub-directory: `mkdir <year>-<month>` (or the like).
+  1. `cd <year>-<month>`
 
 - open the NICOS gui by typing 
 
-  > `> nicos-gui`
+  > `nicos-gui`
 
   in a terminal window as user `amorlnsg`.
   The gui will start up. Probably you will have to connect to the NICOS program: 
      
   > in the upper right corner type the wheel and select *connect*  
   > user: `user`  
-  > password: `<YY>lns1` where `<YY>` is the present year
+  > password: ask beamline scientist
 
 ## identify yourself
 
-Upon starting an measurement campagne, you have to enter the following 
+Upon starting a measurement campagne, you have to enter the following 
 information:
 
 - proposal ID
@@ -45,7 +45,7 @@ information:
 - user name(s)
 - affiliation?
 
-These data are used to create a repository for your data and are
+The information is used to create a repository for your data and is
 also stored in the meta data section of all your files.
 
 ## brief intro for NICOS commands
@@ -54,7 +54,7 @@ also stored in the meta data section of all your files.
 
 - everything is a *device* 
 - each device has a *name*, in most cases a 2 to 3 letter abbreviation  
-  e.g. `som` for the sample tilt (sample omega)
+  e.g. `som` for the sample tilt (*s*ample *om*ega)
 - get the **description** for a device:
   
   > `<device>`
@@ -94,16 +94,18 @@ right pannel. A pop-up window opens with all the options available.
 : (move and wait) moves a *device* to *value* 
 
 
+### left over and does not belong here
+
 The sample must be positioned with the center of its surface at the 
 focal point. At the same time it should be in the center of rotation of
 the $\omega$ stage. For this reason there are 2 vertical **translation**s which are
 close to parallel: 
 
-`SOZ`
+`soz`
 : = *S*ample *O*mega stage *Z* position
 : Lift of the $\omega$ stage so that its center is in the FP.
 
-`STZ`
+`stz`
 : = *S*ample *T*ranslation *Z* direction
 : Lift of the sample on the $\omega$ stage to bring it to the
   center of rotation. 
@@ -111,14 +113,14 @@ close to parallel:
 
 And finally the sample has to be **tilt**ed by using the $\omega$ and $\chi$ stages.
 
-`MU`
+`mu`
 : Tilt of the sample relative to the horizon.
 : On amor $\mu$ is used to define and probably to describe the sample
   orientation relative to the lab horizon. Since the beam might be convergent
   on the sample surface it is not the neutron's angle of incidence!
   See also *[coordinate system(s) and nomenclature]*.
 
-`NU`
+`nu`
 : Rotation of the detector center around the sample position
 relative to the lab horizon. This is a combined movement of
 detector lift, tilt, (*x* translation) and also affects 
@@ -126,24 +128,24 @@ all other devices behind the sample.
 
 Diaphragms
 
-`D<n><m>`
-: = *D*iaphragm number *n*, blade or position *m*
-: $n \in \{\mathrm V, 1..4\}$ for $v$irtual source and *n*umber of diaphragm.
-: $m \in \{\mathrm{T, B, L, R, H, V, Z}\}$ for *t*op, *b*ottem, *l*eft, *r*ight,
+`d<n><m>`
+: = *d*iaphragm number *n*, blade or position *m*
+: $n \in \{\mathrm v, 1..4\}$ for $v$irtual source and *n*umber of diaphragm.
+: $m \in \{\mathrm{t, b, l, r, h, v, z}\}$ for *t*op, *b*ottem, *l*eft, *r*ight,
   *h*orizontal, *v*ertical and *z*-position.
 : not all options rea available for all devices. 
 
 | name    | description               | *m*       | range or values / mm  |
 | :---    | :---                      | :---      | :---:                 |
-| `DVV`   | virtual source vertical   |           | 0.5 1 2 3 4 6 8 10    | 
-| `DVH`   | virtual source horizontal |           | 2 5 10 12 15 20 25 30 |
-| `DMF`   | middle focus              |           | slot 1 .. 5           |
-| `D1<m>` | behind Selene guide       | `T B L R` | -40 .. +40            |
-| `D2<m>` | before sample             | `T B L R` | -40 .. +40            |
-| `D2Z`   | '' lift                   |           | -100 .. +100          |
-| `D3<m>` | behind sample             | `T B L R` | -40 .. +40            |
-| `D3Z`   | '' lift                   |           | -100 .. +100          |
-| `D4<m>` | before detector           | `H V`     | +1 .. +140            |
+| `dvv`   | virtual source vertical   |           | 0.5 1 2 3 4 6 8 10    | 
+| `dvh`   | virtual source horizontal |           | 2 5 10 12 15 20 25 30 |
+| `dmf`   | middle focus              |           | slot 1 .. 5           |
+| `d1<m>` | behind Selene guide       | `t b l r` | -40 .. +40            |
+| `d2<m>` | before sample             | `t b l r` | -40 .. +40            |
+| `d2Z`   | '' lift                   |           | -100 .. +100          |
+| `d3<m>` | behind sample             | `t b l r` | -40 .. +40            |
+| `d3Z`   | '' lift                   |           | -100 .. +100          |
+| `d4<m>` | before detector           | `h v`     | +1 .. +140            |
 
 ## perform measurement
 
@@ -154,19 +156,16 @@ For specular reflecivity, $\alpha_i$ is deduced from the position (i.e. angle)
 of the detector and the position on the detector where a neutron is detected.
 
 `count(<mode>=<preset>)`
-
 : count with *mode* 
 
   - `t` = time for *preset* seconds
   - `m` = monitor for *preset* monitor counts 
 
 `scan(<device>, <start>, <step>, <np>, <mode>=<preset>)`
-
 : scan the *device* from *start* with *np* steps of width *step* with the
 counting time defined by *mode* / *preset*  
 
 `run(<scriptname>)`
-
 : *run* the script *scriptname*, who's path is either relative to 
 `Exp.scriptpath` or which has an absolute path. The script language is
 python. 
