@@ -8,11 +8,11 @@ from datetime import datetime
 
 class Defaults:
     # fileIdentifier
-    normalisationFileIdentifier = []
-    normalisationMethod         = 'overilumination'
     dataPath                    = '.'
     raw                         = ['.', './raw', '../raw', '../../raw']
     year                        = datetime.now().year
+    normalisationFileIdentifier = []
+    #normalisationMethod         = 'overillumination'
     # subtract
     outputName                  = "fromEOS"
     outputFormat                = ['Rqz.ort']
@@ -71,7 +71,7 @@ class ReductionConfig:
     autoscale: Optional[Tuple[bool, bool]] = None
     subtract: Optional[str] = None
     normalisationFileIdentifier: Optional[list] = None
-    normalisationMethod: str
+    #normalisationMethod: str
     timeSlize: Optional[list] = None
 
 @dataclass
@@ -105,8 +105,8 @@ class EOSConfig:
             inpt += f' -Y {datetime.now().year}'
         if self.reader_config.dataPath != '.':
             inpt += f' --dataPath {self.reader_config.dataPath}'
-        if self.reader_config.raw != '.':
-            inpt  = f' --rawd {self.reader_config.raw}'
+        #if self.reader_config.raw != '.':
+        #    inpt  = f' --rawd {self.reader_config.raw}'
         if self.reduction_config.subtract:
             inpt += f' -subtract {self.reduction_config.subtract}'
         if self.reduction_config.normalisationFileIdentifier:
@@ -179,6 +179,7 @@ class EOSConfig:
             if modl:
                 mlst += '  ' + modl
 
+        print(mlst)
         return  mlst
 
             

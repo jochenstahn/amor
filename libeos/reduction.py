@@ -75,7 +75,7 @@ class AmorReduction:
     def read_unsliced(self, i):
         lamda_e = self.file_reader.lamda_e
         detZ_e = self.file_reader.detZ_e
-        qz_lz, ref_lz, err_lz, res_lz, lamda_lz, theta_lz, int_lz, self.mask_lz = self.project_on_lz(
+        qz_lz, qx_lz, ref_lz, err_lz, res_lz, lamda_lz, theta_lz, int_lz, self.mask_lz = self.project_on_lz(
                 self.file_reader, self.norm_lz, self.normAngle, lamda_e, detZ_e)
         try:
             ref_lz *= self.reduction_config.scale[i]
@@ -130,6 +130,7 @@ class AmorReduction:
                 fileio.Column('intensity', '', 'filtered neutron events per pixel'),
                 fileio.Column('norm', '', 'normalisation matrix'),
                 fileio.Column('mask', '', 'pixels used for calculating R(q_z)'),
+                fileio.Column('Qx', '1/angstrom', 'parallel momentum transfer'),
                 ]
             # data_source = file_reader.data_source
 
@@ -149,7 +150,8 @@ class AmorReduction:
                     tindex_lz.T,
                     int_lz.T,
                     self.norm_lz.T,
-                    np.where(self.mask_lz, 1, 0).T
+                    np.where(self.mask_lz, 1, 0).T,
+                    qx_lz.T,
                     ):
                 data = np.array(list(item)).T
                 headerRlt = self.header.orso_header(columns=columns)
@@ -178,7 +180,7 @@ class AmorReduction:
             lamda_e = self.file_reader.lamda_e[filter_e]
             detZ_e = self.file_reader.detZ_e[filter_e]
 
-            qz_lz, ref_lz, err_lz, res_lz, lamda_lz, theta_lz, int_lz, mask_lz = self.project_on_lz(
+            qz_lz, qx_lz, ref_lz, err_lz, res_lz, lamda_lz, theta_lz, int_lz, mask_lz = self.project_on_lz(
                     self.file_reader, self.norm_lz, self.normAngle, lamda_e, detZ_e)
             q_q, R_q, dR_q, dq_q = self.project_on_qz(qz_lz, ref_lz, err_lz, res_lz, self.norm_lz, mask_lz)
 
@@ -349,14 +351,15 @@ class AmorReduction:
     def project_on_lz(self, fromHDF, norm_lz, normAngle, lamda_e, detZ_e):
         # projection on lambda-z-grid
         lamda_l  = self.grid.lamda()
-        if self.experiment_config.incidentAngle == 'alphaF':
-          theta_z  = fromHDF.nu - fromHDF.mu + fromHDF.delta_z
-        elif self.experiment_config.incidentAngle == 'nu':
-          theta_z  = (fromHDF.nu + fromHDF.delta_z + fromHDF.kap + fromHDF.kad) / 2.
-        else:
-          pass
-        lamda_lz = (self.grid.lz().T*lamda_l[:-1]).T
-        theta_lz = self.grid.lz()*theta_z
+        alphaF_z  = fromHDF.nu - fromHDF.mu + fromHDF.delta_z
+        #if self.experiment_config.incidentAngle == 'alphaF':
+        #  alphaF_z  = fromHDF.nu - fromHDF.mu + fromHDF.delta_z
+        #elif self.experiment_config.incidentAngle == 'nu':
+        #  alphaF_z  = (fromHDF.nu + fromHDF.delta_z + fromHDF.kap + fromHDF.kad) / 2.
+        #else:
+        #  pass
+        lamda_lz  = (self.grid.lz().T*lamda_l[:-1]).T
+        alphaF_lz = self.grid.lz()*alphaF_z
 
         thetaN_z  = fromHDF.delta_z + normAngle
         thetaN_lz = np.ones(np.shape(norm_lz))*thetaN_z
@@ -364,37 +367,44 @@ class AmorReduction:
 
         mask_lz   = np.where(np.isnan(norm_lz), False, True)
         mask_lz   = np.logical_and(mask_lz, np.where(np.absolute(thetaN_lz)>5e-3, True, False))
-        mask_lz   = np.logical_and(mask_lz, np.where(np.absolute(theta_lz)>5e-3, True, False))
+        mask_lz   = np.logical_and(mask_lz, np.where(np.absolute(alphaF_lz)>5e-3, True, False))
         if self.reduction_config.thetaRange[1]<12:
-          mask_lz   = np.logical_and(mask_lz, np.where(theta_lz >= self.reduction_config.thetaRange[0], True, False))
-          mask_lz   = np.logical_and(mask_lz, np.where(theta_lz <= self.reduction_config.thetaRange[1], True, False))
+          mask_lz   = np.logical_and(mask_lz, np.where(alphaF_lz >= self.reduction_config.thetaRange[0], True, False))
+          mask_lz   = np.logical_and(mask_lz, np.where(alphaF_lz <= self.reduction_config.thetaRange[1], True, False))
         if self.reduction_config.thetaRangeR[1]<12:
           t0 = fromHDF.nu - fromHDF.mu
-          mask_lz   = np.logical_and(mask_lz, np.where(theta_lz-t0 >= self.reduction_config.thetaRangeR[0], True, False))
-          mask_lz   = np.logical_and(mask_lz, np.where(theta_lz-t0 <= self.reduction_config.thetaRangeR[1], True, False))
+          mask_lz   = np.logical_and(mask_lz, np.where(alphaF_lz-t0 >= self.reduction_config.thetaRangeR[0], True, False))
+          mask_lz   = np.logical_and(mask_lz, np.where(alphaF_lz-t0 <= self.reduction_config.thetaRangeR[1], True, False))
         if self.experiment_config.lambdaRange[1]<15:
           mask_lz   = np.logical_and(mask_lz, np.where(lamda_lz >= self.experiment_config.lambdaRange[0], True, False))
           mask_lz   = np.logical_and(mask_lz, np.where(lamda_lz <= self.experiment_config.lambdaRange[1], True, False))
 
         #           gravity correction
-        #theta_lz += np.rad2deg( np.arctan( 3.07e-10 * (fromHDF.detectorDistance + detXdist_e) * lamda_lz**2 ) )
-        theta_lz += np.rad2deg( np.arctan( 3.07e-10 * fromHDF.detectorDistance * lamda_lz**2 ) )
+        #alphaF_lz += np.rad2deg( np.arctan( 3.07e-10 * (fromHDF.detectorDistance + detXdist_e) * lamda_lz**2 ) )
+        alphaF_lz += np.rad2deg( np.arctan( 3.07e-10 * fromHDF.detectorDistance * lamda_lz**2 ) )
 
-        #z_z       = enumerate(theta_z)
-        qz_lz     = 4.0*np.pi * np.sin(np.deg2rad(theta_lz)) / lamda_lz
+        if self.experiment_config.incidentAngle == 'alphaF':
+          #alphaI_lz = alphaF_lz
+          qz_lz     = 4.0*np.pi * np.sin(np.deg2rad(alphaF_lz)) / lamda_lz
+          qx_lz     = self.grid.lz() * 0.
+        else:
+          alphaI_lz = self.grid.lz()*(fromHDF.mu + fromHDF.kap + fromHDF.kad)
+          qz_lz     = 2.0*np.pi * (np.sin(np.deg2rad(alphaF_lz)) + np.sin(np.deg2rad(alphaI_lz))) / lamda_lz
+          qx_lz     = 2.0*np.pi * (np.cos(np.deg2rad(alphaF_lz)) - np.cos(np.deg2rad(alphaI_lz))) / lamda_lz
+
         int_lz, bins_l, bins_z  = np.histogram2d(lamda_e, detZ_e, bins = (lamda_l, self.grid.z()))
         #           cut normalisation sample horizon
         int_lz    = np.where(mask_lz, int_lz, np.nan)
-        thetaF_lz = np.where(mask_lz, theta_lz, np.nan)
+        thetaF_lz = np.where(mask_lz, alphaF_lz, np.nan)
 
         ref_lz    = (int_lz * np.absolute(thetaN_lz)) / (norm_lz * np.absolute(thetaF_lz))
         err_lz    = ref_lz * np.sqrt( 1/(int_lz+.1) + 1/norm_lz )
 
-        res_lz    = np.ones((np.shape(lamda_l[:-1])[0], np.shape(theta_z)[0])) * 0.022**2
-        res_lz    = res_lz + (0.008/theta_lz)**2
+        res_lz    = np.ones((np.shape(lamda_l[:-1])[0], np.shape(alphaF_z)[0])) * 0.022**2
+        res_lz    = res_lz + (0.008/alphaF_lz)**2
         res_lz    = qz_lz * np.sqrt(res_lz)
 
-        return qz_lz, ref_lz, err_lz, res_lz, lamda_lz, theta_lz, int_lz, mask_lz
+        return qz_lz, qx_lz, ref_lz, err_lz, res_lz, lamda_lz, alphaF_lz, int_lz, mask_lz
 
 
     @staticmethod

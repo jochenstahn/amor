@@ -24,9 +24,9 @@ def commandLineArgs():
                             default = Defaults.normalisationFileIdentifier,
                             nargs = '+',
                             help = "file number(s) of normalisation measurement")
-    input_data.add_argument("-nm", "--normalisationMethod",
-                            default = Defaults.normalisationMethod,
-                            help = "normalisation method: overilumination, underillumination, direct_beam")
+    #input_data.add_argument("-nm", "--normalisationMethod",
+    #                        default = Defaults.normalisationMethod,
+    #                        help = "normalisation method: overillumination, underillumination, direct_beam")
     input_data.add_argument("--raw", 
                             type = str,
                             default = Defaults.raw,
@@ -198,7 +198,8 @@ def command_line_options():
         scale                        = clas.scale,
         subtract                     = clas.subtract,
         normalisationFileIdentifier  = clas.normalisationFileIdentifier,
-        timeSlize                    = clas.timeSlize
+        #normalisationMethod          = clas.normalisationMethod,
+        timeSlize                    = clas.timeSlize,
         )
     output_config = OutputConfig(
         outputFormats                = output_format_list(clas.outputFormat),
