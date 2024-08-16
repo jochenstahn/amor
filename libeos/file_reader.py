@@ -165,7 +165,7 @@ class AmorData:
             self.header.measurement_additional_files.append(fileio.File(file=fileName.split('/')[-1], timestamp=self.fileDate))
         else:
             self.header.measurement_data_files.append(fileio.File(file=fileName.split('/')[-1], timestamp=self.fileDate))
-        logging.info(f'      mu = {self.mu:6.3f}, nu = {self.nu:6.3f}, kap = {self.kap:6.3f}, kad = {self.kap:6.3f}')
+        logging.info(f'      mu = {self.mu:6.3f}, nu = {self.nu:6.3f}, kap = {self.kap:6.3f}, kad = {self.kad:6.3f}')
 
         # TODO: should extract monitor from counts or beam current times time
         self.monitor1 = self.ctime
