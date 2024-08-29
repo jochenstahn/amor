@@ -38,7 +38,7 @@ class AmorData:
     lambdaMax: float
     lambda_e: np.ndarray
     monitor1: float
-    monitor2: float
+    #monitor2: float
     mu: float
     nu: float
     tau: float
@@ -168,8 +168,14 @@ class AmorData:
         logging.info(f'      mu = {self.mu:6.3f}, nu = {self.nu:6.3f}, kap = {self.kap:6.3f}, kad = {self.kad:6.3f}')
 
         # TODO: should extract monitor from counts or beam current times time
-        self.monitor1 = self.ctime
-        self.monitor2 = self.monitor1
+        # using proton charge for normalisation
+        try:
+            self.monitor1 = self.hdf['/entry1/Amor/detector/proton_current/maximum_value'][0]
+            logging.info(f'      using proton charge = {int(self.monitor1)} mC as monitor') 
+        except NameError:
+            self.monitor1 = self.ctime
+            logging.info(f'      using measurement time = {self.monitor1:.1f} s as monitor') 
+        #self.monitor2 = self.monitor1
 
         self.read_event_stream()
         totalNumber = np.shape(self.tof_e)[0]
