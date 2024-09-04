@@ -170,7 +170,7 @@ class AmorData:
         # TODO: should extract monitor from counts or beam current times time
         # using proton charge for normalisation
         try:
-            self.monitor1 = self.hdf['/entry1/Amor/detector/proton_current/maximum_value'][0]
+            self.monitor1 = self.hdf['/entry1/Amor/detector/proton_monitor/value'][1:].max()
             logging.info(f'      using proton charge = {int(self.monitor1)} mC as monitor') 
         except NameError:
             self.monitor1 = self.ctime
