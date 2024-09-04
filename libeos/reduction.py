@@ -87,6 +87,10 @@ class AmorReduction:
             headerRqz = self.header.orso_header()
             headerRqz.data_set = f'Nr {i} : mu = {self.file_reader.mu:6.3f} deg'
 
+            if qz_lz[0,int(np.shape(qz_lz)[1]/2)]  < 0:
+                # assuming a 'measurement from below' 
+                qz_lz *= -1
+
             # projection on qz-grid
             q_q, R_q, dR_q, dq_q = self.project_on_qz(qz_lz, ref_lz, err_lz, res_lz, self.norm_lz, self.mask_lz)
 
