@@ -109,7 +109,10 @@ def analyse_ev(event_e, tof_e, yMin, yMax, thetaMin, thetaMax):
     data_e = data_e[filter_l,:]
     
     # q_z
-    data_e[:,9] = 4*np.pi * np.sin( np.deg2rad( data_e[:,8] ) ) / data_e[:,7]
+    if mu > -0.25:
+        data_e[:,9] = 4*np.pi * np.sin( np.deg2rad( data_e[:,8] ) ) / data_e[:,7]
+    else:
+        data_e[:,9] = 4*np.pi * np.sin( np.deg2rad( -data_e[:,8] ) ) / data_e[:,7]
     
     # filter q_z range
     #filter_e = (qMin < data_e[:,I7]) & (data_e[:,7] < qMax)
@@ -452,8 +455,9 @@ class PlotSelection:
         I_yt, bins_y, bins_t = np.histogram2d(data_e[:,4], data_e[:,8], bins = (y_grid, self.theta_grid()))
         I_lt, bins_l, bins_t = np.histogram2d(data_e[:,7], data_e[:,8], bins = (self.lamda_grid(), self.theta_grid()))
         I_q, bins_q = np.histogram(data_e[:,9], bins = self.q_grid())
-        q_lim = 4*np.pi*np.array([ max( np.sin(self.theta_grid()[0]*np.pi/180.)/self.lamda_grid()[-1] , 1e-4 ),
-                                   min( np.sin(self.theta_grid()[-1]*np.pi/180.)/self.lamda_grid()[0] , 0.03 )])
+        #q_lim = 4*np.pi*np.array([ max( np.sin(self.theta_grid()[0]*np.pi/180.)/self.lamda_grid()[-1] , 1e-4 ),
+        #                           min( np.sin(self.theta_grid()[-1]*np.pi/180.)/self.lamda_grid()[0] , 0.03 )])
+        q_lim = np.array([qMin, qMax])
         if arg == 'lin':
             #vmin = min(np.min(I_lt), np.min(I_yt))
             vmin = 0
@@ -609,8 +613,10 @@ class PlotSelection:
     def Iq(self, numberString, arg, data_e):
         I_q, bins_q = np.histogram(data_e[:,9], bins = self.q_grid())
         err_q = np.sqrt(I_q+1)
-        q_lim = 4*np.pi*np.array([ max( np.sin(self.theta_grid()[0]*np.pi/180.)/self.lamda_grid()[-1] , 1e-4 ),
-                                   min( np.sin(self.theta_grid()[-1]*np.pi/180.)/self.lamda_grid()[0] , 0.03 )])
+        #q_lim = 4*np.pi*np.array([ max( np.sin(self.theta_grid()[0]*np.pi/180.)/self.lamda_grid()[-1] , 1e-4 ),
+        #                           min( np.sin(self.theta_grid()[-1]*np.pi/180.)/self.lamda_grid()[0] , 0.03 )])
+        q_lim = [qMin, qMax]
+        print(q_lim)
         if arg == 'file':
             header = '# q counts'
             I_q =  np.vstack((bins_q[:-1], I_q, err_q))
