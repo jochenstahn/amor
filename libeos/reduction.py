@@ -74,9 +74,13 @@ class AmorReduction:
 
     def read_unsliced(self, i):
         lamda_e = self.file_reader.lamda_e
-        detZ_e = self.file_reader.detZ_e
+        detZ_e  = self.file_reader.detZ_e
         qz_lz, qx_lz, ref_lz, err_lz, res_lz, lamda_lz, theta_lz, int_lz, self.mask_lz = self.project_on_lz(
                 self.file_reader, self.norm_lz, self.normAngle, lamda_e, detZ_e)
+        monitor = self.file_reader.monitor
+        if monitor>1 :
+            ref_lz *= 1/monitor
+            err_lz *= 1/monitor
         try:
             ref_lz *= self.reduction_config.scale[i]
             err_lz *= self.reduction_config.scale[i]
@@ -318,6 +322,7 @@ class AmorReduction:
                 self.normFileList = np.load(fh, allow_pickle=True)
                 self.normAngle    = np.load(fh, allow_pickle=True)
                 self.norm_lz      = np.load(fh, allow_pickle=True)
+                self.normMonitor  = np.load(fh, allow_pickle=True)
             for i, entry in enumerate(self.normFileList):
                  self.normFileList[i] = entry.split('/')[-1]
             self.header.measurement_additional_files = self.normFileList
@@ -328,8 +333,9 @@ class AmorReduction:
                                config=self.experiment_config,
                                short_notation=short_notation, norm=True)
             self.normAngle     = fromHDF.nu - fromHDF.mu
-            lamda_e       = fromHDF.lamda_e
-            detZ_e        = fromHDF.detZ_e
+            lamda_e          = fromHDF.lamda_e
+            detZ_e           = fromHDF.detZ_e
+            self.normMonitor = fromHDF.monitor 
             self.norm_lz, bins_l, bins_z = np.histogram2d(lamda_e, detZ_e, bins = (self.grid.lamda(), self.grid.z()))
             self.norm_lz = np.where(self.norm_lz>2, self.norm_lz, np.nan)
             # correct for the SM reflectivity
@@ -349,6 +355,7 @@ class AmorReduction:
                     np.save(fh, np.array(fromHDF.file_list), allow_pickle=False)
                     np.save(fh, np.array(self.normAngle), allow_pickle=False)
                     np.save(fh, self.norm_lz, allow_pickle=False)
+                    np.save(fh, self.normMonitor, allow_pickle=False)
             self.normFileList = fromHDF.file_list
         self.header.reduction.corrections.append('normalisation with \'additional files\'')
 
@@ -401,8 +408,8 @@ class AmorReduction:
         int_lz    = np.where(mask_lz, int_lz, np.nan)
         thetaF_lz = np.where(mask_lz, alphaF_lz, np.nan)
 
-        ref_lz    = (int_lz * np.absolute(thetaN_lz)) / (norm_lz * np.absolute(thetaF_lz))
-        err_lz    = ref_lz * np.sqrt( 1/(int_lz+.1) + 1/norm_lz )
+        ref_lz    = (int_lz * np.absolute(thetaN_lz)) / (norm_lz * np.absolute(thetaF_lz)) * self.normMonitor
+        err_lz    = ref_lz * np.sqrt( 1/(int_lz+.1) + 1/norm_lz ) 
 
         res_lz    = np.ones((np.shape(lamda_l[:-1])[0], np.shape(alphaF_z)[0])) * 0.022**2
         res_lz    = res_lz + (0.008/alphaF_lz)**2

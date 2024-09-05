@@ -37,8 +37,7 @@ class AmorData:
     kap: float
     lambdaMax: float
     lambda_e: np.ndarray
-    monitor1: float
-    #monitor2: float
+    monitor: float
     mu: float
     nu: float
     tau: float
@@ -69,14 +68,17 @@ class AmorData:
         _detZ_e            = []
         _lamda_e           = []
         _wallTime_e        = []
+        _monitor           = 0
         for file in self.file_list:
             self.read_individual_data(file, norm)
             _detZ_e        = np.append(_detZ_e,        self.detZ_e)
             _lamda_e       = np.append(_lamda_e,       self.lamda_e)
             _wallTime_e    = np.append(_wallTime_e,    self.wallTime_e)
+            _monitor       += self.monitor
         self.detZ_e        = _detZ_e
         self.lamda_e       = _lamda_e
         self.wallTime_e    = _wallTime_e
+        self.monitor       = _monitor
 
     #-------------------------------------------------------------------------------------------------
     #def path_generator(self, number):
@@ -167,15 +169,13 @@ class AmorData:
             self.header.measurement_data_files.append(fileio.File(file=fileName.split('/')[-1], timestamp=self.fileDate))
         logging.info(f'      mu = {self.mu:6.3f}, nu = {self.nu:6.3f}, kap = {self.kap:6.3f}, kad = {self.kad:6.3f}')
 
-        # TODO: should extract monitor from counts or beam current times time
         # using proton charge for normalisation
         try:
-            self.monitor1 = self.hdf['/entry1/Amor/detector/proton_monitor/value'][1:].max()
-            logging.info(f'      using proton charge = {int(self.monitor1)} mC as monitor') 
+            self.monitor = self.hdf['/entry1/Amor/detector/proton_monitor/value'][1:].max() / 1e6
+            logging.info(f'      using proton charge = {int(self.monitor)} C as monitor') 
         except NameError:
-            self.monitor1 = self.ctime
-            logging.info(f'      using measurement time = {self.monitor1:.1f} s as monitor') 
-        #self.monitor2 = self.monitor1
+            self.monitor = self.ctime
+            logging.info(f'      using measurement time = {self.monitor:.1f} s as monitor') 
 
         self.read_event_stream()
         totalNumber = np.shape(self.tof_e)[0]
@@ -281,7 +281,7 @@ class AmorData:
         if not self.startTime and not norm:
             self.startTime = self.wallTime_e[0]
         self.wallTime_e -= self.startTime
-        logging.debug(f'wall time from {self.wallTime_e[0]} to {self.wallTime_e[-1]}')
+        logging.debug(f'      wall time from {self.wallTime_e[0]} to {self.wallTime_e[-1]}')
 
     def read_event_stream(self):
         self.tof_e = np.array(self.hdf['/entry1/Amor/detector/data/event_time_offset'][:])/1.e9
