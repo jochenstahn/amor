@@ -408,7 +408,19 @@ class AmorReduction:
         int_lz    = np.where(mask_lz, int_lz, np.nan)
         thetaF_lz = np.where(mask_lz, alphaF_lz, np.nan)
 
-        ref_lz    = (int_lz * np.absolute(thetaN_lz)) / (norm_lz * np.absolute(thetaF_lz)) * self.normMonitor
+        print(self.reduction_config.normalisationMethod)
+        if self.reduction_config.normalisationMethod == 'o':
+            logging.debug('      assuming an overilluminated sample and correcting for the angle of incidence')
+            ref_lz    = (int_lz * np.absolute(thetaN_lz)) / (norm_lz * np.absolute(thetaF_lz)) * self.normMonitor
+        elif self.reduction_config.normalisationMethod == 'u':
+            logging.debug('      assuming an underilluminated sample and ignoring the angle of incidence')
+            ref_lz    = (int_lz / norm_lz) * self.normMonitor
+        elif self.reduction_config.normalisationMethod == 'u':
+            logging.debug('      assuming direct beam for normalisation an underilluminated sample and ignoring the angle of incidence')
+            ref_lz    = (int_lz / norm_lz) * self.normMonitor
+        else:
+            logging.debug('unknown normalisation method! Use [u], [o] or [d]')
+            ref_lz    = (int_lz * np.absolute(thetaN_lz)) / (norm_lz * np.absolute(thetaF_lz)) * self.normMonitor
         err_lz    = ref_lz * np.sqrt( 1/(int_lz+.1) + 1/norm_lz ) 
 
         res_lz    = np.ones((np.shape(lamda_l[:-1])[0], np.shape(alphaF_z)[0])) * 0.022**2

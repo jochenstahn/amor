@@ -12,7 +12,7 @@ class Defaults:
     raw                         = ['.', './raw', '../raw', '../../raw']
     year                        = datetime.now().year
     normalisationFileIdentifier = []
-    #normalisationMethod         = 'overillumination'
+    normalisationMethod         = 'o'
     # subtract
     outputName                  = "fromEOS"
     outputFormat                = ['Rqz.ort']
@@ -60,6 +60,7 @@ class ExperimentConfig:
 
 @dataclass
 class ReductionConfig:
+    normalisationMethod: str
     qResolution: float
     qzRange: Tuple[float, float]
     thetaRange: Tuple[float, float]
@@ -71,7 +72,6 @@ class ReductionConfig:
     autoscale: Optional[Tuple[bool, bool]] = None
     subtract: Optional[str] = None
     normalisationFileIdentifier: Optional[list] = None
-    #normalisationMethod: str
     timeSlize: Optional[list] = None
 
 @dataclass
