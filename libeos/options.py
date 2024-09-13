@@ -23,7 +23,7 @@ class Defaults:
     # autoscale
     lambdaRange                 = [2., 15.]
     thetaRange                  = [-12., 12.]
-    thetaRangeR                 = [-0.7, 0.7]
+    thetaRangeR                 = [-0.75, 0.75]
     yRange                      = [11, 41]
     qzRange                     = [0.005, 0.30]
     chopperSpeed                = 500

@@ -382,6 +382,11 @@ class AmorReduction:
         if self.reduction_config.thetaRange[1]<12:
           mask_lz   = np.logical_and(mask_lz, np.where(alphaF_lz >= self.reduction_config.thetaRange[0], True, False))
           mask_lz   = np.logical_and(mask_lz, np.where(alphaF_lz <= self.reduction_config.thetaRange[1], True, False))
+        else:
+          self.reduction_config.thetaRange = [fromHDF.nu - fromHDF.mu - fromHDF.div/2, 
+                                              fromHDF.nu - fromHDF.mu + fromHDF.div/2]
+          mask_lz   = np.logical_and(mask_lz, np.where(alphaF_lz >= self.reduction_config.thetaRange[0], True, False))
+          mask_lz   = np.logical_and(mask_lz, np.where(alphaF_lz <= self.reduction_config.thetaRange[1], True, False))
         if self.reduction_config.thetaRangeR[1]<12:
           t0 = fromHDF.nu - fromHDF.mu
           mask_lz   = np.logical_and(mask_lz, np.where(alphaF_lz-t0 >= self.reduction_config.thetaRangeR[0], True, False))
