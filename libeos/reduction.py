@@ -33,6 +33,7 @@ class AmorReduction:
         else:
             self.norm_lz = self.grid.lz()
             self.normAngle = 1.
+            self.normMonitor = 1.
 
             logging.warning('normalisation matrix: none requested')
 

@@ -7,6 +7,7 @@ from typing import List
 
 import h5py
 import numpy as np
+import scipy as sp
 from orsopy import fileio
 
 from . import const
@@ -69,6 +70,7 @@ class AmorData:
         _lamda_e           = []
         _wallTime_e        = []
         _monitor           = 0
+        #_current          = []
         for file in self.file_list:
             self.read_individual_data(file, norm)
             _detZ_e        = np.append(_detZ_e,        self.detZ_e)
@@ -79,6 +81,7 @@ class AmorData:
         self.lamda_e       = _lamda_e
         self.wallTime_e    = _wallTime_e
         self.monitor       = _monitor
+        logging.warning(f'    {self.monitorType} monitor = {self.monitor:9.3f}')
 
     #-------------------------------------------------------------------------------------------------
     #def path_generator(self, number):
@@ -174,15 +177,82 @@ class AmorData:
         logging.info(f'      mu = {self.mu:6.3f}, nu = {self.nu:6.3f}, kap = {self.kap:6.3f}, kad = {self.kad:6.3f}')
 
         # using proton charge for normalisation
-        try:
-            self.monitor = self.hdf['/entry1/Amor/detector/proton_monitor/value'][1:].max() / 1e6
-            logging.info(f'      using proton charge = {int(self.monitor)} C as monitor') 
-        except NameError:
-            self.monitor = self.ctime
-            logging.info(f'      using measurement time = {self.monitor:.1f} s as monitor') 
+        # got obsolete with introducing current in .hdf file
+        #try:
+        #    self.monitor = self.hdf['/entry1/Amor/detector/proton_monitor/value'][1:].max() / 1e6
+        #    logging.info(f'      using proton charge = {int(self.monitor)} C as monitor') 
+        #except NameError:
+        #    self.monitor = self.ctime
+        #    logging.info(f'      using measurement time = {self.monitor:.1f} s as monitor') 
+
+        #try:
+        #    self.current = self.hdf['/entry1/Amor/detector/proton_current/]
 
         self.read_event_stream()
         totalNumber = np.shape(self.tof_e)[0]
+
+        ########################################################################################################
+        # self.sort_event_stream
+        chopperPeriod = int(2*self.tau*1e9)
+        pulseTime = np.sort(self.dataPacketTime_p)
+        pulseTime = pulseTime[np.abs(pulseTime[:]-np.roll(pulseTime, 1)[:])>5]
+
+        if not self.startTime:
+            #self.startTime = pulseTime[0] + ( (pulseTime[1] - pulseTime[0]) % chopperPeriod ) - chopperPeriod
+            self.startTime = pulseTime[0]
+        startTime = self.startTime
+        pulseTime -= startTime
+        stopTime = pulseTime[-1]
+
+        # fill in missing pulse times TODO: check for real end time
+        #t0 = startTime + ( (pulseTime[1] - startTime) % chopperPeriod ) - chopperPeriod
+        pulseTimeS = np.array([pulseTime[0]])
+        for tt in pulseTime[1:]:
+            nxt = pulseTimeS[-1] + chopperPeriod
+            while abs(tt - nxt) > self.tau*1e9:
+                pulseTimeS = np.append(pulseTimeS, nxt)
+                nxt += chopperPeriod
+            pulseTimeS = np.append(pulseTimeS, tt)
+
+        if self.monitorType == 'protonCharge':
+            # associate each pulse with a proton current
+            self.currentTime -= startTime
+            currentInterpolator = sp.interpolate.interp1d(self.currentTime, self.current, kind='previous', fill_value=0)
+            charge = np.array(currentInterpolator(pulseTimeS) * 2*self.tau *1e-3, dtype=float)
+
+            # filter out pulses with too low current
+            #charge = charge[charge > 2*self.tau * 1e-1]
+            charge = np.where(charge > 2*self.tau * 1e-1, charge, 0)
+        
+            chargeSum = np.sum(charge)
+            logging.warning(f'      proton charge = {chargeSum:9.3f} mC')
+            self.monitor = chargeSum
+        elif self.monitorType == 'countingTime':
+            self.monitor = stopTime - startTime
+        else:
+            self.monitor = 1.
+
+        #extract_walltime(self, norm):
+        #    totalNumber = np.shape(self.tof_e)[0]
+        #    self.wallTime_e = np.empty(totalNumber)
+        #    for i in range(len(self.dataPacket_p)-1):
+        #        self.wallTime_e[self.dataPacket_p[i]:self.dataPacket_p[i+1]] = self.dataPacketTime_p[i]
+        #    self.wallTime_e[self.dataPacket_p[-1]:] = self.dataPacketTime_p[-1]
+        #if not self.startTime and not norm:
+        #    self.startTime = self.wallTime_e[0]
+        #self.wallTime_e -= self.startTime
+        #logging.debug(f'      wall time from {self.wallTime_e[0]} to {self.wallTime_e[-1]}')
+
+        #remove events (wallTime, tof and pixelID) from stream for pulses with too low monitor signal
+        # probably using np.isin()
+
+        # make pulse grid
+        #pulseGrid = pulseTimeS + int(self.tau*1e9) # first packege gets lost on purpose!
+        # sort the events into the related pulses
+        # probably time-slize here
+        # calculate the normalisation factor: sum over all currents * 2*tau
+        self.dataPacketTime_p = np.array(self.dataPacketTime_p, dtype=float) / 1e9
+        ########################################################################################################
 
         self.extract_walltime(norm)
 
@@ -291,7 +361,14 @@ class AmorData:
         self.tof_e = np.array(self.hdf['/entry1/Amor/detector/data/event_time_offset'][:])/1.e9
         self.pixelID_e = np.array(self.hdf['/entry1/Amor/detector/data/event_id'][:], dtype=int)
         self.dataPacket_p = np.array(self.hdf['/entry1/Amor/detector/data/event_index'][:], dtype=np.uint64)
-        self.dataPacketTime_p = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][:], dtype=np.uint64)/1e9
+        #self.dataPacketTime_p = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][:], dtype=np.uint64)/1e9
+        self.dataPacketTime_p = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][:], dtype=int)
+        try:
+            self.currentTime = np.array(self.hdf['entry1/Amor/detector/proton_current/time'][:], dtype=int)
+            self.current = np.array(self.hdf['entry1/Amor/detector/proton_current/value'][:,0], dtype=float)
+            self.monitorType = 'protonCharge'
+        except(KeyError, IndexError):
+            self.monitorType = 'countingTime'
 
     def read_individual_header(self):
         self.chopperDistance = float(np.take(self.hdf['entry1/Amor/chopper/pair_separation'], 0))
