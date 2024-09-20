@@ -27,7 +27,6 @@ class AmorData:
     chopperDistance: float
     chopperPhase: float
     chopperSpeed: float
-    ctime: float
     div: float
     data_file_numbers: List[int]
     delta_z: np.ndarray
@@ -176,104 +175,72 @@ class AmorData:
             self.header.measurement_data_files.append(fileio.File(file=fileName.split('/')[-1], timestamp=self.fileDate))
         logging.info(f'      mu = {self.mu:6.3f}, nu = {self.nu:6.3f}, kap = {self.kap:6.3f}, kad = {self.kad:6.3f}')
 
-        # using proton charge for normalisation
-        # got obsolete with introducing current in .hdf file
-        #try:
-        #    self.monitor = self.hdf['/entry1/Amor/detector/proton_monitor/value'][1:].max() / 1e6
-        #    logging.info(f'      using proton charge = {int(self.monitor)} C as monitor') 
-        #except NameError:
-        #    self.monitor = self.ctime
-        #    logging.info(f'      using measurement time = {self.monitor:.1f} s as monitor') 
-
-        #try:
-        #    self.current = self.hdf['/entry1/Amor/detector/proton_current/]
-
         self.read_event_stream()
         totalNumber = np.shape(self.tof_e)[0]
 
-        ########################################################################################################
-        # self.sort_event_stream
-        chopperPeriod = int(2*self.tau*1e9)
-        pulseTime = np.sort(self.dataPacketTime_p)
-        pulseTime = pulseTime[np.abs(pulseTime[:]-np.roll(pulseTime, 1)[:])>5]
+        self.sort_events_by_pulse()
 
-        if not self.startTime:
-            #self.startTime = pulseTime[0] + ( (pulseTime[1] - pulseTime[0]) % chopperPeriod ) - chopperPeriod
-            self.startTime = pulseTime[0]
-        startTime = self.startTime
-        pulseTime -= startTime
-        stopTime = pulseTime[-1]
+        self.define_monitor()
 
-        # fill in missing pulse times TODO: check for real end time
-        #t0 = startTime + ( (pulseTime[1] - startTime) % chopperPeriod ) - chopperPeriod
-        pulseTimeS = np.array([pulseTime[0]])
-        for tt in pulseTime[1:]:
-            nxt = pulseTimeS[-1] + chopperPeriod
-            while abs(tt - nxt) > self.tau*1e9:
-                pulseTimeS = np.append(pulseTimeS, nxt)
-                nxt += chopperPeriod
-            pulseTimeS = np.append(pulseTimeS, tt)
-
-        if self.monitorType == 'protonCharge':
-            # associate each pulse with a proton current
-            self.currentTime -= startTime
-            currentInterpolator = sp.interpolate.interp1d(self.currentTime, self.current, kind='previous', fill_value=0)
-            charge = np.array(currentInterpolator(pulseTimeS) * 2*self.tau *1e-3, dtype=float)
-
-            # filter out pulses with too low current
-            #charge = charge[charge > 2*self.tau * 1e-1]
-            charge = np.where(charge > 2*self.tau * 1e-1, charge, 0)
-        
-            chargeSum = np.sum(charge)
-            logging.warning(f'      proton charge = {chargeSum:9.3f} mC')
-            self.monitor = chargeSum
-        elif self.monitorType == 'countingTime':
-            self.monitor = stopTime - startTime
-        else:
-            self.monitor = 1.
-
-        #extract_walltime(self, norm):
-        #    totalNumber = np.shape(self.tof_e)[0]
-        #    self.wallTime_e = np.empty(totalNumber)
-        #    for i in range(len(self.dataPacket_p)-1):
-        #        self.wallTime_e[self.dataPacket_p[i]:self.dataPacket_p[i+1]] = self.dataPacketTime_p[i]
-        #    self.wallTime_e[self.dataPacket_p[-1]:] = self.dataPacketTime_p[-1]
-        #if not self.startTime and not norm:
-        #    self.startTime = self.wallTime_e[0]
-        #self.wallTime_e -= self.startTime
-        #logging.debug(f'      wall time from {self.wallTime_e[0]} to {self.wallTime_e[-1]}')
-
-        #remove events (wallTime, tof and pixelID) from stream for pulses with too low monitor signal
-        # probably using np.isin()
-
-        # make pulse grid
-        #pulseGrid = pulseTimeS + int(self.tau*1e9) # first packege gets lost on purpose!
         # sort the events into the related pulses
-        # probably time-slize here
-        # calculate the normalisation factor: sum over all currents * 2*tau
-        self.dataPacketTime_p = np.array(self.dataPacketTime_p, dtype=float) / 1e9
-        ########################################################################################################
 
         self.extract_walltime(norm)
 
-        if True:
-            self.filter_strange_times()
+        self.filter_strange_times()
+
         self.merge_frames()
 
         self.filter_project_x()
 
-        # correct tof for beam size effect at chopper:  t_cor = (delta / 180 deg) * tau
-        if self.config.incidentAngle == 'alphaF':
-            self.tof_e    -= ( self.delta_e / 180. ) * self.tau
-        else:
-            # TODO: check sign of correction
-            self.tof_e    -= ( self.kad / 180. ) * self.tau
+        self.correct_for_chopper_opening()
 
         self.calculate_derived_properties()
 
         self.filter_qz_range(norm)
 
         logging.info(f'      number of events: total = {totalNumber:7d}, filtered = {np.shape(self.lamda_e)[0]:7d}')
+
+    def sort_events_by_pulse(self):
+        chopperPeriod = int(2*self.tau*1e9)
+        pulseTime = np.sort(self.dataPacketTime_p)
+        pulseTime = pulseTime[np.abs(pulseTime[:]-np.roll(pulseTime, 1)[:])>5]
+
+        try:
+            self.seriesStartTime
+        except:
+            self.seriesStartTime = pulseTime[0]
+        pulseTime -= self.seriesStartTime
+        stopTime = pulseTime[-1]
+
+        # fill in missing pulse times 
+        # TODO: check for real end time
+        self.pulseTimeS = np.array([pulseTime[0]])
+        for tt in pulseTime[1:]:
+            nxt = self.pulseTimeS[-1] + chopperPeriod
+            while abs(tt - nxt) > self.tau*1e9:
+                self.pulseTimeS = np.append(self.pulseTimeS, nxt)
+                nxt += chopperPeriod
+            self.pulseTimeS = np.append(self.pulseTimeS, tt)
+        # remove 'partially filled' pulses
+        self.pulseTimeS = self.pulseTimeS[1:-1]
+
+    def define_monitor(self):
+        if self.monitorType == 'protonCharge':
+            # associate each pulse with a proton current
+            self.currentTime -= self.seriesStartTime
+            currentInterpolator = sp.interpolate.interp1d(self.currentTime, self.current, kind='previous', fill_value=0)
+            charge = np.array(currentInterpolator(self.pulseTimeS) * 2*self.tau *1e-3, dtype=float)
+            # TODO: activate the following filter AND remove the respective events :
+            # remove events (wallTime, tof and pixelID) from stream for pulses with too low monitor signal
+            # probably using np.isin()
+            #charge = np.where(charge > 2*self.tau * 1e-1, charge, 0)
+            chargeSum = np.sum(charge)
+            logging.warning(f'      proton charge = {chargeSum:9.3f} mC')
+            self.monitor = chargeSum
+        elif self.monitorType == 'countingTime':
+            self.monitor = self.stopTime - self.seriesStartTime
+        else:
+            self.monitor = 1.
 
     def filter_qz_range(self, norm):
         if self.config.qzRange[1]<0.3 and not norm:
@@ -315,6 +282,14 @@ class AmorData:
             self.qx_e = 2*np.pi * ((np.cos(np.deg2rad(alphaF_e)) - np.cos(np.deg2rad(alphaI)))/self.lamda_e)
             self.header.measurement_scheme = 'energy-dispersive'
 
+    def correct_for_chopper_opening(self):
+        # correct tof for beam size effect at chopper:  t_cor = (delta / 180 deg) * tau
+        if self.config.incidentAngle == 'alphaF':
+            self.tof_e    -= ( self.delta_e / 180. ) * self.tau
+        else:
+            # TODO: check sign of correction
+            self.tof_e    -= ( self.kad / 180. ) * self.tau
+
     def filter_project_x(self):
         pixelLookUp = self.resolve_pixels()
         if nb_helpers:
@@ -335,7 +310,7 @@ class AmorData:
             self.tof_e = np.remainder(self.tof_e-(self.tofCut-self.tau), self.tau)+total_offset  # tof shifted to 1 frame
 
     def filter_strange_times(self):
-        # filter 'strange' tof times > 2 tau
+        # 'strange' tof times are those with t > 2 tau (originating from the efu)
         filter_e = (self.tof_e<=2*self.tau)
         self.tof_e = self.tof_e[filter_e]
         self.pixelID_e = self.pixelID_e[filter_e]
@@ -344,6 +319,7 @@ class AmorData:
             logging.warning(f'#    strange times: {np.shape(filter_e)[0]-np.shape(self.tof_e)[0]}')
 
     def extract_walltime(self, norm):
+        self.dataPacketTime_p = np.array(self.dataPacketTime_p, dtype=float) / 1e9
         if nb_helpers:
             self.wallTime_e = nb_helpers.extract_walltime(self.tof_e, self.dataPacket_p, self.dataPacketTime_p)
         else:
@@ -412,11 +388,6 @@ class AmorData:
         if self.config.nu:
             self.nu = self.config.nu
 
-        # TODO:  figure out real stop time....
-        #self.ctime=(self.hdf['/entry1/Amor/detector/data/event_time_zero'][-1]
-        #    - self.hdf['/entry1/Amor/detector/data/event_time_zero'][0]) / 1.e9
-        self.ctime=(self.hdf['/entry1/Amor/detector/data/event_time_zero'][-1]
-            - datetime.fromisoformat(self.hdf['/entry1/start_time'][0].decode('utf-8')).timestamp()) / 1.e9
         self.fileDate = datetime.fromisoformat( self.hdf['/entry1/start_time'][0].decode('utf-8') )
 
     def read_header_info(self):
