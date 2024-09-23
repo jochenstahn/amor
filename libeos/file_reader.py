@@ -224,11 +224,24 @@ class AmorData:
         # remove 'partially filled' pulses
         self.pulseTimeS = self.pulseTimeS[1:-1]
 
+    def associate_pulse_with_current(self):
+        if self.monitorType == 'protonCharge':
+            self.currentTime -= self.seriesStartTime
+            currentInterpolator = sp.interpolate.interp1d(self.currentTime, self.current, kind='previous', bounds_error=False)
+            charge = np.array(currentInterpolator(self.pulseTimeS) * 2*self.tau *1e-3, dtype=float)
+            # filter low-current pulses
+            charge = np.where(charge > 2*self.tau * 1e-1, charge, 0)
+            #self.event
+            # TODO: activate the following filter AND remove the respective events :
+            # remove events (wallTime, tof and pixelID) from stream for pulses with too low monitor signal
+            # probably using np.isin()
+
+
     def define_monitor(self):
         if self.monitorType == 'protonCharge':
             # associate each pulse with a proton current
             self.currentTime -= self.seriesStartTime
-            currentInterpolator = sp.interpolate.interp1d(self.currentTime, self.current, kind='previous', fill_value=0)
+            currentInterpolator = sp.interpolate.interp1d(self.currentTime, self.current, kind='previous', bounds_error=False, fill_value=0)
             charge = np.array(currentInterpolator(self.pulseTimeS) * 2*self.tau *1e-3, dtype=float)
             # TODO: activate the following filter AND remove the respective events :
             # remove events (wallTime, tof and pixelID) from stream for pulses with too low monitor signal
