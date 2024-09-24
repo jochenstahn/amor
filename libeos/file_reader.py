@@ -9,6 +9,7 @@ import h5py
 import numpy as np
 import scipy as sp
 from orsopy import fileio
+from orsopy.fileio.model_language import SampleModel
 
 from . import const
 from .header import Header
@@ -43,6 +44,8 @@ class AmorData:
     tau: float
     tofCut: float
     start_date: str
+
+    seriesStartTime = None
 
     #-------------------------------------------------------------------------------------------------
     def __init__(self, header: Header, reader_config: ReaderConfig, config: ExperimentConfig,
@@ -205,12 +208,10 @@ class AmorData:
         pulseTime = np.sort(self.dataPacketTime_p)
         pulseTime = pulseTime[np.abs(pulseTime[:]-np.roll(pulseTime, 1)[:])>5]
 
-        try:
-            self.seriesStartTime
-        except:
-            self.seriesStartTime = pulseTime[0]
+        if self.seriesStartTime is None:
+            self.seriesStartTime = float(pulseTime[0])
         pulseTime -= self.seriesStartTime
-        stopTime = pulseTime[-1]
+        self.stopTime = float(pulseTime[-1])
 
         # fill in missing pulse times 
         # TODO: check for real end time
@@ -227,7 +228,7 @@ class AmorData:
     def associate_pulse_with_current(self):
         if self.monitorType == 'protonCharge':
             self.currentTime -= self.seriesStartTime
-            currentInterpolator = sp.interpolate.interp1d(self.currentTime, self.current, kind='previous', bounds_error=False)
+            currentInterpolator = sp.interpolate.interp1d(self.currentTime, self.current, kind='previous', bounds_error=False, fill_value='extrapolate')
             charge = np.array(currentInterpolator(self.pulseTimeS) * 2*self.tau *1e-3, dtype=float)
             # filter low-current pulses
             charge = np.where(charge > 2*self.tau * 1e-1, charge, 0)
@@ -241,7 +242,7 @@ class AmorData:
         if self.monitorType == 'protonCharge':
             # associate each pulse with a proton current
             self.currentTime -= self.seriesStartTime
-            currentInterpolator = sp.interpolate.interp1d(self.currentTime, self.current, kind='previous', bounds_error=False, fill_value=0)
+            currentInterpolator = sp.interpolate.interp1d(self.currentTime, self.current, kind='previous', bounds_error=False, fill_value='extrapolate')
             charge = np.array(currentInterpolator(self.pulseTimeS) * 2*self.tau *1e-3, dtype=float)
             # TODO: activate the following filter AND remove the respective events :
             # remove events (wallTime, tof and pixelID) from stream for pulses with too low monitor signal
@@ -440,7 +441,7 @@ class AmorData:
                 )
         self.header.sample = fileio.Sample(
                 name=sampleName,
-                model=model,
+                model=SampleModel(stack=model),
                 sample_parameters=None,
                 )
         self.header.measurement_scheme = 'angle- and energy-dispersive'
