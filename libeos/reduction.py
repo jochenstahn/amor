@@ -18,9 +18,9 @@ class AmorReduction:
         self.reduction_config = config.reduction
         self.output_config = config.output
         self.grid = Grid(config.reduction.qResolution, config.experiment.qzRange)
-        self.header = Header()
 
-        self.header.reduction.call = EOSConfig.call_string(self)
+        self.header = Header()
+        self.header.reduction.call = config.call_string()
 
     def reduce(self):
         if not os.path.exists(f'{self.reader_config.dataPath}'):
@@ -221,7 +221,7 @@ class AmorReduction:
             self.datasetsRqz.append(orso_data)
         # reset normal logging behavior
         logging.StreamHandler.terminator = "\n"
-        logging.warning(f' time slize {ti:4d}, done')
+        logging.warning(f' time slizing, done')
 
     def save_Rqz(self):
         fname = os.path.join(self.reader_config.dataPath, f'{self.output_config.outputName}.Rqz.ort')

@@ -1,5 +1,4 @@
 import argparse
-from datetime import date
 
 from .logconfig import update_loglevel
 from .options import ReaderConfig, EOSConfig, ExperimentConfig, OutputConfig, ReductionConfig, Defaults
