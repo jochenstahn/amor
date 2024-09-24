@@ -80,8 +80,8 @@ class AmorReduction:
                 self.file_reader, self.norm_lz, self.normAngle, lamda_e, detZ_e)
         monitor = self.file_reader.monitor
         if monitor>1 :
-            ref_lz *= 1/monitor
-            err_lz *= 1/monitor
+            ref_lz /= monitor
+            err_lz /= monitor
         try:
             ref_lz *= self.reduction_config.scale[i]
             err_lz *= self.reduction_config.scale[i]
@@ -93,7 +93,7 @@ class AmorReduction:
             headerRqz.data_set = f'Nr {i} : mu = {self.file_reader.mu:6.3f} deg'
 
             if qz_lz[0,int(np.shape(qz_lz)[1]/2)]  < 0:
-                # assuming a 'measurement from below' 
+                # assuming a 'measurement from below' when center of detector at negative qz
                 qz_lz *= -1
 
             # projection on qz-grid
