@@ -6,6 +6,8 @@ from libeos import options, reduction, logconfig
 logconfig.setup_logging()
 logconfig.update_loglevel(True, False)
 
+# TODO: add test for new features like proton charge normalization
+
 class FullAmorTest(TestCase):
     @classmethod
     def setUpClass(cls):
@@ -19,7 +21,9 @@ class FullAmorTest(TestCase):
         self.pr.enable()
         self.reader_config = options.ReaderConfig(
                 year=2023,
-                dataPath=os.path.join('..', "test_data"))
+                dataPath=os.path.join('..', "test_data"),
+                raw=(os.path.join('..', "test_data"),)
+                )
 
     def tearDown(self):
         self.pr.disable()
@@ -37,14 +41,16 @@ class FullAmorTest(TestCase):
                 yRange=(11., 41.),
                 lambdaRange=(2., 15.),
                 qzRange=(0.005, 0.30),
-                offSpecular=False,
+                incidentAngle=options.Defaults.incidentAngle,
                 mu=0,
                 nu=0,
                 muOffset=0.0,
                 sampleModel='air | 10 H2O | D2O'
                 )
         reduction_config = options.ReductionConfig(
+                normalisationMethod=options.Defaults.normalisationMethod,
                 qResolution=0.01,
+                qzRange=options.Defaults.qzRange,
                 thetaRange=(-12., 12.),
                 thetaRangeR=(-12., 12.),
                 fileIdentifier=["610"],
@@ -72,19 +78,21 @@ class FullAmorTest(TestCase):
                 yRange=(11., 41.),
                 lambdaRange=(2., 15.),
                 qzRange=(0.005, 0.30),
-                offSpecular=False,
+                incidentAngle=options.Defaults.incidentAngle,
                 mu=0,
                 nu=0,
                 muOffset=0.0
                 )
         reduction_config = options.ReductionConfig(
                 qResolution=0.01,
+                qzRange=options.Defaults.qzRange,
+                normalisationMethod=options.Defaults.normalisationMethod,
                 thetaRange=(-12., 12.),
                 thetaRangeR=(-12., 12.),
                 fileIdentifier=["610", "611", "608,612-613", "609"],
                 scale=[1],
                 normalisationFileIdentifier=["614"],
-                autoscale=(0.005, 0.008)
+                autoscale=(True, True)
                 )
         output_config = options.OutputConfig(
                 outputFormats=["Rqz.ort"],

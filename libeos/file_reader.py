@@ -352,11 +352,14 @@ class AmorData:
         self.pixelID_e = np.array(self.hdf['/entry1/Amor/detector/data/event_id'][:], dtype=int)
         self.dataPacket_p = np.array(self.hdf['/entry1/Amor/detector/data/event_index'][:], dtype=np.uint64)
         #self.dataPacketTime_p = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][:], dtype=np.uint64)/1e9
-        self.dataPacketTime_p = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][:], dtype=int)
+        self.dataPacketTime_p = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][:], dtype=float)
         try:
             self.currentTime = np.array(self.hdf['entry1/Amor/detector/proton_current/time'][:], dtype=int)
             self.current = np.array(self.hdf['entry1/Amor/detector/proton_current/value'][:,0], dtype=float)
-            self.monitorType = 'protonCharge'
+            if len(self.current)>0:
+                self.monitorType = 'protonCharge'
+            else:
+                self.monitorType = 'countingTime'
         except(KeyError, IndexError):
             self.monitorType = 'countingTime'
 
