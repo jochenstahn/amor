@@ -183,11 +183,13 @@ class AmorData:
 
         self.sort_pulses()
 
+        self.associate_pulse_with_current()
+
         self.define_monitor()
 
-        # sort the events into the related pulses
-
         self.extract_walltime(norm)
+
+        self.monitor_threshold()
 
         self.filter_strange_times()
 
