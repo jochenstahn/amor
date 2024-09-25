@@ -252,13 +252,13 @@ class AmorData:
         if nb_helpers:
             self.wallTime_e = nb_helpers.extract_walltime(self.tof_e, self.dataPacket_p, self.dataPacketTime_p)
         else:
-            self.wallTime_e = np.empty(np.shape(self.tof_e)[0], dtype=int)
+            self.wallTime_e = np.empty(np.shape(self.tof_e)[0], dtype=np.int64)
             for i in range(len(self.dataPacket_p)-1):
                 self.wallTime_e[self.dataPacket_p[i]:self.dataPacket_p[i+1]] = self.dataPacketTime_p[i]
             self.wallTime_e[self.dataPacket_p[-1]:] = self.dataPacketTime_p[-1]
         #if not self.startTime and not norm:
         #    self.startTime = self.wallTime_e[0]
-        self.wallTime_e -= self.seriesStartTime
+        self.wallTime_e -= np.int64(self.seriesStartTime)
         logging.debug(f'      wall time from {self.wallTime_e[0]/1e9} to {self.wallTime_e[-1]/1e9}')
 
     def monitor_threshold(self):
@@ -348,12 +348,12 @@ class AmorData:
 
     def read_event_stream(self):
         self.tof_e = np.array(self.hdf['/entry1/Amor/detector/data/event_time_offset'][:])/1.e9
-        self.pixelID_e = np.array(self.hdf['/entry1/Amor/detector/data/event_id'][:], dtype=int)
+        self.pixelID_e = np.array(self.hdf['/entry1/Amor/detector/data/event_id'][:], dtype=np.int64)
         self.dataPacket_p = np.array(self.hdf['/entry1/Amor/detector/data/event_index'][:], dtype=np.uint64)
         #self.dataPacketTime_p = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][:], dtype=np.uint64)/1e9
         self.dataPacketTime_p = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][:], dtype=float)
         try:
-            self.currentTime = np.array(self.hdf['entry1/Amor/detector/proton_current/time'][:], dtype=int)
+            self.currentTime = np.array(self.hdf['entry1/Amor/detector/proton_current/time'][:], dtype=np.int64)
             self.current = np.array(self.hdf['entry1/Amor/detector/proton_current/value'][:,0], dtype=float)
             if len(self.current)>0:
                 self.monitorType = 'protonCharge'

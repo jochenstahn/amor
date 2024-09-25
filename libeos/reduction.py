@@ -465,7 +465,7 @@ class AmorReduction:
         '''
         if len(lambda_e)==0:
             # no more events in range, return empty bins
-            return [np.zeros(dimension, dtype=int).tolist()]*(len(lamda_edges)-1)
+            return [np.zeros(dimension, dtype=np.int64).tolist()]*(len(lamda_edges)-1)
         if len(lamda_edges)==2:
             # deepest recursion reached, all items should be within the two ToF edges
             return [np.bincount(position_e, minlength=dimension).tolist()]
