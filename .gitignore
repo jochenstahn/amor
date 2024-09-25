@@ -1,7 +1,10 @@
 *~
 *.bak
 *.log
+*.prof
 __pycache__
 raw
 .idea
 test_data
+build
+dist
