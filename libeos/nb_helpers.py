@@ -16,7 +16,8 @@ def merge_frames(tof_e, tofCut, tau, total_offset):
 def extract_walltime(tof_e, dataPacket_p, dataPacketTime_p):
     # assigning every event the wall time of the event packet (absolute time of pulse ?start?)
     totalNumber = np.shape(tof_e)[0]
-    wallTime_e = np.empty(totalNumber, dtype=np.float64)
+    #wallTime_e = np.empty(totalNumber, dtype=np.float64)
+    wallTime_e = np.empty(totalNumber, dtype=int)
     for i in nb.prange(len(dataPacket_p)-1):
         for j in range(dataPacket_p[i], dataPacket_p[i+1]):
             wallTime_e[j] = dataPacketTime_p[i]

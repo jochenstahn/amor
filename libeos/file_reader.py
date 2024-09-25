@@ -203,7 +203,7 @@ class AmorData:
 
         logging.info(f'      number of events: total = {totalNumber:7d}, filtered = {np.shape(self.lamda_e)[0]:7d}')
 
-    def sort_events_by_pulse(self):
+    def sort_pulses(self):
         chopperPeriod = int(2*self.tau*1e9)
         pulseTime = np.sort(self.dataPacketTime_p)
         pulseTime = pulseTime[np.abs(pulseTime[:]-np.roll(pulseTime, 1)[:])>5]
@@ -227,34 +227,48 @@ class AmorData:
 
     def associate_pulse_with_current(self):
         if self.monitorType == 'protonCharge':
+            lowCurrentThreshold = 0.05 # mA
             self.currentTime -= self.seriesStartTime
             currentInterpolator = sp.interpolate.interp1d(self.currentTime, self.current, kind='previous', bounds_error=False, fill_value=0)
-            charge = np.array(currentInterpolator(self.pulseTimeS) * 2*self.tau *1e-3, dtype=float)
+            self.charge = np.array(currentInterpolator(self.pulseTimeS) * 2*self.tau *1e-3, dtype=float)
             # filter low-current pulses
-            charge = np.where(charge > 2*self.tau * 1e-1, charge, 0)
-            #self.event
-            # TODO: activate the following filter AND remove the respective events :
-            # remove events (wallTime, tof and pixelID) from stream for pulses with too low monitor signal
-            # probably using np.isin()
-
+            self.charge = np.where(self.charge > 2*self.tau *lowCurrentThreshold, self.charge, 0)
+            # remove 'partially filled' pulses
+            self.charge[0] = 0
+            self.charge[-1] = 0
 
     def define_monitor(self):
         if self.monitorType == 'protonCharge':
-            # associate each pulse with a proton current
-            self.currentTime -= self.seriesStartTime
-            currentInterpolator = sp.interpolate.interp1d(self.currentTime, self.current, kind='previous', bounds_error=False, fill_value=0)
-            charge = np.array(currentInterpolator(self.pulseTimeS) * 2*self.tau *1e-3, dtype=float)
-            # TODO: activate the following filter AND remove the respective events :
-            # remove events (wallTime, tof and pixelID) from stream for pulses with too low monitor signal
-            # probably using np.isin()
-            #charge = np.where(charge > 2*self.tau * 1e-1, charge, 0)
-            chargeSum = np.sum(charge)
+            chargeSum = np.sum(self.charge)
             logging.warning(f'      proton charge = {chargeSum:9.3f} mC')
             self.monitor = chargeSum
         elif self.monitorType == 'countingTime':
             self.monitor = self.stopTime - self.seriesStartTime
         else:
             self.monitor = 1.
+
+    def extract_walltime(self, norm):
+        #self.dataPacketTime_p = np.array(self.dataPacketTime_p, dtype=float) / 1e9
+        if nb_helpers:
+            self.wallTime_e = nb_helpers.extract_walltime(self.tof_e, self.dataPacket_p, self.dataPacketTime_p)
+        else:
+            self.wallTime_e = np.empty(np.shape(self.tof_e)[0], dtype=int)
+            for i in range(len(self.dataPacket_p)-1):
+                self.wallTime_e[self.dataPacket_p[i]:self.dataPacket_p[i+1]] = self.dataPacketTime_p[i]
+            self.wallTime_e[self.dataPacket_p[-1]:] = self.dataPacketTime_p[-1]
+        #if not self.startTime and not norm:
+        #    self.startTime = self.wallTime_e[0]
+        self.wallTime_e -= self.seriesStartTime
+        logging.debug(f'      wall time from {self.wallTime_e[0]/1e9} to {self.wallTime_e[-1]/1e9}')
+
+    def monitor_threshold(self):
+        goodTimeS = self.pulseTimeS[self.charge!=0]
+        filter_e = np.where(np.isin(self.wallTime_e, goodTimeS), True, False)
+        self.tof_e = self.tof_e[filter_e]
+        self.pixelID_e = self.pixelID_e[filter_e]
+        self.wallTime_e = self.wallTime_e[filter_e]
+        logging.warning(f'      rejected {np.shape(self.charge)[0]-np.shape(goodTimeS)[0]} pulses due to low beam current')
+        logging.warning(f'      rejected {np.shape(filter_e)[0]-np.shape(self.tof_e)[0]} events due to low beam current')
 
     def filter_qz_range(self, norm):
         if self.config.qzRange[1]<0.3 and not norm:
@@ -331,21 +345,6 @@ class AmorData:
         self.wallTime_e = self.wallTime_e[filter_e]
         if np.shape(filter_e)[0]-np.shape(self.tof_e)[0]>0.5:
             logging.warning(f'#    strange times: {np.shape(filter_e)[0]-np.shape(self.tof_e)[0]}')
-
-    def extract_walltime(self, norm):
-        self.dataPacketTime_p = np.array(self.dataPacketTime_p, dtype=float) / 1e9
-        if nb_helpers:
-            self.wallTime_e = nb_helpers.extract_walltime(self.tof_e, self.dataPacket_p, self.dataPacketTime_p)
-        else:
-            totalNumber = np.shape(self.tof_e)[0]
-            self.wallTime_e = np.empty(totalNumber)
-            for i in range(len(self.dataPacket_p)-1):
-                self.wallTime_e[self.dataPacket_p[i]:self.dataPacket_p[i+1]] = self.dataPacketTime_p[i]
-            self.wallTime_e[self.dataPacket_p[-1]:] = self.dataPacketTime_p[-1]
-        if not self.startTime and not norm:
-            self.startTime = self.wallTime_e[0]
-        self.wallTime_e -= self.startTime
-        logging.debug(f'      wall time from {self.wallTime_e[0]} to {self.wallTime_e[-1]}')
 
     def read_event_stream(self):
         self.tof_e = np.array(self.hdf['/entry1/Amor/detector/data/event_time_offset'][:])/1.e9
@@ -444,7 +443,7 @@ class AmorData:
                 )
         self.header.sample = fileio.Sample(
                 name=sampleName,
-                model=SampleModel(stack=model),
+                model=model,
                 sample_parameters=None,
                 )
         self.header.measurement_scheme = 'angle- and energy-dispersive'
