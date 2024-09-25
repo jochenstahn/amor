@@ -181,7 +181,7 @@ class AmorData:
         self.read_event_stream()
         totalNumber = np.shape(self.tof_e)[0]
 
-        self.sort_events_by_pulse()
+        self.sort_pulses()
 
         self.define_monitor()
 
@@ -443,7 +443,7 @@ class AmorData:
                 )
         self.header.sample = fileio.Sample(
                 name=sampleName,
-                model=model,
+                model=SampleModel(stack=model),
                 sample_parameters=None,
                 )
         self.header.measurement_scheme = 'angle- and energy-dispersive'

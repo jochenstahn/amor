@@ -4,13 +4,14 @@ Classes for stroing various configurations needed for reduction.
 from dataclasses import dataclass, field
 from typing import Optional, Tuple
 from datetime import datetime
+from os import path
 
 import logging
 
 class Defaults:
     # fileIdentifier
     dataPath                    = '.'
-    raw                         = ['.', './raw', '../raw', '../../raw']
+    raw                         = ['.', path.join('.','raw'), path.join('..','raw'), path.join('..','..','raw')]
     year                        = datetime.now().year
     normalisationFileIdentifier = []
     normalisationMethod         = 'o'
