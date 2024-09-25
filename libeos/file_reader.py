@@ -206,14 +206,14 @@ class AmorData:
         logging.info(f'      number of events: total = {totalNumber:7d}, filtered = {np.shape(self.lamda_e)[0]:7d}')
 
     def sort_pulses(self):
-        chopperPeriod = int(2*self.tau*1e9)
+        chopperPeriod = np.int64(2*self.tau*1e9)
         pulseTime = np.sort(self.dataPacketTime_p)
         pulseTime = pulseTime[np.abs(pulseTime[:]-np.roll(pulseTime, 1)[:])>5]
 
         if self.seriesStartTime is None:
-            self.seriesStartTime = float(pulseTime[0])
+            self.seriesStartTime = pulseTime[0]
         pulseTime -= self.seriesStartTime
-        self.stopTime = float(pulseTime[-1])
+        self.stopTime = pulseTime[-1]
 
         # fill in missing pulse times 
         # TODO: check for real end time
@@ -250,7 +250,6 @@ class AmorData:
             self.monitor = 1.
 
     def extract_walltime(self, norm):
-        #self.dataPacketTime_p = np.array(self.dataPacketTime_p, dtype=float) / 1e9
         if nb_helpers:
             self.wallTime_e = nb_helpers.extract_walltime(self.tof_e, self.dataPacket_p, self.dataPacketTime_p)
         else:
@@ -261,16 +260,17 @@ class AmorData:
         #if not self.startTime and not norm:
         #    self.startTime = self.wallTime_e[0]
         self.wallTime_e -= np.int64(self.seriesStartTime)
-        logging.debug(f'      wall time from {self.wallTime_e[0]/1e9} to {self.wallTime_e[-1]/1e9}')
+        logging.debug(f'      wall time from {self.wallTime_e[0]/1e9:6.1f} s to {self.wallTime_e[-1]/1e9:6.1f} s')
 
     def monitor_threshold(self):
-        goodTimeS = self.pulseTimeS[self.charge!=0]
-        filter_e = np.where(np.isin(self.wallTime_e, goodTimeS), True, False)
-        self.tof_e = self.tof_e[filter_e]
-        self.pixelID_e = self.pixelID_e[filter_e]
-        self.wallTime_e = self.wallTime_e[filter_e]
-        logging.warning(f'      rejected {np.shape(self.charge)[0]-np.shape(goodTimeS)[0]} pulses due to low beam current')
-        logging.warning(f'      rejected {np.shape(filter_e)[0]-np.shape(self.tof_e)[0]} events due to low beam current')
+        if self.monitorType == 'protonCharge': # fix to check for file compatibility
+            goodTimeS = self.pulseTimeS[self.charge!=0]
+            filter_e = np.where(np.isin(self.wallTime_e, goodTimeS), True, False)
+            self.tof_e = self.tof_e[filter_e]
+            self.pixelID_e = self.pixelID_e[filter_e]
+            self.wallTime_e = self.wallTime_e[filter_e]
+            logging.warning(f'      rejected {np.shape(self.charge)[0]-np.shape(goodTimeS)[0]} pulses due to low beam current')
+            logging.warning(f'      rejected {np.shape(filter_e)[0]-np.shape(self.tof_e)[0]} events due to low beam current')
 
     def filter_qz_range(self, norm):
         if self.config.qzRange[1]<0.3 and not norm:
@@ -353,7 +353,7 @@ class AmorData:
         self.pixelID_e = np.array(self.hdf['/entry1/Amor/detector/data/event_id'][:], dtype=np.int64)
         self.dataPacket_p = np.array(self.hdf['/entry1/Amor/detector/data/event_index'][:], dtype=np.uint64)
         #self.dataPacketTime_p = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][:], dtype=np.uint64)/1e9
-        self.dataPacketTime_p = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][:], dtype=float)
+        self.dataPacketTime_p = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][:], dtype=np.int64)
         try:
             self.currentTime = np.array(self.hdf['entry1/Amor/detector/proton_current/time'][:], dtype=np.int64)
             self.current = np.array(self.hdf['entry1/Amor/detector/proton_current/value'][:,0], dtype=float)

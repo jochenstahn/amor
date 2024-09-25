@@ -170,7 +170,7 @@ class AmorReduction:
                 j += 1
 
     def read_timeslices(self, i):
-        wallTime_e = self.file_reader.wallTime_e
+        wallTime_e = np.float64(self.file_reader.wallTime_e)/1e9
         interval = self.reduction_config.timeSlize[0]
         try:
             start = self.reduction_config.timeSlize[1]
@@ -183,7 +183,7 @@ class AmorReduction:
         # make overwriting log lines possible by removing newline at the end
         logging.StreamHandler.terminator = "\r"
         for ti, time in enumerate(np.arange(start, stop, interval)):
-            logging.warning(f' time slize {ti:4d}')
+            logging.warning(f'    time slize {ti:4d}')
 
             filter_e = np.where((time<wallTime_e) & (wallTime_e<time+interval), True, False)
             lamda_e = self.file_reader.lamda_e[filter_e]
@@ -221,7 +221,7 @@ class AmorReduction:
             self.datasetsRqz.append(orso_data)
         # reset normal logging behavior
         logging.StreamHandler.terminator = "\n"
-        logging.warning(f' time slizing, done')
+        logging.warning(f'    time slizing, done')
 
     def save_Rqz(self):
         fname = os.path.join(self.reader_config.dataPath, f'{self.output_config.outputName}.Rqz.ort')
