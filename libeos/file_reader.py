@@ -9,6 +9,7 @@ import h5py
 import numpy as np
 import scipy as sp
 from orsopy import fileio
+from orsopy.fileio.model_language import SampleModel
 
 from . import const
 from .header import Header
@@ -43,6 +44,8 @@ class AmorData:
     tau: float
     tofCut: float
     start_date: str
+
+    seriesStartTime = None
 
     #-------------------------------------------------------------------------------------------------
     def __init__(self, header: Header, reader_config: ReaderConfig, config: ExperimentConfig,
@@ -178,15 +181,13 @@ class AmorData:
         self.read_event_stream()
         totalNumber = np.shape(self.tof_e)[0]
 
-        self.sort_pulses()
-
-        self.associate_pulse_with_current()
+        self.sort_events_by_pulse()
 
         self.define_monitor()
 
-        self.extract_walltime(norm)
+        # sort the events into the related pulses
 
-        self.monitor_threshold()
+        self.extract_walltime(norm)
 
         self.filter_strange_times()
 
@@ -207,12 +208,10 @@ class AmorData:
         pulseTime = np.sort(self.dataPacketTime_p)
         pulseTime = pulseTime[np.abs(pulseTime[:]-np.roll(pulseTime, 1)[:])>5]
 
-        try:
-            self.seriesStartTime
-        except:
-            self.seriesStartTime = pulseTime[0]
+        if self.seriesStartTime is None:
+            self.seriesStartTime = float(pulseTime[0])
         pulseTime -= self.seriesStartTime
-        stopTime = pulseTime[-1]
+        self.stopTime = float(pulseTime[-1])
 
         # fill in missing pulse times 
         # TODO: check for real end time
@@ -223,6 +222,8 @@ class AmorData:
                 self.pulseTimeS = np.append(self.pulseTimeS, nxt)
                 nxt += chopperPeriod
             self.pulseTimeS = np.append(self.pulseTimeS, tt)
+        # remove 'partially filled' pulses
+        self.pulseTimeS = self.pulseTimeS[1:-1]
 
     def associate_pulse_with_current(self):
         if self.monitorType == 'protonCharge':
@@ -350,11 +351,14 @@ class AmorData:
         self.pixelID_e = np.array(self.hdf['/entry1/Amor/detector/data/event_id'][:], dtype=int)
         self.dataPacket_p = np.array(self.hdf['/entry1/Amor/detector/data/event_index'][:], dtype=np.uint64)
         #self.dataPacketTime_p = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][:], dtype=np.uint64)/1e9
-        self.dataPacketTime_p = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][:], dtype=int)
+        self.dataPacketTime_p = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][:], dtype=float)
         try:
             self.currentTime = np.array(self.hdf['entry1/Amor/detector/proton_current/time'][:], dtype=int)
             self.current = np.array(self.hdf['entry1/Amor/detector/proton_current/value'][:,0], dtype=float)
-            self.monitorType = 'protonCharge'
+            if len(self.current)>0:
+                self.monitorType = 'protonCharge'
+            else:
+                self.monitorType = 'countingTime'
         except(KeyError, IndexError):
             self.monitorType = 'countingTime'
 

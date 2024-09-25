@@ -18,9 +18,9 @@ class AmorReduction:
         self.reduction_config = config.reduction
         self.output_config = config.output
         self.grid = Grid(config.reduction.qResolution, config.experiment.qzRange)
-        self.header = Header()
 
-        self.header.reduction.call = EOSConfig.call_string(self)
+        self.header = Header()
+        self.header.reduction.call = config.call_string()
 
     def reduce(self):
         if not os.path.exists(f'{self.reader_config.dataPath}'):
@@ -80,8 +80,8 @@ class AmorReduction:
                 self.file_reader, self.norm_lz, self.normAngle, lamda_e, detZ_e)
         monitor = self.file_reader.monitor
         if monitor>1 :
-            ref_lz *= 1/monitor
-            err_lz *= 1/monitor
+            ref_lz /= monitor
+            err_lz /= monitor
         try:
             ref_lz *= self.reduction_config.scale[i]
             err_lz *= self.reduction_config.scale[i]
@@ -93,7 +93,7 @@ class AmorReduction:
             headerRqz.data_set = f'Nr {i} : mu = {self.file_reader.mu:6.3f} deg'
 
             if qz_lz[0,int(np.shape(qz_lz)[1]/2)]  < 0:
-                # assuming a 'measurement from below' 
+                # assuming a 'measurement from below' when center of detector at negative qz
                 qz_lz *= -1
 
             # projection on qz-grid
@@ -221,7 +221,7 @@ class AmorReduction:
             self.datasetsRqz.append(orso_data)
         # reset normal logging behavior
         logging.StreamHandler.terminator = "\n"
-        logging.warning(f' time slize {ti:4d}, done')
+        logging.warning(f' time slizing, done')
 
     def save_Rqz(self):
         fname = os.path.join(self.reader_config.dataPath, f'{self.output_config.outputName}.Rqz.ort')

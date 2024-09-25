@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Tuple
 from datetime import datetime
 
+import logging
 
 class Defaults:
     # fileIdentifier
@@ -99,64 +100,64 @@ class EOSConfig:
         base = 'python eos.py'
         
         inpt = ''
-        if self.reader_config.year:
-            inpt += f' -Y {self.reader_config.year}'
+        if self.reader.year:
+            inpt += f' -Y {self.reader.year}'
         else:
             inpt += f' -Y {datetime.now().year}'
-        if self.reader_config.dataPath != '.':
-            inpt += f' --dataPath {self.reader_config.dataPath}'
-        #if self.reader_config.raw != '.':
-        #    inpt  = f' --rawd {self.reader_config.raw}'
-        if self.reduction_config.subtract:
-            inpt += f' -subtract {self.reduction_config.subtract}'
-        if self.reduction_config.normalisationFileIdentifier:
-            inpt += f' -n {" ".join(self.reduction_config.normalisationFileIdentifier)}'
-        if self.reduction_config.fileIdentifier:
-            inpt += f' -f {" ".join(self.reduction_config.fileIdentifier)}'
+        if self.reader.dataPath != '.':
+            inpt += f' --dataPath {self.reader.dataPath}'
+        #if self.reader.raw != '.':
+        #    inpt  = f' --rawd {self.reader.raw}'
+        if self.reduction.subtract:
+            inpt += f' -subtract {self.reduction.subtract}'
+        if self.reduction.normalisationFileIdentifier:
+            inpt += f' -n {" ".join(self.reduction.normalisationFileIdentifier)}'
+        if self.reduction.fileIdentifier:
+            inpt += f' -f {" ".join(self.reduction.fileIdentifier)}'
 
         otpt = ''
-        if self.reduction_config.qResolution:
-            otpt += f' -r {self.reduction_config.qResolution}'
-        if self.output_config.outputName:
-            otpt += f' -o {self.output_config.outputName}'
-        if self.output_config.outputFormats != ['Rqz.ort']:
-            otpt += f' -of {" ".join(self.output_config.outputFormats)}'
+        if self.reduction.qResolution:
+            otpt += f' -r {self.reduction.qResolution}'
+        if self.output.outputName:
+            otpt += f' -o {self.output.outputName}'
+        if self.output.outputFormats != ['Rqz.ort']:
+            otpt += f' -of {" ".join(self.output.outputFormats)}'
             
         mask = ''    
-        if self.experiment_config.yRange != Defaults.yRange:
-            mask += f' -y {" ".join(str(ii) for ii in self.experiment_config.yRange)}'
-        if self.experiment_config.lambdaRange!= Defaults.lambdaRange:
-            mask += f' -l {" ".join(str(ff) for ff in self.experiment_config.lambdaRange)}'
-        if self.reduction_config.thetaRange != Defaults.thetaRange:
-            mask += f' -T {" ".join(str(ff) for ff in self.reduction_config.thetaRange)}'
-        elif self.reduction_config.thetaRangeR != Defaults.thetaRangeR:
-            mask += f' -t {" ".join(str(ff) for ff in self.reduction_config.thetaRangeR)}'
-        if self.experiment_config.qzRange!= Defaults.qzRange:
-            mask += f' -q {" ".join(str(ff) for ff in self.experiment_config.qzRange)}'
+        if self.experiment.yRange != Defaults.yRange:
+            mask += f' -y {" ".join(str(ii) for ii in self.experiment.yRange)}'
+        if self.experiment.lambdaRange!= Defaults.lambdaRange:
+            mask += f' -l {" ".join(str(ff) for ff in self.experiment.lambdaRange)}'
+        if self.reduction.thetaRange != Defaults.thetaRange:
+            mask += f' -T {" ".join(str(ff) for ff in self.reduction.thetaRange)}'
+        elif self.reduction.thetaRangeR != Defaults.thetaRangeR:
+            mask += f' -t {" ".join(str(ff) for ff in self.reduction.thetaRangeR)}'
+        if self.experiment.qzRange!= Defaults.qzRange:
+            mask += f' -q {" ".join(str(ff) for ff in self.experiment.qzRange)}'
 
         para = ''
-        if self.experiment_config.chopperPhase != Defaults.chopperPhase:
-            para += f' --chopperPhase {self.experiment_config.chopperPhase}'
-        if self.experiment_config.chopperPhaseOffset != Defaults.chopperPhaseOffset:
-            para += f' --chopperPhaseOffset {self.experiment_config.chopperPhaseOffset}'
-        if self.experiment_config.mu:
-            para += f' --mu {self.experiment_config.mu}'
-        elif self.experiment_config.muOffset:
-            para += f' --muOffset {self.experiment_config.muOffset}'
-        if self.experiment_config.nu:
-            para += f' --nu {self.experiment_config.nu}'
+        if self.experiment.chopperPhase != Defaults.chopperPhase:
+            para += f' --chopperPhase {self.experiment.chopperPhase}'
+        if self.experiment.chopperPhaseOffset != Defaults.chopperPhaseOffset:
+            para += f' --chopperPhaseOffset {self.experiment.chopperPhaseOffset}'
+        if self.experiment.mu:
+            para += f' --mu {self.experiment.mu}'
+        elif self.experiment.muOffset:
+            para += f' --muOffset {self.experiment.muOffset}'
+        if self.experiment.nu:
+            para += f' --nu {self.experiment.nu}'
 
         modl = ''
-        if self.experiment_config.sampleModel:
-            modl += f" --sampleModel '{self.experiment_config.sampleModel}'"
+        if self.experiment.sampleModel:
+            modl += f" --sampleModel '{self.experiment.sampleModel}'"
 
         acts = ''
-        if self.reduction_config.autoscale:
-            acts += f' --autoscale {" ".join(str(ff) for ff in self.reduction_config.autoscale)}'
-        if self.reduction_config.scale != Defaults.scale:
-            acts += f' --scale {self.reduction_config.scale}'
-        if self.reduction_config.timeSlize:
-            acts += f' --timeSlize {" ".join(str(ff) for ff in self.reduction_config.timeSlize)}'
+        if self.reduction.autoscale:
+            acts += f' --autoscale {" ".join(str(ff) for ff in self.reduction.autoscale)}'
+        if self.reduction.scale != Defaults.scale:
+            acts += f' --scale {self.reduction.scale}'
+        if self.reduction.timeSlize:
+            acts += f' --timeSlize {" ".join(str(ff) for ff in self.reduction.timeSlize)}'
 
         mlst = base + inpt + otpt 
         if mask:
@@ -179,7 +180,7 @@ class EOSConfig:
             if modl:
                 mlst += '  ' + modl
 
-        print(mlst)
+        logging.debug(f'Argument list build in EOSConfig.call_string: {mlst}')
         return  mlst
 
             
