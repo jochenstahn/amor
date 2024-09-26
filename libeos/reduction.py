@@ -80,9 +80,9 @@ class AmorReduction:
         logging.warning(f'    monitor = {self.monitor:8.2f}')
         qz_lz, qx_lz, ref_lz, err_lz, res_lz, lamda_lz, theta_lz, int_lz, self.mask_lz = self.project_on_lz(
                 self.file_reader, self.norm_lz, self.normAngle, lamda_e, detZ_e)
-        if self.monitor>1 :
-            ref_lz /= self.monitor
-            err_lz /= self.monitor
+        #if self.monitor>1 :
+        #    ref_lz /= self.monitor
+        #    err_lz /= self.monitor
         try:
             ref_lz *= self.reduction_config.scale[i]
             err_lz *= self.reduction_config.scale[i]
@@ -342,6 +342,7 @@ class AmorReduction:
             lamda_e          = fromHDF.lamda_e
             detZ_e           = fromHDF.detZ_e
             self.normMonitor = np.sum(fromHDF.monitorPerPulse)
+            print(self.normMonitor)
             self.norm_lz, bins_l, bins_z = np.histogram2d(lamda_e, detZ_e, bins = (self.grid.lamda(), self.grid.z()))
             self.norm_lz = np.where(self.norm_lz>2, self.norm_lz, np.nan)
             # correct for the SM reflectivity
@@ -432,7 +433,10 @@ class AmorReduction:
         else:
             logging.error('unknown normalisation method! Use [u], [o] or [d]')
             ref_lz    = (int_lz * np.absolute(thetaN_lz)) / (norm_lz * np.absolute(thetaF_lz))
-        ref_lz   *= self.normMonitor/self.monitor
+        if self.monitor > 1e-6 :
+            ref_lz   *= self.normMonitor / self.monitor
+        else:
+            logging.warning('   too small monitor value for normalisation -> ignoring monitors')
         err_lz    = ref_lz * np.sqrt( 1/(int_lz+.1) + 1/norm_lz ) 
 
         res_lz    = np.ones((np.shape(lamda_l[:-1])[0], np.shape(alphaF_z)[0])) * 0.022**2
