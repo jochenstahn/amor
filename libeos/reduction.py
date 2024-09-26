@@ -341,7 +341,7 @@ class AmorReduction:
             self.normAngle     = fromHDF.nu - fromHDF.mu
             lamda_e          = fromHDF.lamda_e
             detZ_e           = fromHDF.detZ_e
-            self.normMonitor = fromHDF.monitor 
+            self.normMonitor = np.sum(fromHDF.monitorPerPulse)
             self.norm_lz, bins_l, bins_z = np.histogram2d(lamda_e, detZ_e, bins = (self.grid.lamda(), self.grid.z()))
             self.norm_lz = np.where(self.norm_lz>2, self.norm_lz, np.nan)
             # correct for the SM reflectivity
