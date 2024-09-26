@@ -38,7 +38,7 @@ class AmorData:
     kap: float
     lambdaMax: float
     lambda_e: np.ndarray
-    monitor: float
+    #monitor: float
     mu: float
     nu: float
     tau: float
@@ -68,22 +68,27 @@ class AmorData:
         else:
             self.readHeaderInfo = True
 
-        _detZ_e            = []
-        _lamda_e           = []
-        _wallTime_e        = []
-        _monitor           = 0
-        #_current          = []
+        _detZ_e = []
+        _lamda_e = []
+        _wallTime_e = []
+        #_monitor = 0
+        _monitorPerPulse = []
+        _pulseTimeS = []
         for file in self.file_list:
             self.read_individual_data(file, norm)
-            _detZ_e        = np.append(_detZ_e,        self.detZ_e)
-            _lamda_e       = np.append(_lamda_e,       self.lamda_e)
-            _wallTime_e    = np.append(_wallTime_e,    self.wallTime_e)
-            _monitor       += self.monitor
-        self.detZ_e        = _detZ_e
-        self.lamda_e       = _lamda_e
-        self.wallTime_e    = _wallTime_e
-        self.monitor       = _monitor
-        logging.warning(f'    {self.monitorType} monitor = {self.monitor:9.3f}')
+            _detZ_e = np.append(_detZ_e, self.detZ_e)
+            _lamda_e = np.append(_lamda_e, self.lamda_e)
+            _wallTime_e = np.append(_wallTime_e, self.wallTime_e)
+            _monitorPerPulse = np.append(_monitorPerPulse, self.monitorPerPulse)
+            _pulseTimeS = np.append(_pulseTimeS, self.pulseTimeS)
+            #_monitor += self.monitor
+        self.detZ_e = _detZ_e
+        self.lamda_e = _lamda_e
+        self.wallTime_e = _wallTime_e
+        #self.monitor = _monitor
+        self.monitorPerPulse = _monitorPerPulse   
+        self.pulseTimeS    = _pulseTimeS
+        #logging.warning(f'    {self.monitorType} monitor = {self.monitor:9.3f}')
 
     #-------------------------------------------------------------------------------------------------
     #def path_generator(self, number):
@@ -183,9 +188,9 @@ class AmorData:
 
         self.sort_pulses()
 
-        self.associate_pulse_with_current()
+        self.associate_pulse_with_monitor()
 
-        self.define_monitor()
+        #self.define_monitor()
 
         self.extract_walltime(norm)
 
@@ -227,27 +232,31 @@ class AmorData:
         # remove 'partially filled' pulses
         self.pulseTimeS = self.pulseTimeS[1:-1]
 
-    def associate_pulse_with_current(self):
+    def associate_pulse_with_monitor(self):
         if self.monitorType == 'protonCharge':
             lowCurrentThreshold = 0.05 # mA
             self.currentTime -= self.seriesStartTime
             currentInterpolator = sp.interpolate.interp1d(self.currentTime, self.current, kind='previous', bounds_error=False, fill_value=0)
-            self.charge = np.array(currentInterpolator(self.pulseTimeS) * 2*self.tau *1e-3, dtype=float)
+            self.monitorPerPulse = np.array(currentInterpolator(self.pulseTimeS) * 2*self.tau *1e-3, dtype=float)
             # filter low-current pulses
-            self.charge = np.where(self.charge > 2*self.tau *lowCurrentThreshold, self.charge, 0)
+            self.monitorPerPulse = np.where(self.monitorPerPulse > 2*self.tau *lowCurrentThreshold, self.monitorPerPulse, 0)
             # remove 'partially filled' pulses
-            self.charge[0] = 0
-            self.charge[-1] = 0
-
-    def define_monitor(self):
-        if self.monitorType == 'protonCharge':
-            chargeSum = np.sum(self.charge)
-            logging.warning(f'      proton charge = {chargeSum:9.3f} mC')
-            self.monitor = chargeSum
+            self.monitorPerPulse[0] = 0
+            self.monitorPerPulse[-1] = 0
         elif self.monitorType == 'countingTime':
-            self.monitor = self.stopTime - self.seriesStartTime
-        else:
-            self.monitor = 1.
+            self.monitorPerPulse = self.tau
+        else: 
+            self.monitorPerPulse = 1./np.shape(pulseTimeS)[1]
+
+    #def define_monitor(self):
+    #    if self.monitorType == 'protonCharge':
+    #        chargeSum = np.sum(self.monitorPerPulse)
+    #        logging.warning(f'      proton charge = {chargeSum:9.3f} mC')
+    #        self.monitor = chargeSum
+    ##    elif self.monitorType == 'countingTime':
+    #        self.monitor = self.stopTime - self.seriesStartTime
+    #    else:
+    #        self.monitor = 1.
 
     def extract_walltime(self, norm):
         if nb_helpers:
@@ -264,12 +273,12 @@ class AmorData:
 
     def monitor_threshold(self):
         if self.monitorType == 'protonCharge': # fix to check for file compatibility
-            goodTimeS = self.pulseTimeS[self.charge!=0]
+            goodTimeS = self.pulseTimeS[self.monitorPerPulse!=0]
             filter_e = np.where(np.isin(self.wallTime_e, goodTimeS), True, False)
             self.tof_e = self.tof_e[filter_e]
             self.pixelID_e = self.pixelID_e[filter_e]
             self.wallTime_e = self.wallTime_e[filter_e]
-            logging.warning(f'      rejected {np.shape(self.charge)[0]-np.shape(goodTimeS)[0]} pulses due to low beam current')
+            logging.warning(f'      rejected {np.shape(self.monitorPerPulse)[0]-np.shape(goodTimeS)[0]} pulses due to low beam current')
             logging.warning(f'      rejected {np.shape(filter_e)[0]-np.shape(self.tof_e)[0]} events due to low beam current')
 
     def filter_qz_range(self, norm):

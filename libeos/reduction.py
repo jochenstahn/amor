@@ -76,12 +76,13 @@ class AmorReduction:
     def read_unsliced(self, i):
         lamda_e = self.file_reader.lamda_e
         detZ_e  = self.file_reader.detZ_e
+        self.monitor = np.sum(self.file_reader.monitorPerPulse)
+        logging.warning(f'    monitor = {self.monitor:8.2f}')
         qz_lz, qx_lz, ref_lz, err_lz, res_lz, lamda_lz, theta_lz, int_lz, self.mask_lz = self.project_on_lz(
                 self.file_reader, self.norm_lz, self.normAngle, lamda_e, detZ_e)
-        monitor = self.file_reader.monitor
-        if monitor>1 :
-            ref_lz /= monitor
-            err_lz /= monitor
+        if self.monitor>1 :
+            ref_lz /= self.monitor
+            err_lz /= self.monitor
         try:
             ref_lz *= self.reduction_config.scale[i]
             err_lz *= self.reduction_config.scale[i]
@@ -171,6 +172,7 @@ class AmorReduction:
 
     def read_timeslices(self, i):
         wallTime_e = np.float64(self.file_reader.wallTime_e)/1e9
+        pulseTimeS = np.float64(self.file_reader.pulseTimeS)/1e9
         interval = self.reduction_config.timeSlize[0]
         try:
             start = self.reduction_config.timeSlize[1]
@@ -181,13 +183,16 @@ class AmorReduction:
         except:
             stop = wallTime_e[-1]
         # make overwriting log lines possible by removing newline at the end
-        logging.StreamHandler.terminator = "\r"
+        #logging.StreamHandler.terminator = "\r"
         for ti, time in enumerate(np.arange(start, stop, interval)):
             logging.warning(f'    time slize {ti:4d}')
 
             filter_e = np.where((time<wallTime_e) & (wallTime_e<time+interval), True, False)
             lamda_e = self.file_reader.lamda_e[filter_e]
             detZ_e = self.file_reader.detZ_e[filter_e]
+            filter_m = np.where((time<pulseTimeS) & (pulseTimeS<time+interval), True, False)
+            self.monitor = np.sum(self.file_reader.monitorPerPulse[filter_m])
+            logging.warning(f'      monitor = {self.monitor:7.2f}')
 
             qz_lz, qx_lz, ref_lz, err_lz, res_lz, lamda_lz, theta_lz, int_lz, mask_lz = self.project_on_lz(
                     self.file_reader, self.norm_lz, self.normAngle, lamda_e, detZ_e)
@@ -220,7 +225,7 @@ class AmorReduction:
             orso_data = fileio.OrsoDataset(headerRqz, data)
             self.datasetsRqz.append(orso_data)
         # reset normal logging behavior
-        logging.StreamHandler.terminator = "\n"
+        #logging.StreamHandler.terminator = "\n"
         logging.warning(f'    time slizing, done')
 
     def save_Rqz(self):
@@ -416,17 +421,18 @@ class AmorReduction:
 
         if self.reduction_config.normalisationMethod == 'o':
             logging.debug('      assuming an overilluminated sample and correcting for the angle of incidence')
-            ref_lz    = (int_lz * np.absolute(thetaN_lz)) / (norm_lz * np.absolute(thetaF_lz)) * self.normMonitor
+            ref_lz    = (int_lz * np.absolute(thetaN_lz)) / (norm_lz * np.absolute(thetaF_lz))
         elif self.reduction_config.normalisationMethod == 'u':
             logging.debug('      assuming an underilluminated sample and ignoring the angle of incidence')
-            ref_lz    = (int_lz / norm_lz) * self.normMonitor
+            ref_lz    = (int_lz / norm_lz)
         elif self.reduction_config.normalisationMethod == 'd':
             logging.debug('      assuming direct beam for normalisation and ignoring the angle of incidence')
             norm_lz = np.flip(norm_lz,1)
-            ref_lz    = (int_lz / norm_lz) * self.normMonitor
+            ref_lz    = (int_lz / norm_lz)
         else:
             logging.error('unknown normalisation method! Use [u], [o] or [d]')
-            ref_lz    = (int_lz * np.absolute(thetaN_lz)) / (norm_lz * np.absolute(thetaF_lz)) * self.normMonitor
+            ref_lz    = (int_lz * np.absolute(thetaN_lz)) / (norm_lz * np.absolute(thetaF_lz))
+        ref_lz   *= self.normMonitor/self.monitor
         err_lz    = ref_lz * np.sqrt( 1/(int_lz+.1) + 1/norm_lz ) 
 
         res_lz    = np.ones((np.shape(lamda_l[:-1])[0], np.shape(alphaF_z)[0])) * 0.022**2
