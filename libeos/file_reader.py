@@ -7,7 +7,6 @@ from typing import List
 
 import h5py
 import numpy as np
-import scipy as sp
 from orsopy import fileio
 from orsopy.fileio.model_language import SampleModel
 
@@ -21,6 +20,17 @@ try:
 except Exception:
     nb_helpers = None
 
+def get_current_per_pulse(t_pulses, t_currents, currents):
+    # add currents for early pulses and current time value after last pulse (j+1)
+    t_currents = np.hstack([[0], t_currents, [t_pulses[-1]+1]])
+    currents = np.hstack([[0], currents])
+    pulse_currents = np.zeros(t_pulses.shape[0], dtype=float)
+    j = 0
+    for i, ti in enumerate(t_pulses):
+        if ti>=t_currents[j+1]: 
+            j+=1
+        pulse_currents[i] = currents[j]
+    return pulse_currents
 
 class AmorData:
     """read meta-data and event streams from .hdf file(s), apply filters and conversions"""
@@ -236,8 +246,7 @@ class AmorData:
         if self.monitorType == 'protonCharge':
             lowCurrentThreshold = 0.05 # mA
             self.currentTime -= self.seriesStartTime
-            currentInterpolator = sp.interpolate.interp1d(self.currentTime, self.current, kind='previous', bounds_error=False, fill_value=0)
-            self.monitorPerPulse = np.array(currentInterpolator(self.pulseTimeS) * 2*self.tau *1e-3, dtype=float)
+            self.monitorPerPulse = get_current_per_pulse(self.pulseTimeS, self.currentTime, self.current) * 2*self.tau * 1e-3
             # filter low-current pulses
             self.monitorPerPulse = np.where(self.monitorPerPulse > 2*self.tau *lowCurrentThreshold, self.monitorPerPulse, 0)
             # remove 'partially filled' pulses
@@ -248,16 +257,6 @@ class AmorData:
         else: 
             self.monitorPerPulse = 1./np.shape(pulseTimeS)[1]
 
-    #def define_monitor(self):
-    #    if self.monitorType == 'protonCharge':
-    #        chargeSum = np.sum(self.monitorPerPulse)
-    #        logging.warning(f'      proton charge = {chargeSum:9.3f} mC')
-    #        self.monitor = chargeSum
-    ##    elif self.monitorType == 'countingTime':
-    #        self.monitor = self.stopTime - self.seriesStartTime
-    #    else:
-    #        self.monitor = 1.
-
     def extract_walltime(self, norm):
         if nb_helpers:
             self.wallTime_e = nb_helpers.extract_walltime(self.tof_e, self.dataPacket_p, self.dataPacketTime_p)
@@ -266,8 +265,6 @@ class AmorData:
             for i in range(len(self.dataPacket_p)-1):
                 self.wallTime_e[self.dataPacket_p[i]:self.dataPacket_p[i+1]] = self.dataPacketTime_p[i]
             self.wallTime_e[self.dataPacket_p[-1]:] = self.dataPacketTime_p[-1]
-        #if not self.startTime and not norm:
-        #    self.startTime = self.wallTime_e[0]
         self.wallTime_e -= np.int64(self.seriesStartTime)
         logging.debug(f'      wall time from {self.wallTime_e[0]/1e9:6.1f} s to {self.wallTime_e[-1]/1e9:6.1f} s')
 

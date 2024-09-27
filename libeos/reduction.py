@@ -184,15 +184,16 @@ class AmorReduction:
             stop = wallTime_e[-1]
         # make overwriting log lines possible by removing newline at the end
         #logging.StreamHandler.terminator = "\r"
+        logging.warning(f'    time slizing')
         for ti, time in enumerate(np.arange(start, stop, interval)):
-            logging.warning(f'    time slize {ti:4d}')
+            logging.info(f'      slize {ti:4d}  t = {time:5.0f}')
 
             filter_e = np.where((time<wallTime_e) & (wallTime_e<time+interval), True, False)
             lamda_e = self.file_reader.lamda_e[filter_e]
             detZ_e = self.file_reader.detZ_e[filter_e]
             filter_m = np.where((time<pulseTimeS) & (pulseTimeS<time+interval), True, False)
             self.monitor = np.sum(self.file_reader.monitorPerPulse[filter_m])
-            logging.warning(f'      monitor = {self.monitor:7.2f}')
+            logging.info(f'        monitor = {self.monitor:7.2f}')
 
             qz_lz, qx_lz, ref_lz, err_lz, res_lz, lamda_lz, theta_lz, int_lz, mask_lz = self.project_on_lz(
                     self.file_reader, self.norm_lz, self.normAngle, lamda_e, detZ_e)
@@ -226,7 +227,7 @@ class AmorReduction:
             self.datasetsRqz.append(orso_data)
         # reset normal logging behavior
         #logging.StreamHandler.terminator = "\n"
-        logging.warning(f'    time slizing, done')
+        logging.info(f'      done')
 
     def save_Rqz(self):
         fname = os.path.join(self.reader_config.dataPath, f'{self.output_config.outputName}.Rqz.ort')
@@ -342,7 +343,6 @@ class AmorReduction:
             lamda_e          = fromHDF.lamda_e
             detZ_e           = fromHDF.detZ_e
             self.normMonitor = np.sum(fromHDF.monitorPerPulse)
-            print(self.normMonitor)
             self.norm_lz, bins_l, bins_z = np.histogram2d(lamda_e, detZ_e, bins = (self.grid.lamda(), self.grid.z()))
             self.norm_lz = np.where(self.norm_lz>2, self.norm_lz, np.nan)
             # correct for the SM reflectivity
