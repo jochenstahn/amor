@@ -26,14 +26,14 @@ def commandLineArgs():
     input_data.add_argument("-nm", "--normalisationMethod",
                             default = Defaults.normalisationMethod,
                             help = "normalisation method: [o]verillumination, [u]nderillumination, [d]irect_beam")
-    input_data.add_argument("--raw", 
+    input_data.add_argument("-rp", "--rawPath", 
                             type = str,
-                            default = Defaults.raw,
-                            help = "relative path to directory with .hdf files")
-    input_data.add_argument("-d", "--dataPath",
+                            default = Defaults.rawPath,
+                            help = "ath to directory with .hdf files")
+    input_data.add_argument("-op", "--outputPath",
                             type = str,
-                            default = Defaults.dataPath,
-                            help = "relative path for output")
+                            default = Defaults.outputPath,
+                            help = "path for output")
     input_data.add_argument("-Y", "--year",
                             default = Defaults.year,
                             type = int,
@@ -98,6 +98,11 @@ def commandLineArgs():
                             nargs = 2,
                             type = float,
                             help = "q_z range")
+    masks.add_argument("-ct", "--lowCurrentThreshold",
+                            default = Defaults.lowCurrentThreshold,
+                            type = float,
+                            help = "proton current threshold for discarding neutron pulses")
+
 
     overwrite = clas.add_argument_group('overwrite')
     overwrite.add_argument("-cs", "--chopperSpeed",
@@ -172,8 +177,7 @@ def command_line_options():
 
     reader_config = ReaderConfig(
         year                         = clas.year,
-        raw                          = clas.raw,
-        dataPath                     = clas.dataPath
+        rawPath                      = clas.rawPath,
         )
     experiment_config = ExperimentConfig(
         sampleModel                  = clas.sampleModel,
@@ -182,6 +186,7 @@ def command_line_options():
         yRange                       = clas.yRange,
         lambdaRange                  = clas.lambdaRange,
         qzRange                      = clas.qzRange,
+        lowCurrentThreshold          = clas.lowCurrentThreshold,
         incidentAngle                = clas.incidentAngle,
         mu                           = clas.mu,
         nu                           = clas.nu,
@@ -202,7 +207,8 @@ def command_line_options():
         )
     output_config = OutputConfig(
         outputFormats                = output_format_list(clas.outputFormat),
-        outputName                   = clas.outputName
+        outputName                   = clas.outputName,
+        outputPath                   = clas.outputPath,
         )
 
     return EOSConfig(reader_config, experiment_config, reduction_config, output_config)

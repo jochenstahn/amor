@@ -23,9 +23,9 @@ class AmorReduction:
         self.header.reduction.call = config.call_string()
 
     def reduce(self):
-        if not os.path.exists(f'{self.reader_config.dataPath}'):
-            logging.debug(f'Creating destination path {self.reader_config.dataPath}')
-            os.system(f'mkdir {self.reader_config.dataPath}')
+        if not os.path.exists(f'{self.output_config.outputPath}'):
+            logging.debug(f'Creating destination path {self.output_config.outputPath}')
+            os.system(f'mkdir {self.output_config.outputPath}')
 
         # load or create normalisation matrix
         if self.reduction_config.normalisationFileIdentifier:
@@ -185,15 +185,15 @@ class AmorReduction:
         # make overwriting log lines possible by removing newline at the end
         #logging.StreamHandler.terminator = "\r"
         logging.warning(f'    time slizing')
+        logging.info('      slize  time  monitor')
         for ti, time in enumerate(np.arange(start, stop, interval)):
-            logging.info(f'      slize {ti:4d}  t = {time:5.0f}')
 
             filter_e = np.where((time<wallTime_e) & (wallTime_e<time+interval), True, False)
             lamda_e = self.file_reader.lamda_e[filter_e]
             detZ_e = self.file_reader.detZ_e[filter_e]
             filter_m = np.where((time<pulseTimeS) & (pulseTimeS<time+interval), True, False)
             self.monitor = np.sum(self.file_reader.monitorPerPulse[filter_m])
-            logging.info(f'        monitor = {self.monitor:7.2f}')
+            logging.info(f'      {ti:<4d}  {time:5.0f}  {self.monitor:7.2f}')
 
             qz_lz, qx_lz, ref_lz, err_lz, res_lz, lamda_lz, theta_lz, int_lz, mask_lz = self.project_on_lz(
                     self.file_reader, self.norm_lz, self.normAngle, lamda_e, detZ_e)
@@ -227,16 +227,16 @@ class AmorReduction:
             self.datasetsRqz.append(orso_data)
         # reset normal logging behavior
         #logging.StreamHandler.terminator = "\n"
-        logging.info(f'      done')
+        logging.info(f'      done  {time+interval:5.0f}')
 
     def save_Rqz(self):
-        fname = os.path.join(self.reader_config.dataPath, f'{self.output_config.outputName}.Rqz.ort')
+        fname = os.path.join(self.output_config.outputPath, f'{self.output_config.outputName}.Rqz.ort')
         logging.warning(f'    {fname}')
         theSecondLine = f' {self.header.experiment.title} | {self.header.experiment.start_date} | sample {self.header.sample.name} | R(q_z)'
         fileio.save_orso(self.datasetsRqz, fname, data_separator='\n', comment=theSecondLine)
 
     def save_Rtl(self):
-        fname = os.path.join(self.reader_config.dataPath, f'{self.output_config.outputName}.Rlt.ort')
+        fname = os.path.join(self.output_config.outputPath, f'{self.output_config.outputName}.Rlt.ort')
         logging.warning(f'    {fname}')
         theSecondLine = f' {self.header.experiment.title} | {self.header.experiment.start_date} | sample {self.header.sample.name} | R(lambda, theta)'
         fileio.save_orso(self.datasetsRlt, fname, data_separator='\n', comment=theSecondLine)
@@ -304,7 +304,7 @@ class AmorReduction:
         return q_q[1:], R_q, dR_q, dq_q
 
     def loadRqz(self, name):
-        fname = os.path.join(self.reader_config.dataPath, name)
+        fname = os.path.join(self.output_config.outputPath, name)
         if os.path.exists(fname):
             fileName = fname
         elif os.path.exists(f'{fname}.Rqz.ort'):
@@ -317,12 +317,12 @@ class AmorReduction:
         return q_q, Sq_q, dS_q, fileName
 
     def create_normalisation_map(self, short_notation):
-        dataPath = self.reader_config.dataPath
+        outputPath = self.output_config.outputPath
         normalisation_list = expand_file_list(short_notation)
         name = str(normalisation_list[0])
         for i in range(1, len(normalisation_list), 1):
             name = f'{name}_{normalisation_list[i]}'
-        n_path = os.path.join(dataPath, f'{name}.norm')
+        n_path = os.path.join(outputPath, f'{name}.norm')
         if os.path.exists(n_path):
             logging.warning(f'normalisation matrix: found and using {n_path}')
             with open(n_path, 'rb') as fh:

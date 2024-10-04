@@ -120,7 +120,7 @@ class AmorData:
     def path_generator(self, number):
         fileName = f'amor{self.reader_config.year}n{number:06d}.hdf'
         path = ''
-        for rawd in self.reader_config.raw:
+        for rawd in self.reader_config.rawPath:
             if os.path.exists(os.path.join(rawd,fileName)):
                 path = rawd
                 break
@@ -128,7 +128,7 @@ class AmorData:
             if os.path.exists(f'/afs/psi.ch/project/sinqdata/{self.reader_config.year}/amor/{int(number/1000)}/{fileName}'):
                 path = f'/afs/psi.ch/project/sinqdata/{self.reader_config.year}/amor/{int(number/1000)}'
             else:
-                sys.exit(f'# ERROR: the file {fileName} can not be found in {self.reader_config.raw}!')
+                sys.exit(f'# ERROR: the file {fileName} can not be found in {self.reader_config.rawPath}')
         return os.path.join(path, fileName)
     #-------------------------------------------------------------------------------------------------
     def expand_file_list(self, short_notation):
@@ -168,7 +168,7 @@ class AmorData:
         if self.readHeaderInfo:
             self.read_header_info()
 
-        logging.warning(f'    data from file: {fileName}')
+        logging.warning(f'    from file: {fileName}')
         self.read_individual_header()
 
         # add header content
@@ -244,11 +244,11 @@ class AmorData:
 
     def associate_pulse_with_monitor(self):
         if self.monitorType == 'protonCharge':
-            lowCurrentThreshold = 0.05 # mA
+            #lowCurrentThreshold = 0.05 # mA
             self.currentTime -= self.seriesStartTime
             self.monitorPerPulse = get_current_per_pulse(self.pulseTimeS, self.currentTime, self.current) * 2*self.tau * 1e-3
             # filter low-current pulses
-            self.monitorPerPulse = np.where(self.monitorPerPulse > 2*self.tau *lowCurrentThreshold, self.monitorPerPulse, 0)
+            self.monitorPerPulse = np.where(self.monitorPerPulse > 2*self.tau * self.config.lowCurrentThreshold/1e3, self.monitorPerPulse, 0)
             # remove 'partially filled' pulses
             self.monitorPerPulse[0] = 0
             self.monitorPerPulse[-1] = 0
@@ -275,8 +275,8 @@ class AmorData:
             self.tof_e = self.tof_e[filter_e]
             self.pixelID_e = self.pixelID_e[filter_e]
             self.wallTime_e = self.wallTime_e[filter_e]
-            logging.warning(f'      rejected {np.shape(self.monitorPerPulse)[0]-np.shape(goodTimeS)[0]} pulses due to low beam current')
-            logging.warning(f'      rejected {np.shape(filter_e)[0]-np.shape(self.tof_e)[0]} events due to low beam current')
+            logging.info(f'      rejected {np.shape(self.monitorPerPulse)[0]-np.shape(goodTimeS)[0]} pulses due to low beam current')
+            logging.info(f'      rejected {np.shape(filter_e)[0]-np.shape(self.tof_e)[0]} events due to low beam current')
 
     def filter_qz_range(self, norm):
         if self.config.qzRange[1]<0.3 and not norm:

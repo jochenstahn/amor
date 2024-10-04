@@ -5,13 +5,14 @@ from dataclasses import dataclass, field
 from typing import Optional, Tuple
 from datetime import datetime
 from os import path
+import numpy as np
 
 import logging
 
 class Defaults:
     # fileIdentifier
-    dataPath                    = '.'
-    raw                         = ['.', path.join('.','raw'), path.join('..','raw'), path.join('..','..','raw')]
+    outputPath                  = '.'
+    rawPath                     = ['.', path.join('.','raw'), path.join('..','raw'), path.join('..','..','raw')]
     year                        = datetime.now().year
     normalisationFileIdentifier = []
     normalisationMethod         = 'o'
@@ -35,6 +36,7 @@ class Defaults:
     mu                          = 0
     nu                          = 0
     sampleModel                 = None
+    lowCurrentThreshold         = 50
     #
     
     
@@ -42,8 +44,7 @@ class Defaults:
 @dataclass
 class ReaderConfig:
     year: int
-    dataPath: str
-    raw: Tuple[str]
+    rawPath: Tuple[str]
     startTime: Optional[float] = 0
 
 @dataclass
@@ -53,6 +54,7 @@ class ExperimentConfig:
     yRange: Tuple[float, float]
     lambdaRange: Tuple[float, float]
     qzRange: Tuple[float, float]
+    lowCurrentThreshold: float
 
     sampleModel: Optional[str] = None
     chopperPhaseOffset: float = 0
@@ -80,6 +82,7 @@ class ReductionConfig:
 class OutputConfig:
     outputFormats: list
     outputName: str
+    outputPath: str
 
 @dataclass
 class EOSConfig:
@@ -105,10 +108,10 @@ class EOSConfig:
             inpt += f' -Y {self.reader.year}'
         else:
             inpt += f' -Y {datetime.now().year}'
-        if self.reader.dataPath != '.':
-            inpt += f' --dataPath {self.reader.dataPath}'
-        #if self.reader.raw != '.':
-        #    inpt  = f' --rawd {self.reader.raw}'
+        if self.output.outputPath != '.':
+            inpt += f' --outputdPath {self.output.outputPath}'
+        if np.shape(self.reader.rawPath)[0] == 1:
+            inpt += f' --rawPath {self.reader.rawPath}'
         if self.reduction.subtract:
             inpt += f' -subtract {self.reduction.subtract}'
         if self.reduction.normalisationFileIdentifier:
