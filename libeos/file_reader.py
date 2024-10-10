@@ -244,14 +244,13 @@ class AmorData:
 
     def associate_pulse_with_monitor(self):
         if self.monitorType == 'protonCharge':
-            #lowCurrentThreshold = 0.05 # mA
             self.currentTime -= self.seriesStartTime
             self.monitorPerPulse = get_current_per_pulse(self.pulseTimeS, self.currentTime, self.current) * 2*self.tau * 1e-3
             # filter low-current pulses
-            self.monitorPerPulse = np.where(self.monitorPerPulse > 2*self.tau * self.config.lowCurrentThreshold/1e3, self.monitorPerPulse, 0)
+            self.monitorPerPulse = np.where(self.monitorPerPulse > 2*self.tau * self.config.lowCurrentThreshold*1e-3, self.monitorPerPulse, 0)
             # remove 'partially filled' pulses
-            self.monitorPerPulse[0] = 0
-            self.monitorPerPulse[-1] = 0
+            #self.monitorPerPulse[0] = 0
+            #self.monitorPerPulse[-1] = 0
         elif self.monitorType == 'countingTime':
             self.monitorPerPulse = self.tau
         else: 
@@ -275,8 +274,8 @@ class AmorData:
             self.tof_e = self.tof_e[filter_e]
             self.pixelID_e = self.pixelID_e[filter_e]
             self.wallTime_e = self.wallTime_e[filter_e]
-            logging.info(f'      rejected {np.shape(self.monitorPerPulse)[0]-np.shape(goodTimeS)[0]} pulses due to low beam current')
-            logging.info(f'      rejected {np.shape(filter_e)[0]-np.shape(self.tof_e)[0]} events due to low beam current')
+            logging.info(f'      rejected {np.shape(self.monitorPerPulse)[0]-np.shape(goodTimeS)[0]} pulses with {np.shape(filter_e)[0]-np.shape(self.tof_e)[0]} events due to low beam current')
+            logging.info(f'      average counts per pulse =  {np.shape(self.tof_e)[0] / np.shape(goodTimeS[goodTimeS!=0])[0]:7.1f}')
 
     def filter_qz_range(self, norm):
         if self.config.qzRange[1]<0.3 and not norm:
