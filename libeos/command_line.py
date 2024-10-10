@@ -23,28 +23,28 @@ def commandLineArgs():
                             default = Defaults.normalisationFileIdentifier,
                             nargs = '+',
                             help = "file number(s) of normalisation measurement")
-    input_data.add_argument("-nm", "--normalisationMethod",
-                            default = Defaults.normalisationMethod,
-                            help = "normalisation method: [o]verillumination, [u]nderillumination, [d]irect_beam")
     input_data.add_argument("-rp", "--rawPath", 
                             type = str,
                             default = Defaults.rawPath,
                             help = "ath to directory with .hdf files")
-    input_data.add_argument("-op", "--outputPath",
-                            type = str,
-                            default = Defaults.outputPath,
-                            help = "path for output")
     input_data.add_argument("-Y", "--year",
                             default = Defaults.year,
                             type = int,
                             help = "year the measurement was performed")
     input_data.add_argument("-sub", "--subtract",
                             help = "R(q_z) curve to be subtracted (in .Rqz.ort format)")
+    input_data.add_argument("-nm", "--normalisationMethod",
+                            default = Defaults.normalisationMethod,
+                            help = "normalisation method: [o]verillumination, [u]nderillumination, [d]irect_beam")
 
     output = clas.add_argument_group('output')
     output.add_argument("-o", "--outputName",
                             default = Defaults.outputName,
                             help = "output file name (withot suffix)")
+    output.add_argument("-op", "--outputPath",
+                            type = str,
+                            default = Defaults.outputPath,
+                            help = "path for output")
     output.add_argument("-of", "--outputFormat",
                             nargs = '+',
                             default = Defaults.outputFormat,
