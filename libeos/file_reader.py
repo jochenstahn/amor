@@ -205,7 +205,11 @@ class AmorData:
 
         self.extract_walltime(norm)
 
-        self.events_per_pulse()
+        # following lines: debugging output to trace the time-offset of proton current and neutron pulses
+        #cpp, t_bins = np.histogram(self.wallTime_e, self.pulseTimeS)
+        #np.savetxt('tme.hst', np.vstack((self.pulseTimeS[:-1], cpp, self.monitorPerPulse[:-1])).T)
+
+        self.average_events_per_pulse()
 
         self.monitor_threshold()
 
@@ -250,7 +254,7 @@ class AmorData:
             self.currentTime -= self.seriesStartTime
             self.monitorPerPulse = get_current_per_pulse(self.pulseTimeS, self.currentTime, self.current) * 2*self.tau * 1e-3
             # filter low-current pulses
-            self.monitorPerPulse = np.where(self.monitorPerPulse > 2*self.tau * self.config.lowCurrentThreshold, self.monitorPerPulse, 0)
+            self.monitorPerPulse = np.where(self.monitorPerPulse > 2*self.tau * self.config.lowCurrentThreshold * 1e-3, self.monitorPerPulse, 0)
             # remove 'partially filled' pulses
             #self.monitorPerPulse[0] = 0
             #self.monitorPerPulse[-1] = 0
@@ -270,7 +274,7 @@ class AmorData:
         self.wallTime_e -= np.int64(self.seriesStartTime)
         logging.debug(f'      wall time from {self.wallTime_e[0]/1e9:6.1f} s to {self.wallTime_e[-1]/1e9:6.1f} s')
 
-    def events_per_pulse(self):
+    def average_events_per_pulse(self):
         if self.config.monitorType == 'protonCharge':
             for i, time in enumerate(self.pulseTimeS):
                 events = np.shape(self.wallTime_e[self.wallTime_e == time])[0]
@@ -283,7 +287,8 @@ class AmorData:
             self.tof_e = self.tof_e[filter_e]
             self.pixelID_e = self.pixelID_e[filter_e]
             self.wallTime_e = self.wallTime_e[filter_e]
-            logging.info(f'      rejected {np.shape(self.monitorPerPulse)[0]-np.shape(goodTimeS)[0]} pulses with {np.shape(filter_e)[0]-np.shape(self.tof_e)[0]} events due to low beam current')
+            logging.info(f'      rejected {np.shape(self.monitorPerPulse)[0]-np.shape(goodTimeS)[0]} out of {np.shape(self.monitorPerPulse)[0]} pulses')
+            logging.info(f'          with {np.shape(filter_e)[0]-np.shape(self.tof_e)[0]} events due to low beam current')
             logging.info(f'      average counts per pulse =  {np.shape(self.tof_e)[0] / np.shape(goodTimeS[goodTimeS!=0])[0]:7.1f}')
 
     def filter_qz_range(self, norm):
