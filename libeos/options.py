@@ -110,8 +110,6 @@ class EOSConfig:
             inpt += f' -Y {self.reader.year}'
         else:
             inpt += f' -Y {datetime.now().year}'
-        if self.output.outputPath != '.':
-            inpt += f' --outputdPath {self.output.outputPath}'
         if np.shape(self.reader.rawPath)[0] == 1:
             inpt += f' --rawPath {self.reader.rawPath}'
         if self.reduction.subtract:
@@ -124,6 +122,8 @@ class EOSConfig:
         otpt = ''
         if self.reduction.qResolution:
             otpt += f' -r {self.reduction.qResolution}'
+        if self.output.outputPath != '.':
+            inpt += f' --outputdPath {self.output.outputPath}'
         if self.output.outputName:
             otpt += f' -o {self.output.outputName}'
         if self.output.outputFormats != ['Rqz.ort']:
@@ -135,9 +135,9 @@ class EOSConfig:
         if self.experiment.lambdaRange!= Defaults.lambdaRange:
             mask += f' -l {" ".join(str(ff) for ff in self.experiment.lambdaRange)}'
         if self.reduction.thetaRange != Defaults.thetaRange:
-            mask += f' -T {" ".join(str(ff) for ff in self.reduction.thetaRange)}'
+            mask += f' -t {" ".join(str(ff) for ff in self.reduction.thetaRange)}'
         elif self.reduction.thetaRangeR != Defaults.thetaRangeR:
-            mask += f' -t {" ".join(str(ff) for ff in self.reduction.thetaRangeR)}'
+            mask += f' -T {" ".join(str(ff) for ff in self.reduction.thetaRangeR)}'
         if self.experiment.qzRange!= Defaults.qzRange:
             mask += f' -q {" ".join(str(ff) for ff in self.experiment.qzRange)}'
 

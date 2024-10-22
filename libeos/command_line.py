@@ -39,7 +39,7 @@ def commandLineArgs():
     input_data.add_argument("-mt", "--monitorType",
                             type = str,
                             default = Defaults.monitorType,
-                            help = "one of 'protonCurrent', 'countingTime' or 'neutronMonitor'")
+                            help = "one of [p]rotonCurrent, [t]ime or [n]eutronMonitor")
 
     output = clas.add_argument_group('output')
     output.add_argument("-o", "--outputName",
