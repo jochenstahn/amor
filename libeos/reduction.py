@@ -77,7 +77,7 @@ class AmorReduction:
         lamda_e = self.file_reader.lamda_e
         detZ_e  = self.file_reader.detZ_e
         self.monitor = np.sum(self.file_reader.monitorPerPulse)
-        logging.warning(f'    monitor = {self.monitor:8.2f}')
+        logging.warning(f'    monitor = {self.monitor:8.2f}  ({self.experiment_config.monitorType})')
         qz_lz, qx_lz, ref_lz, err_lz, res_lz, lamda_lz, theta_lz, int_lz, self.mask_lz = self.project_on_lz(
                 self.file_reader, self.norm_lz, self.normAngle, lamda_e, detZ_e)
         #if self.monitor>1 :

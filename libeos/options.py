@@ -16,6 +16,7 @@ class Defaults:
     year                        = datetime.now().year
     normalisationFileIdentifier = []
     normalisationMethod         = 'o'
+    monitorType                 = 'auto'
     # subtract
     outputName                  = "fromEOS"
     outputFormat                = ['Rqz.ort']
@@ -54,6 +55,7 @@ class ExperimentConfig:
     yRange: Tuple[float, float]
     lambdaRange: Tuple[float, float]
     qzRange: Tuple[float, float]
+    monitorType: str
     lowCurrentThreshold: float
 
     sampleModel: Optional[str] = None

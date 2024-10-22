@@ -36,6 +36,10 @@ def commandLineArgs():
     input_data.add_argument("-nm", "--normalisationMethod",
                             default = Defaults.normalisationMethod,
                             help = "normalisation method: [o]verillumination, [u]nderillumination, [d]irect_beam")
+    input_data.add_argument("-mt", "--monitorType",
+                            type = str,
+                            default = Defaults.monitorType,
+                            help = "one of 'protonCurrent', 'countingTime' or 'neutronMonitor'")
 
     output = clas.add_argument_group('output')
     output.add_argument("-o", "--outputName",
@@ -190,7 +194,8 @@ def command_line_options():
         incidentAngle                = clas.incidentAngle,
         mu                           = clas.mu,
         nu                           = clas.nu,
-        muOffset                     = clas.muOffset
+        muOffset                     = clas.muOffset,
+        monitorType                  = clas.monitorType,
         )
     reduction_config = ReductionConfig(
         qResolution                  = clas.qResolution,

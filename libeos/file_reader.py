@@ -20,17 +20,18 @@ try:
 except Exception:
     nb_helpers = None
 
-def get_current_per_pulse(t_pulses, t_currents, currents):
+def get_current_per_pulse(pulseTimeS, currentTimeS, currents):
     # add currents for early pulses and current time value after last pulse (j+1)
-    t_currents = np.hstack([[0], t_currents, [t_pulses[-1]+1]])
+    currentTimeS = np.hstack([[0], currentTimeS, [pulseTimeS[-1]+1]])
     currents = np.hstack([[0], currents])
-    pulse_currents = np.zeros(t_pulses.shape[0], dtype=float)
+    pulseCurrentS = np.zeros(pulseTimeS.shape[0], dtype=float)
     j = 0
-    for i, ti in enumerate(t_pulses):
-        if ti>=t_currents[j+1]: 
-            j+=1
-        pulse_currents[i] = currents[j]
-    return pulse_currents
+    for i, ti in enumerate(pulseTimeS):
+        if ti >= currentTimeS[j+1]: 
+            j += 1
+        pulseCurrentS[i] = currents[j]
+        #print(f' {i}  {pulseTimeS[i]}  {pulseCurrentS[i]}') 
+    return pulseCurrentS
 
 class AmorData:
     """read meta-data and event streams from .hdf file(s), apply filters and conversions"""
@@ -54,6 +55,7 @@ class AmorData:
     tau: float
     tofCut: float
     start_date: str
+    monitorType: str
 
     seriesStartTime = None
 
@@ -98,7 +100,6 @@ class AmorData:
         #self.monitor = _monitor
         self.monitorPerPulse = _monitorPerPulse   
         self.pulseTimeS    = _pulseTimeS
-        #logging.warning(f'    {self.monitorType} monitor = {self.monitor:9.3f}')
 
     #-------------------------------------------------------------------------------------------------
     #def path_generator(self, number):
@@ -204,6 +205,8 @@ class AmorData:
 
         self.extract_walltime(norm)
 
+        self.events_per_pulse()
+
         self.monitor_threshold()
 
         self.filter_strange_times()
@@ -243,15 +246,15 @@ class AmorData:
         self.pulseTimeS = self.pulseTimeS[1:-1]
 
     def associate_pulse_with_monitor(self):
-        if self.monitorType == 'protonCharge':
+        if self.config.monitorType == 'protonCharge':
             self.currentTime -= self.seriesStartTime
             self.monitorPerPulse = get_current_per_pulse(self.pulseTimeS, self.currentTime, self.current) * 2*self.tau * 1e-3
             # filter low-current pulses
-            self.monitorPerPulse = np.where(self.monitorPerPulse > 2*self.tau * self.config.lowCurrentThreshold*1e-3, self.monitorPerPulse, 0)
+            self.monitorPerPulse = np.where(self.monitorPerPulse > 2*self.tau * self.config.lowCurrentThreshold, self.monitorPerPulse, 0)
             # remove 'partially filled' pulses
             #self.monitorPerPulse[0] = 0
             #self.monitorPerPulse[-1] = 0
-        elif self.monitorType == 'countingTime':
+        elif self.config.monitorType == 'countingTime':
             self.monitorPerPulse = self.tau
         else: 
             self.monitorPerPulse = 1./np.shape(pulseTimeS)[1]
@@ -267,8 +270,14 @@ class AmorData:
         self.wallTime_e -= np.int64(self.seriesStartTime)
         logging.debug(f'      wall time from {self.wallTime_e[0]/1e9:6.1f} s to {self.wallTime_e[-1]/1e9:6.1f} s')
 
+    def events_per_pulse(self):
+        if self.config.monitorType == 'protonCharge':
+            for i, time in enumerate(self.pulseTimeS):
+                events = np.shape(self.wallTime_e[self.wallTime_e == time])[0]
+                #print(f' {i:6.0f} {events:6.0f} {self.monitorPerPulse[i]:6.2f}')
+
     def monitor_threshold(self):
-        if self.monitorType == 'protonCharge': # fix to check for file compatibility
+        if self.config.monitorType == 'protonCharge': # fix to check for file compatibility
             goodTimeS = self.pulseTimeS[self.monitorPerPulse!=0]
             filter_e = np.where(np.isin(self.wallTime_e, goodTimeS), True, False)
             self.tof_e = self.tof_e[filter_e]
@@ -357,17 +366,20 @@ class AmorData:
         self.tof_e = np.array(self.hdf['/entry1/Amor/detector/data/event_time_offset'][:])/1.e9
         self.pixelID_e = np.array(self.hdf['/entry1/Amor/detector/data/event_id'][:], dtype=np.int64)
         self.dataPacket_p = np.array(self.hdf['/entry1/Amor/detector/data/event_index'][:], dtype=np.uint64)
-        #self.dataPacketTime_p = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][:], dtype=np.uint64)/1e9
         self.dataPacketTime_p = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][:], dtype=np.int64)
-        try:
-            self.currentTime = np.array(self.hdf['entry1/Amor/detector/proton_current/time'][:], dtype=np.int64)
-            self.current = np.array(self.hdf['entry1/Amor/detector/proton_current/value'][:,0], dtype=float)
-            if len(self.current)>0:
-                self.monitorType = 'protonCharge'
-            else:
-                self.monitorType = 'countingTime'
-        except(KeyError, IndexError):
-            self.monitorType = 'countingTime'
+        if self.config.monitorType in ['auto', 'protonCharge']:
+            try:
+                self.currentTime = np.array(self.hdf['entry1/Amor/detector/proton_current/time'][:], dtype=np.int64)
+                self.current = np.array(self.hdf['entry1/Amor/detector/proton_current/value'][:,0], dtype=float)
+                if len(self.current)>0:
+                    self.config.monitorType = 'protonCharge'
+                else:
+                    self.config.monitorType = 'countingTime'
+            except(KeyError, IndexError):
+                self.config.monitorType = 'countingTime'
+        else:
+            self.config.monitorType = 'countingTime'
+        #TODO: protonMonitor
 
     def read_individual_header(self):
         self.chopperDistance = float(np.take(self.hdf['entry1/Amor/chopper/pair_separation'], 0))
