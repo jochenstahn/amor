@@ -439,6 +439,7 @@ class AmorReduction:
             logging.warning('   too small monitor value for normalisation -> ignoring monitors')
         err_lz    = ref_lz * np.sqrt( 1/(int_lz+.1) + 1/norm_lz ) 
 
+        # TODO: allow for non-ideal Delta lambda / lambda (rather than 2.2%)
         res_lz    = np.ones((np.shape(lamda_l[:-1])[0], np.shape(alphaF_z)[0])) * 0.022**2
         res_lz    = res_lz + (0.008/alphaF_lz)**2
         res_lz    = qz_lz * np.sqrt(res_lz)
