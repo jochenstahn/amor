@@ -62,7 +62,7 @@ class AmorData:
     #-------------------------------------------------------------------------------------------------
     def __init__(self, header: Header, reader_config: ReaderConfig, config: ExperimentConfig,
                  short_notation:str, norm=False):
-        self.startTime = reader_config.startTime
+        #self.startTime = reader_config.startTime
         self.header = header
         self.config = config
         self.reader_config = reader_config
@@ -201,13 +201,11 @@ class AmorData:
 
         self.associate_pulse_with_monitor()
 
-        #self.define_monitor()
-
         self.extract_walltime(norm)
 
         # following lines: debugging output to trace the time-offset of proton current and neutron pulses
-        #cpp, t_bins = np.histogram(self.wallTime_e, self.pulseTimeS)
-        #np.savetxt('tme.hst', np.vstack((self.pulseTimeS[:-1], cpp, self.monitorPerPulse[:-1])).T)
+        cpp, t_bins = np.histogram(self.wallTime_e, self.pulseTimeS)
+        np.savetxt('tme.hst', np.vstack((self.pulseTimeS[:-1], cpp, self.monitorPerPulse[:-1])).T)
 
         self.average_events_per_pulse()
 
@@ -233,14 +231,17 @@ class AmorData:
         pulseTime = pulseTime[np.abs(pulseTime[:]-np.roll(pulseTime, 1)[:])>5]
 
         if self.seriesStartTime is None:
-            self.seriesStartTime = pulseTime[0]
-        pulseTime -= self.seriesStartTime
+            #self.seriesStartTime = pulseTime[0]
+            self.seriesStartTime = self.startTime 
+        pulseTime -= np.int64(self.seriesStartTime)
         self.stopTime = pulseTime[-1]
 
         # fill in missing pulse times 
         # TODO: check for real end time
-        self.pulseTimeS = np.array([pulseTime[0]])
-        for tt in pulseTime[1:]:
+        pulseTime = pulseTime[pulseTime>=0]
+        firstPulse = pulseTime[0] % np.int64(self.tau*2e9)
+        self.pulseTimeS = np.array([firstPulse])
+        for tt in pulseTime:
             nxt = self.pulseTimeS[-1] + chopperPeriod
             while abs(tt - nxt) > self.tau*1e9:
                 self.pulseTimeS = np.append(self.pulseTimeS, nxt)
@@ -251,13 +252,11 @@ class AmorData:
 
     def associate_pulse_with_monitor(self):
         if self.config.monitorType == 'p': # protonCharge
-            self.currentTime -= self.seriesStartTime
+            self.currentTime -= np.int64(self.seriesStartTime)
+            self.currentTime -= np.int64(16e9) # time offset of proton current signal
             self.monitorPerPulse = get_current_per_pulse(self.pulseTimeS, self.currentTime, self.current) * 2*self.tau * 1e-3
             # filter low-current pulses
             self.monitorPerPulse = np.where(self.monitorPerPulse > 2*self.tau * self.config.lowCurrentThreshold * 1e-3, self.monitorPerPulse, 0)
-            # remove 'partially filled' pulses
-            #self.monitorPerPulse[0] = 0
-            #self.monitorPerPulse[-1] = 0
         elif self.config.monitorType == 't': # countingTime
             self.monitorPerPulse = self.tau
         else: 
@@ -429,6 +428,7 @@ class AmorData:
             self.nu = self.config.nu
 
         self.fileDate = datetime.fromisoformat( self.hdf['/entry1/start_time'][0].decode('utf-8') )
+        self.startTime = np.int64( self.fileDate.timestamp() * 1e9 )
 
     def read_header_info(self):
         # read general information and first data set
