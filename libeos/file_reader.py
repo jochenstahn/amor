@@ -204,8 +204,9 @@ class AmorData:
         self.extract_walltime(norm)
 
         # following lines: debugging output to trace the time-offset of proton current and neutron pulses
-        cpp, t_bins = np.histogram(self.wallTime_e, self.pulseTimeS)
-        np.savetxt('tme.hst', np.vstack((self.pulseTimeS[:-1], cpp, self.monitorPerPulse[:-1])).T)
+        if self.config.monitorType == 'p':
+            cpp, t_bins = np.histogram(self.wallTime_e, self.pulseTimeS)
+            np.savetxt('tme.hst', np.vstack((self.pulseTimeS[:-1], cpp, self.monitorPerPulse[:-1])).T)
 
         self.average_events_per_pulse()
 
@@ -258,7 +259,7 @@ class AmorData:
             # filter low-current pulses
             self.monitorPerPulse = np.where(self.monitorPerPulse > 2*self.tau * self.config.lowCurrentThreshold * 1e-3, self.monitorPerPulse, 0)
         elif self.config.monitorType == 't': # countingTime
-            self.monitorPerPulse = self.tau
+            self.monitorPerPulse = np.ones(np.shape(self.pulseTimeS)[0])*self.tau
         else: 
             self.monitorPerPulse = 1./np.shape(pulseTimeS)[1]
 
@@ -375,7 +376,7 @@ class AmorData:
             try:
                 self.currentTime = np.array(self.hdf['entry1/Amor/detector/proton_current/time'][:], dtype=np.int64)
                 self.current = np.array(self.hdf['entry1/Amor/detector/proton_current/value'][:,0], dtype=float)
-                if len(self.current)>0:
+                if len(self.current)>4:
                     self.config.monitorType = 'p'
                 else:
                     self.config.monitorType = 't'
