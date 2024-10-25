@@ -231,9 +231,6 @@ class AmorData:
         pulseTime = np.sort(self.dataPacketTime_p)
         pulseTime = pulseTime[np.abs(pulseTime[:]-np.roll(pulseTime, 1)[:])>5]
 
-        if self.seriesStartTime is None:
-            #self.seriesStartTime = pulseTime[0]
-            self.seriesStartTime = self.startTime 
         pulseTime -= np.int64(self.seriesStartTime)
         self.stopTime = pulseTime[-1]
 
@@ -241,15 +238,14 @@ class AmorData:
         # TODO: check for real end time
         pulseTime = pulseTime[pulseTime>=0]
         firstPulse = pulseTime[0] % np.int64(self.tau*2e9)
-        self.pulseTimeS = np.array([firstPulse])
+        self.pulseTimeS = np.array([], dtype=np.int64)
+        nxt = firstPulse
         for tt in pulseTime:
-            nxt = self.pulseTimeS[-1] + chopperPeriod
-            while abs(tt - nxt) > self.tau*1e9:
+            while tt - nxt > self.tau*1e9:
                 self.pulseTimeS = np.append(self.pulseTimeS, nxt)
                 nxt += chopperPeriod
             self.pulseTimeS = np.append(self.pulseTimeS, tt)
-        # remove 'partially filled' pulses
-        self.pulseTimeS = self.pulseTimeS[1:-1]
+            nxt = self.pulseTimeS[-1] + chopperPeriod
 
     def associate_pulse_with_monitor(self):
         if self.config.monitorType == 'p': # protonCharge
@@ -430,6 +426,8 @@ class AmorData:
 
         self.fileDate = datetime.fromisoformat( self.hdf['/entry1/start_time'][0].decode('utf-8') )
         self.startTime = np.int64( self.fileDate.timestamp() * 1e9 )
+        if self.seriesStartTime is None:
+            self.seriesStartTime = self.startTime 
 
     def read_header_info(self):
         # read general information and first data set
