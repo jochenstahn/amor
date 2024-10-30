@@ -62,7 +62,7 @@ class FullAmorTest(TestCase):
         output_config = options.OutputConfig(
                 outputFormats=["Rqz.ort"],
                 outputName='test',
-                outputPath=options.Defaults.outputPath,
+                outputPath=os.path.join('..', 'test_results'),
                 )
         config=options.EOSConfig(self.reader_config, experiment_config, reduction_config, output_config)
         # run three times to get similar timing to noslicing runs
@@ -95,13 +95,13 @@ class FullAmorTest(TestCase):
                 thetaRangeR=(-12., 12.),
                 fileIdentifier=["610", "611", "608,612-613", "609"],
                 scale=[1],
-                normalisationFileIdentifier=["614"],
+                normalisationFileIdentifier=["608"],
                 autoscale=(True, True)
                 )
         output_config = options.OutputConfig(
                 outputFormats=["Rqz.ort"],
                 outputName='test',
-                outputPath=options.Defaults.outputPath,
+                outputPath=os.path.join('..', 'test_results'),
                 )
         config=options.EOSConfig(self.reader_config, experiment_config, reduction_config, output_config)
         reducer = reduction.AmorReduction(config)
