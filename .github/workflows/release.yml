@@ -50,4 +50,4 @@ jobs:
       with:
         name: linux-dist
         path: |
-          genx/dist/*.tar.gz
+          dist/*.tar.gz
