@@ -204,7 +204,7 @@ class AmorData:
         self.extract_walltime(norm)
 
         # following lines: debugging output to trace the time-offset of proton current and neutron pulses
-        if self.config.monitorType == 'p':
+        if self.config.monitorType == 't':
             cpp, t_bins = np.histogram(self.wallTime_e, self.pulseTimeS)
             np.savetxt('tme.hst', np.vstack((self.pulseTimeS[:-1], cpp, self.monitorPerPulse[:-1])).T)
 
@@ -233,19 +233,23 @@ class AmorData:
 
         pulseTime -= np.int64(self.seriesStartTime)
         self.stopTime = pulseTime[-1]
+        pulseTime = pulseTime[pulseTime>=0]
 
         # fill in missing pulse times 
         # TODO: check for real end time
-        pulseTime = pulseTime[pulseTime>=0]
-        firstPulse = pulseTime[0] % np.int64(self.tau*2e9)
-        self.pulseTimeS = np.array([], dtype=np.int64)
-        nxt = firstPulse
+        try:
+            # TODO: use the first pulse of the respective measurement
+            #nextPulseTime = startTime % np.int64(self.tau*2e9)
+            nextPulseTime = self.pulseTimeS[-1] + chopperPeriod
+        except AttributeError:
+            nextPulseTime = pulseTime[0] % np.int64(self.tau*2e9)
+            self.pulseTimeS = np.array([], dtype=np.int64)
         for tt in pulseTime:
-            while tt - nxt > self.tau*1e9:
-                self.pulseTimeS = np.append(self.pulseTimeS, nxt)
-                nxt += chopperPeriod
+            while tt - nextPulseTime > self.tau*1e9:
+                self.pulseTimeS = np.append(self.pulseTimeS, nextPulseTime)
+                nextPulseTime += chopperPeriod
             self.pulseTimeS = np.append(self.pulseTimeS, tt)
-            nxt = self.pulseTimeS[-1] + chopperPeriod
+            nextPulseTime = self.pulseTimeS[-1] + chopperPeriod
 
     def associate_pulse_with_monitor(self):
         if self.config.monitorType == 'p': # protonCharge
