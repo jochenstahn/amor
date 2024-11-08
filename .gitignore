@@ -5,6 +5,6 @@
 __pycache__
 raw
 .idea
-test_data
+test_results
 build
 dist

@@ -21,15 +21,14 @@ class FullAmorTest(TestCase):
         self.pr.enable()
         self.reader_config = options.ReaderConfig(
                 year=2023,
-                dataPath=os.path.join('..', "test_data"),
-                raw=(os.path.join('..', "test_data"),)
+                rawPath=(os.path.join('..', "test_data"),),
                 )
 
     def tearDown(self):
         self.pr.disable()
         for fi in ['test.Rqz.ort', '614.norm']:
             try:
-                os.unlink(os.path.join(self.reader_config.dataPath, fi))
+                os.unlink(os.path.join(self.reader_config.rawPath[0], fi))
             except FileNotFoundError:
                 pass
 
@@ -38,6 +37,8 @@ class FullAmorTest(TestCase):
         experiment_config = options.ExperimentConfig(
                 chopperPhase=-13.5,
                 chopperPhaseOffset=-5,
+                monitorType=options.Defaults.monitorType,
+                lowCurrentThreshold=options.Defaults.lowCurrentThreshold,
                 yRange=(11., 41.),
                 lambdaRange=(2., 15.),
                 qzRange=(0.005, 0.30),
@@ -60,7 +61,8 @@ class FullAmorTest(TestCase):
                 )
         output_config = options.OutputConfig(
                 outputFormats=["Rqz.ort"],
-                outputName='test'
+                outputName='test',
+                outputPath=os.path.join('..', 'test_results'),
                 )
         config=options.EOSConfig(self.reader_config, experiment_config, reduction_config, output_config)
         # run three times to get similar timing to noslicing runs
@@ -75,6 +77,8 @@ class FullAmorTest(TestCase):
         experiment_config = options.ExperimentConfig(
                 chopperPhase=-13.5,
                 chopperPhaseOffset=-5,
+                monitorType=options.Defaults.monitorType,
+                lowCurrentThreshold=options.Defaults.lowCurrentThreshold,
                 yRange=(11., 41.),
                 lambdaRange=(2., 15.),
                 qzRange=(0.005, 0.30),
@@ -91,12 +95,13 @@ class FullAmorTest(TestCase):
                 thetaRangeR=(-12., 12.),
                 fileIdentifier=["610", "611", "608,612-613", "609"],
                 scale=[1],
-                normalisationFileIdentifier=["614"],
+                normalisationFileIdentifier=["608"],
                 autoscale=(True, True)
                 )
         output_config = options.OutputConfig(
                 outputFormats=["Rqz.ort"],
-                outputName='test'
+                outputName='test',
+                outputPath=os.path.join('..', 'test_results'),
                 )
         config=options.EOSConfig(self.reader_config, experiment_config, reduction_config, output_config)
         reducer = reduction.AmorReduction(config)
