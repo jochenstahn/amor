@@ -20,19 +20,6 @@ try:
 except Exception:
     nb_helpers = None
 
-def get_current_per_pulse(pulseTimeS, currentTimeS, currents):
-    # add currents for early pulses and current time value after last pulse (j+1)
-    currentTimeS = np.hstack([[0], currentTimeS, [pulseTimeS[-1]+1]])
-    currents = np.hstack([[0], currents])
-    pulseCurrentS = np.zeros(pulseTimeS.shape[0], dtype=float)
-    j = 0
-    for i, ti in enumerate(pulseTimeS):
-        if ti >= currentTimeS[j+1]: 
-            j += 1
-        pulseCurrentS[i] = currents[j]
-        #print(f' {i}  {pulseTimeS[i]}  {pulseCurrentS[i]}') 
-    return pulseCurrentS
-
 class AmorData:
     """read meta-data and event streams from .hdf file(s), apply filters and conversions"""
     chopperDetectorDistance: float
@@ -196,6 +183,10 @@ class AmorData:
 
         self.read_event_stream()
         totalNumber = np.shape(self.tof_e)[0]
+        # check for empty event stream
+        if totalNumber == 0:
+             logging.error('empty event stream: can not determine end time')
+             sys.exit()
 
         self.sort_pulses()
 
@@ -251,11 +242,25 @@ class AmorData:
             self.pulseTimeS = np.append(self.pulseTimeS, tt)
             nextPulseTime = self.pulseTimeS[-1] + chopperPeriod
 
+    def get_current_per_pulse(self, pulseTimeS, currentTimeS, currents):
+        # add currents for early pulses and current time value after last pulse (j+1)
+        currentTimeS = np.hstack([[0], currentTimeS, [pulseTimeS[-1]+1]])
+        currents = np.hstack([[0], currents])
+        pulseCurrentS = np.zeros(pulseTimeS.shape[0], dtype=float)
+        j = 0
+        for i, ti in enumerate(pulseTimeS):
+            if ti >= currentTimeS[j+1]: 
+                j += 1
+            pulseCurrentS[i] = currents[j]
+            #print(f' {i}  {pulseTimeS[i]}  {pulseCurrentS[i]}') 
+        return pulseCurrentS
+
+
     def associate_pulse_with_monitor(self):
         if self.config.monitorType == 'p': # protonCharge
             self.currentTime -= np.int64(self.seriesStartTime)
             self.currentTime -= np.int64(16e9) # time offset of proton current signal
-            self.monitorPerPulse = get_current_per_pulse(self.pulseTimeS, self.currentTime, self.current) * 2*self.tau * 1e-3
+            self.monitorPerPulse = self.get_current_per_pulse(self.pulseTimeS, self.currentTime, self.current) * 2*self.tau * 1e-3
             # filter low-current pulses
             self.monitorPerPulse = np.where(self.monitorPerPulse > 2*self.tau * self.config.lowCurrentThreshold * 1e-3, self.monitorPerPulse, 0)
         elif self.config.monitorType == 't': # countingTime
