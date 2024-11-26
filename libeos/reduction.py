@@ -388,7 +388,11 @@ class AmorReduction:
         mask_lz   = np.where(np.isnan(norm_lz), False, True)
         mask_lz   = np.logical_and(mask_lz, np.where(np.absolute(thetaN_lz)>5e-3, True, False))
         mask_lz   = np.logical_and(mask_lz, np.where(np.absolute(alphaF_lz)>5e-3, True, False))
-        if self.reduction_config.thetaRange[1]<12:
+        if self.reduction_config.thetaRangeR[1]<12:
+          t0 = fromHDF.nu - fromHDF.mu
+          mask_lz   = np.logical_and(mask_lz, np.where(alphaF_lz-t0 >= self.reduction_config.thetaRangeR[0], True, False))
+          mask_lz   = np.logical_and(mask_lz, np.where(alphaF_lz-t0 <= self.reduction_config.thetaRangeR[1], True, False))
+        elif self.reduction_config.thetaRange[1]<12:
           mask_lz   = np.logical_and(mask_lz, np.where(alphaF_lz >= self.reduction_config.thetaRange[0], True, False))
           mask_lz   = np.logical_and(mask_lz, np.where(alphaF_lz <= self.reduction_config.thetaRange[1], True, False))
         else:
@@ -396,10 +400,6 @@ class AmorReduction:
                                               fromHDF.nu - fromHDF.mu + fromHDF.div/2]
           mask_lz   = np.logical_and(mask_lz, np.where(alphaF_lz >= self.reduction_config.thetaRange[0], True, False))
           mask_lz   = np.logical_and(mask_lz, np.where(alphaF_lz <= self.reduction_config.thetaRange[1], True, False))
-        if self.reduction_config.thetaRangeR[1]<12:
-          t0 = fromHDF.nu - fromHDF.mu
-          mask_lz   = np.logical_and(mask_lz, np.where(alphaF_lz-t0 >= self.reduction_config.thetaRangeR[0], True, False))
-          mask_lz   = np.logical_and(mask_lz, np.where(alphaF_lz-t0 <= self.reduction_config.thetaRangeR[1], True, False))
         if self.experiment_config.lambdaRange[1]<15:
           mask_lz   = np.logical_and(mask_lz, np.where(lamda_lz >= self.experiment_config.lambdaRange[0], True, False))
           mask_lz   = np.logical_and(mask_lz, np.where(lamda_lz <= self.experiment_config.lambdaRange[1], True, False))
