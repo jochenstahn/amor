@@ -199,7 +199,7 @@ class AmorData:
             cpp, t_bins = np.histogram(self.wallTime_e, self.pulseTimeS)
             np.savetxt('tme.hst', np.vstack((self.pulseTimeS[:-1], cpp, self.monitorPerPulse[:-1])).T)
 
-        self.average_events_per_pulse()
+        #self.average_events_per_pulse() # for debugging only. VERY time consuming!!!
 
         self.monitor_threshold()
 
@@ -241,6 +241,7 @@ class AmorData:
                 nextPulseTime += chopperPeriod
             self.pulseTimeS = np.append(self.pulseTimeS, tt)
             nextPulseTime = self.pulseTimeS[-1] + chopperPeriod
+        print(f'# == number of pulses: {np.shape(self.pulseTimeS)[0]}')
 
     def get_current_per_pulse(self, pulseTimeS, currentTimeS, currents):
         # add currents for early pulses and current time value after last pulse (j+1)
@@ -254,7 +255,6 @@ class AmorData:
             pulseCurrentS[i] = currents[j]
             #print(f' {i}  {pulseTimeS[i]}  {pulseCurrentS[i]}') 
         return pulseCurrentS
-
 
     def associate_pulse_with_monitor(self):
         if self.config.monitorType == 'p': # protonCharge
@@ -283,7 +283,7 @@ class AmorData:
         if self.config.monitorType == 'p':
             for i, time in enumerate(self.pulseTimeS):
                 events = np.shape(self.wallTime_e[self.wallTime_e == time])[0]
-                #print(f' {i:6.0f} {events:6.0f} {self.monitorPerPulse[i]:6.2f}')
+                logging.info(f'pulse: {i:6.0f}, events: {events:6.0f}, monitor: {self.monitorPerPulse[i]:6.2f}')
 
     def monitor_threshold(self):
         if self.config.monitorType == 'p': # fix to check for file compatibility
