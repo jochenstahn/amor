@@ -195,7 +195,7 @@ class AmorData:
         self.extract_walltime(norm)
 
         # following lines: debugging output to trace the time-offset of proton current and neutron pulses
-        if self.config.monitorType == 't':
+        if self.config.monitorType == 'x':
             cpp, t_bins = np.histogram(self.wallTime_e, self.pulseTimeS)
             np.savetxt('tme.hst', np.vstack((self.pulseTimeS[:-1], cpp, self.monitorPerPulse[:-1])).T)
 
@@ -241,7 +241,6 @@ class AmorData:
                 nextPulseTime += chopperPeriod
             self.pulseTimeS = np.append(self.pulseTimeS, tt)
             nextPulseTime = self.pulseTimeS[-1] + chopperPeriod
-        print(f'# == number of pulses: {np.shape(self.pulseTimeS)[0]}')
 
     def get_current_per_pulse(self, pulseTimeS, currentTimeS, currents):
         # add currents for early pulses and current time value after last pulse (j+1)
