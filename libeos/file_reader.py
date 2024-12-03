@@ -432,10 +432,9 @@ class AmorData:
         if self.config.nu:
             self.nu = self.config.nu
 
-        # extract start time as unix time, ignoring possible local timezone configuration issues
-        zone_offset = datetime.now().replace(tzinfo=timezone.utc).timestamp()-datetime.now().timestamp()
-        self.fileDate = datetime.fromisoformat( self.hdf['/entry1/start_time'][0].decode('utf-8') ).replace(tzinfo=timezone.utc)
-        self.startTime = np.int64( (self.fileDate.timestamp() - zone_offset) * 1e9 )
+        # extract start time as unix time, adding UTC offset of 1h to time string
+        self.fileDate = datetime.fromisoformat( self.hdf['/entry1/start_time'][0].decode('utf-8')+"+01" )
+        self.startTime = np.int64( (self.fileDate.timestamp() ) * 1e9 )
         if self.seriesStartTime is None:
             self.seriesStartTime = self.startTime 
 
