@@ -2,7 +2,7 @@ import logging
 import os
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List
 
 import h5py
@@ -432,7 +432,7 @@ class AmorData:
         if self.config.nu:
             self.nu = self.config.nu
 
-        self.fileDate = datetime.fromisoformat( self.hdf['/entry1/start_time'][0].decode('utf-8') )
+        self.fileDate = datetime.fromisoformat( self.hdf['/entry1/start_time'][0].decode('utf-8') ).replace(tzinfo=timezone.utc)
         self.startTime = np.int64( self.fileDate.timestamp() * 1e9 )
         if self.seriesStartTime is None:
             self.seriesStartTime = self.startTime 
