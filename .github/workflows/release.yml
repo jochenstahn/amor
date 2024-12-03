@@ -52,6 +52,32 @@ jobs:
         path: |
           dist/*.tar.gz
 
+  build-windows:
+    runs-on: windows-latest
+    if: ${{ (github.event_name != 'workflow_dispatch') || (contains(fromJson('["all", "windows"]'), github.event.inputs.build-items)) }}
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: 3.12
+    - name: Install dependencies
+      run: |
+        C:\Miniconda\condabin\conda.bat env update --file conda_windows.yml --name base
+        C:\Miniconda\condabin\conda.bat init powershell
+    - name: Build with pyinstaller
+      run: |
+        pyinstaller windows_folder.spec
+        cd dist\eos
+        Compress-Archive -Path .\* -Destination ..\..\eos.zip
+    - name: Archive distribution
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-dist
+        path: |
+          eos.zip
+
   release:
     if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
@@ -61,8 +87,11 @@ jobs:
     - uses: actions/download-artifact@v4
       with:
         name: linux-dist
+    - uses: actions/download-artifact@v4
+      with:
+        name: windows-dist
     - uses: ncipollo/release-action@v1
       with:
-        artifacts: "amor*.tar.gz"
+        artifacts: "amor*.tar.gz,*.zip"
         token: ${{ secrets.GITHUB_TOKEN }}
         allowUpdates: true
