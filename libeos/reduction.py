@@ -372,11 +372,15 @@ class AmorReduction:
         # projection on lambda-z-grid
         lamda_l  = self.grid.lamda()
         alphaF_z  = fromHDF.nu - fromHDF.mu + fromHDF.delta_z
+        # TODO: implement various methods to obtain alpha_i.
         #if self.experiment_config.incidentAngle == 'alphaF':
+        #  # for specular reflectometry with a highly divergent beam
         #  alphaF_z  = fromHDF.nu - fromHDF.mu + fromHDF.delta_z
         #elif self.experiment_config.incidentAngle == 'nu':
+        #  # for specular reflectometry, using kappa nad nu but ignoring mu
         #  alphaF_z  = (fromHDF.nu + fromHDF.delta_z + fromHDF.kap + fromHDF.kad) / 2.
         #else:
+        #  # using kappa, for a collimated incoming beam
         #  pass
         lamda_lz  = (self.grid.lz().T*lamda_l[:-1]).T
         alphaF_lz = self.grid.lz()*alphaF_z
@@ -438,7 +442,7 @@ class AmorReduction:
         if self.monitor > 1e-6 :
             ref_lz   *= self.normMonitor / self.monitor
         else:
-            logging.warning('   too small monitor value for normalisation -> ignoring monitors')
+            logging.info('       too small monitor value for normalisation -> ignoring monitors')
         err_lz    = ref_lz * np.sqrt( 1/(int_lz+.1) + 1/norm_lz ) 
 
         # TODO: allow for non-ideal Delta lambda / lambda (rather than 2.2%)
