@@ -38,6 +38,12 @@ jobs:
     - name: Build PyPI package
       run: |
         python3 -m build
+    - name: Archive distribution
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-dist
+        path: |
+          dist/*.tar.gz
     - name: Upload to PyPI
       if: github.event_name != 'workflow_dispatch'
       uses: pypa/gh-action-pypi-publish@release/v1
@@ -45,12 +51,6 @@ jobs:
         user: __token__
         password: ${{ secrets.PYPI_TOKEN }}
         skip-existing: true
-    - name: Archive distribution
-      uses: actions/upload-artifact@v4
-      with:
-        name: linux-dist
-        path: |
-          dist/*.tar.gz
 
   build-windows:
     runs-on: windows-latest
