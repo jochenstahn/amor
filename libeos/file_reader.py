@@ -87,6 +87,7 @@ class AmorData:
         #self.monitor = _monitor
         self.monitorPerPulse = _monitorPerPulse   
         self.pulseTimeS    = _pulseTimeS
+        print(f' number of pulses: {np.shape(self.pulseTimeS)[0]}')
 
     #-------------------------------------------------------------------------------------------------
     #def path_generator(self, number):
@@ -195,7 +196,7 @@ class AmorData:
         self.extract_walltime(norm)
 
         # following lines: debugging output to trace the time-offset of proton current and neutron pulses
-        if self.config.monitorType == 'x':
+        if self.config.monitorType == 'p':
             cpp, t_bins = np.histogram(self.wallTime_e, self.pulseTimeS)
             np.savetxt('tme.hst', np.vstack((self.pulseTimeS[:-1], cpp, self.monitorPerPulse[:-1])).T)
 
@@ -228,19 +229,25 @@ class AmorData:
 
         # fill in missing pulse times 
         # TODO: check for real end time
+        self.pulseTimeS = np.array([], dtype=np.int64)
         try:
+            # further files
             # TODO: use the first pulse of the respective measurement
             #nextPulseTime = startTime % np.int64(self.tau*2e9)
-            nextPulseTime = self.pulseTimeS[-1] + chopperPeriod
+            #nextPulseTime = self.pulseTimeS[-1] + chopperPeriod
+            nextPulseTime = pulseTime[0]
         except AttributeError:
+            # first file
             nextPulseTime = pulseTime[0] % np.int64(self.tau*2e9)
-            self.pulseTimeS = np.array([], dtype=np.int64)
+        print(f' start time: {nextPulseTime/1e9}')
+
         for tt in pulseTime:
             while tt - nextPulseTime > self.tau*1e9:
                 self.pulseTimeS = np.append(self.pulseTimeS, nextPulseTime)
                 nextPulseTime += chopperPeriod
             self.pulseTimeS = np.append(self.pulseTimeS, tt)
             nextPulseTime = self.pulseTimeS[-1] + chopperPeriod
+        print(f' number of pulses: {np.shape(self.pulseTimeS)[0]}')
 
     def get_current_per_pulse(self, pulseTimeS, currentTimeS, currents):
         # add currents for early pulses and current time value after last pulse (j+1)
