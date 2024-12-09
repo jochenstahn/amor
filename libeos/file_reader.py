@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 from datetime import datetime, timezone
+import pytz
 from typing import List
 
 import h5py
@@ -373,7 +374,7 @@ class AmorData:
         self.pixelID_e = self.pixelID_e[filter_e]
         self.wallTime_e = self.wallTime_e[filter_e]
         if np.shape(filter_e)[0]-np.shape(self.tof_e)[0]>0.5:
-            logging.warning(f'#    strange times: {np.shape(filter_e)[0]-np.shape(self.tof_e)[0]}')
+            logging.warning(f'        strange times: {np.shape(filter_e)[0]-np.shape(self.tof_e)[0]}')
 
     def read_event_stream(self):
         self.tof_e = np.array(self.hdf['/entry1/Amor/detector/data/event_time_offset'][:])/1.e9
@@ -437,7 +438,11 @@ class AmorData:
             self.nu = self.config.nu
 
         # extract start time as unix time, adding UTC offset of 1h to time string
-        self.fileDate = datetime.fromisoformat( self.hdf['/entry1/start_time'][0].decode('utf-8')+"+01:00" )
+        tz =  pytz.timezone('Europe/Zurich')
+        fileDate = datetime.fromisoformat( self.hdf['/entry1/start_time'][0].decode('utf-8'))
+        timeOffset = f'{int(str(tz.utcoffset(fileDate)).split(':')[0]):+03d}'
+        #self.fileDate = datetime.fromisoformat( self.hdf['/entry1/start_time'][0].decode('utf-8')+"+02:00" )
+        self.fileDate = datetime.fromisoformat( self.hdf['/entry1/start_time'][0].decode('utf-8')+timeOffset )
         self.startTime = np.int64( (self.fileDate.timestamp() ) * 1e9 )
         if self.seriesStartTime is None:
             self.seriesStartTime = self.startTime 
