@@ -3,7 +3,7 @@ import os
 import subprocess
 import sys
 from datetime import datetime, timezone
-import pytz
+import zoneinfo
 from typing import List
 
 import h5py
@@ -438,11 +438,11 @@ class AmorData:
             self.nu = self.config.nu
 
         # extract start time as unix time, adding UTC offset of 1h to time string
-        tz =  pytz.timezone('Europe/Zurich')
-        fileDate = datetime.fromisoformat( self.hdf['/entry1/start_time'][0].decode('utf-8'))
-        timeOffset = f'{int(str(tz.utcoffset(fileDate)).split(':')[0]):+03d}'
-        #self.fileDate = datetime.fromisoformat( self.hdf['/entry1/start_time'][0].decode('utf-8')+"+02:00" )
-        self.fileDate = datetime.fromisoformat( self.hdf['/entry1/start_time'][0].decode('utf-8')+timeOffset )
+        tz = zoneinfo.ZoneInfo(key='Europe/Zurich')
+        dz = datetime.fromisoformat(self.hdf['/entry1/start_time'][0].decode('utf-8'))                         
+        self.fileDate=datetime(dz.year, dz.month, dz.day, dz.hour, dz.minute, dz.second, tzinfo=tz)                                                     
+        #timeOffset = f'{int(str(tz.utcoffset(dz)).split(':')[0]):+03d}'
+        #self.fileDate = datetime.fromisoformat( self.hdf['/entry1/start_time'][0].decode('utf-8')+timeOffset )
         self.startTime = np.int64( (self.fileDate.timestamp() ) * 1e9 )
         if self.seriesStartTime is None:
             self.seriesStartTime = self.startTime 
