@@ -2,4 +2,3 @@ numpy
 h5py
 orsopy
 numba
-pytz

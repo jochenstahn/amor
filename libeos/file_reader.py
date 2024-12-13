@@ -3,7 +3,11 @@ import os
 import subprocess
 import sys
 from datetime import datetime, timezone
-import zoneinfo
+try:
+    import zoneinfo
+except ImportError:
+    # for python versions < 3.9 try to use the backports version
+    from backports import zoneinfo
 from typing import List
 
 import h5py
@@ -20,6 +24,9 @@ try:
     from . import nb_helpers
 except Exception:
     nb_helpers = None
+
+# Time zone used to interpret time strings
+AMOR_LOCAL_TIMEZONE = zoneinfo.ZoneInfo(key='Europe/Zurich')
 
 class AmorData:
     """read meta-data and event streams from .hdf file(s), apply filters and conversions"""
@@ -438,9 +445,8 @@ class AmorData:
             self.nu = self.config.nu
 
         # extract start time as unix time, adding UTC offset of 1h to time string
-        tz = zoneinfo.ZoneInfo(key='Europe/Zurich')
-        dz = datetime.fromisoformat(self.hdf['/entry1/start_time'][0].decode('utf-8'))                         
-        self.fileDate=datetime(dz.year, dz.month, dz.day, dz.hour, dz.minute, dz.second, tzinfo=tz)                                                     
+        dz = datetime.fromisoformat(self.hdf['/entry1/start_time'][0].decode('utf-8'))
+        self.fileDate=dz.replace(tzinfo=AMOR_LOCAL_TIMEZONE)
         #timeOffset = f'{int(str(tz.utcoffset(dz)).split(':')[0]):+03d}'
         #self.fileDate = datetime.fromisoformat( self.hdf['/entry1/start_time'][0].decode('utf-8')+timeOffset )
         self.startTime = np.int64( (self.fileDate.timestamp() ) * 1e9 )
