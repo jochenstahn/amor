@@ -447,8 +447,6 @@ class AmorData:
         # extract start time as unix time, adding UTC offset of 1h to time string
         dz = datetime.fromisoformat(self.hdf['/entry1/start_time'][0].decode('utf-8'))
         self.fileDate=dz.replace(tzinfo=AMOR_LOCAL_TIMEZONE)
-        #timeOffset = f'{int(str(tz.utcoffset(dz)).split(':')[0]):+03d}'
-        #self.fileDate = datetime.fromisoformat( self.hdf['/entry1/start_time'][0].decode('utf-8')+timeOffset )
         self.startTime = np.int64( (self.fileDate.timestamp() ) * 1e9 )
         if self.seriesStartTime is None:
             self.seriesStartTime = self.startTime 
