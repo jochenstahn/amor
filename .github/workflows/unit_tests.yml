@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-22.04
     strategy:
       matrix:
-        python-version: [3.8, 3.9, '3.10', '3.11', '3.12']
+        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
       fail-fast: false
 
     steps:
@@ -30,6 +30,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install pytest
           pip install -r requirements.txt
+
+      - name: Backport to 3.8
+        if: matrix.python-version == '3.8'
+        run: |
+          pip install backports.zoneinfo
 
       - name: Test with pytest
         run: |
