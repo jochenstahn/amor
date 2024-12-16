@@ -195,7 +195,7 @@ class AmorReduction:
             detZ_e = self.file_reader.detZ_e[filter_e]
             filter_m = np.where((time<pulseTimeS) & (pulseTimeS<time+interval), True, False)
             self.monitor = np.sum(self.file_reader.monitorPerPulse[filter_m])
-            logging.info(f'      {ti:<4d}  {time:5.0f}  {self.monitor:7.2f} {self.monitorUnit[self.experiment_config.monitorType]}')
+            logging.info(f'      {ti:<4d}  {time:6.0f}  {self.monitor:7.2f} {self.monitorUnit[self.experiment_config.monitorType]}')
 
             qz_lz, qx_lz, ref_lz, err_lz, res_lz, lamda_lz, theta_lz, int_lz, mask_lz = self.project_on_lz(
                     self.file_reader, self.norm_lz, self.normAngle, lamda_e, detZ_e)
@@ -265,7 +265,7 @@ class AmorReduction:
                 scale = 1.
         R_q  /= scale
         dR_q /= scale
-        logging.debug(f'      scaling factor = {scale}')
+        logging.info(f'      scaling factor = {1/scale}')
 
         return R_q, dR_q
 
