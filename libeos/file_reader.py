@@ -270,7 +270,6 @@ class AmorData:
     def associate_pulse_with_monitor(self):
         if self.config.monitorType == 'p': # protonCharge
             self.currentTime -= np.int64(self.seriesStartTime)
-            self.currentTime -= np.int64(16e9) # time offset of proton current signal
             self.monitorPerPulse = self.get_current_per_pulse(self.pulseTimeS, self.currentTime, self.current) * 2*self.tau * 1e-3
             # filter low-current pulses
             self.monitorPerPulse = np.where(self.monitorPerPulse > 2*self.tau * self.config.lowCurrentThreshold * 1e-3, self.monitorPerPulse, 0)
