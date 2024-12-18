@@ -164,7 +164,7 @@ class AmorData:
         if self.readHeaderInfo:
             self.read_header_info()
 
-        logging.warning(f'    {fileName.split('/')[-1]}')
+        logging.warning(f'    {fileName.split("/")[-1]}')
         self.read_individual_header()
 
         # add header content
@@ -231,21 +231,12 @@ class AmorData:
         pulseTime = pulseTime[np.abs(pulseTime[:]-np.roll(pulseTime, 1)[:])>5]
 
         pulseTime -= self.seriesStartTime
-        pulseTime = pulseTime[pulseTime>=-1e5]
-        pulseTime = pulseTime[pulseTime<=self.duration+1e5]
+        pulseTime = pulseTime[pulseTime >= self.startTime-1e5]
+        pulseTime = pulseTime[pulseTime <= self.startTime+self.duration+1e5]
 
         # fill in missing pulse times 
-        # TODO: check for real end time
         self.pulseTimeS = np.array([], dtype=np.int64)
-        try:
-            # further files
-            # TODO: use the first pulse of the respective measurement
-            #nextPulseTime = startTime % np.int64(self.tau*2e9)
-            #nextPulseTime = self.pulseTimeS[-1] + chopperPeriod
-            nextPulseTime = pulseTime[0]
-        except AttributeError:
-            # first file
-            nextPulseTime = pulseTime[0] 
+        nextPulseTime = self.startTime
 
         for tt in pulseTime:
             while tt - nextPulseTime > self.tau*1e9:
@@ -253,7 +244,7 @@ class AmorData:
                 nextPulseTime += chopperPeriod
             self.pulseTimeS = np.append(self.pulseTimeS, tt)
             nextPulseTime = self.pulseTimeS[-1] + chopperPeriod
-        while self.pulseTimeS[-1]<self.duration+1e-5:
+        while self.pulseTimeS[-1] < self.startTime+self.duration+1e-5:
             self.pulseTimeS = np.append(self.pulseTimeS, self.pulseTimeS[-1]+self.tau*1e9)
 
     def get_current_per_pulse(self, pulseTimeS, currentTimeS, currents):
@@ -456,14 +447,14 @@ class AmorData:
             # for debugging:
             chopperStartTime = np.int64(self.hdf['/entry1/Amor/detector/data/event_time_zero'][0])
             chopperStopTime = np.int64(self.hdf['/entry1/Amor/detector/data/event_time_zero'][-1])
-            logging.debug(f'          chopper start time = {chopperStartTime/1e9} s')
-            logging.debug(f'                   stop time = {chopperStopTime/1e9} s')
-            logging.debug(f'               counting time = {(chopperStopTime-chopperStartTime)/1e9:13.2f} s')
+            #logging.debug(f'          chopper start time = {chopperStartTime/1e9} s')
+            #logging.debug(f'                   stop time = {chopperStopTime/1e9} s')
+            #logging.debug(f'               counting time = {(chopperStopTime-chopperStartTime)/1e9:13.2f} s')
             currentStartTime = np.int64(self.hdf['/entry1/Amor/detector/proton_current/time'][0])
             currentStopTime = np.int64(self.hdf['/entry1/Amor/detector/proton_current/time'][-1])
-            logging.debug(f'          current start time = {currentStartTime/1e9} s')
-            logging.debug(f'                   stop time = {currentStopTime/1e9} s')
-            logging.debug(f'               counting time = {(currentStopTime-currentStartTime)/1e9:13.2f} s')
+            #logging.debug(f'          current start time = {currentStartTime/1e9} s')
+            #logging.debug(f'                   stop time = {currentStopTime/1e9} s')
+            #logging.debug(f'               counting time = {(currentStopTime-currentStartTime)/1e9:13.2f} s')
             #
             # start: first (calculated) chopper pulse after first proton current entry
             # stop: last (calculated) chopper pulse before last proton current entry
@@ -477,6 +468,7 @@ class AmorData:
             self.startTime = np.int64( (self.fileDate.timestamp() ) * 1e9 )
         if self.seriesStartTime is None:
             self.seriesStartTime = self.startTime 
+        self.startTime -= self.seriesStartTime
 
 
     def read_header_info(self):
