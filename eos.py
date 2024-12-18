@@ -31,6 +31,7 @@ from libeos.reduction import AmorReduction
 
 def main():
     setup_logging()
+    print('')
     logging.warning('######## eos - data reduction for Amor ########')
 
     # read command line arguments and generate classes holding configuration parameters
@@ -41,6 +42,7 @@ def main():
     reducer.reduce()
 
     logging.info('######## eos - finished ########')
+    print('')
 
 if __name__ == '__main__':
     main()

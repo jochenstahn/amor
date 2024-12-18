@@ -64,7 +64,7 @@ class AmorReduction:
             self.save_Rtl()
 
     def read_file_block(self, i, short_notation):
-        logging.warning('reading input:')
+        logging.warning('processing files:')
         self.header.measurement_data_files = []
         self.file_reader = AmorData(header=self.header,
                                     reader_config=self.reader_config,
@@ -79,7 +79,7 @@ class AmorReduction:
         lamda_e = self.file_reader.lamda_e
         detZ_e  = self.file_reader.detZ_e
         self.monitor = np.sum(self.file_reader.monitorPerPulse)
-        logging.warning(f'    monitor = {self.monitor:8.2f} {self.monitorUnit[self.experiment_config.monitorType]}')
+        logging.info(f'   monitor = {self.monitor:8.2f} {self.monitorUnit[self.experiment_config.monitorType]}')
         qz_lz, qx_lz, ref_lz, err_lz, res_lz, lamda_lz, theta_lz, int_lz, self.mask_lz = self.project_on_lz(
                 self.file_reader, self.norm_lz, self.normAngle, lamda_e, detZ_e)
         #if self.monitor>1 :
@@ -186,7 +186,7 @@ class AmorReduction:
             stop = wallTime_e[-1]
         # make overwriting log lines possible by removing newline at the end
         #logging.StreamHandler.terminator = "\r"
-        logging.warning(f'    time slizing')
+        logging.warning(f'   time slizing')
         logging.info('      slize  time  monitor')
         for ti, time in enumerate(np.arange(start, stop, interval)):
 
@@ -427,13 +427,13 @@ class AmorReduction:
         thetaF_lz = np.where(mask_lz, alphaF_lz, np.nan)
 
         if self.reduction_config.normalisationMethod == 'o':
-            logging.debug('      assuming an overilluminated sample and correcting for the angle of incidence')
+            logging.debug('          assuming an overilluminated sample and correcting for the angle of incidence')
             ref_lz    = (int_lz * np.absolute(thetaN_lz)) / (norm_lz * np.absolute(thetaF_lz))
         elif self.reduction_config.normalisationMethod == 'u':
-            logging.debug('      assuming an underilluminated sample and ignoring the angle of incidence')
+            logging.debug('          assuming an underilluminated sample and ignoring the angle of incidence')
             ref_lz    = (int_lz / norm_lz)
         elif self.reduction_config.normalisationMethod == 'd':
-            logging.debug('      assuming direct beam for normalisation and ignoring the angle of incidence')
+            logging.debug('          assuming direct beam for normalisation and ignoring the angle of incidence')
             norm_lz = np.flip(norm_lz,1)
             ref_lz    = (int_lz / norm_lz)
         else:
