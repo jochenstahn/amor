@@ -178,11 +178,11 @@ class AmorReduction:
         interval = self.reduction_config.timeSlize[0]
         try:
             start = self.reduction_config.timeSlize[1]
-        except:
+        except IndexError:
             start = 0
         try:
             stop = self.reduction_config.timeSlize[2]
-        except:
+        except IndexError:
             stop = wallTime_e[-1]
         # make overwriting log lines possible by removing newline at the end
         #logging.StreamHandler.terminator = "\r"
