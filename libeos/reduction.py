@@ -199,6 +199,12 @@ class AmorReduction:
 
             qz_lz, qx_lz, ref_lz, err_lz, res_lz, lamda_lz, theta_lz, int_lz, mask_lz = self.project_on_lz(
                     self.file_reader, self.norm_lz, self.normAngle, lamda_e, detZ_e)
+            try:
+                ref_lz *= self.reduction_config.scale[i]
+                err_lz *= self.reduction_config.scale[i]
+            except IndexError:
+                ref_lz *= self.reduction_config.scale[-1]
+                err_lz *= self.reduction_config.scale[-1]
             q_q, R_q, dR_q, dq_q = self.project_on_qz(qz_lz, ref_lz, err_lz, res_lz, self.norm_lz, mask_lz)
 
             filter_q = np.where((self.experiment_config.qzRange[0]<q_q) & (q_q<self.experiment_config.qzRange[1]),
