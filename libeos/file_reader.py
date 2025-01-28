@@ -252,6 +252,10 @@ class AmorData:
         pulseExtra = (pulseLengths-np.int64(self.tau*1e9))//np.int64(self.tau*2e9)
         gap_indices = np.where(pulseExtra>0)[0]
 
+        if len(gap_indices)==0:
+            # no missing pulses, just use given array
+            self.pulseTimeS = np.array(pulseTime, dtype=np.int64)
+            return
         self.pulseTimeS = np.array(pulseTime[:gap_indices[0]+1], dtype=np.int64)
         last_index = gap_indices[0]
         for gapi in gap_indices[1:]:
