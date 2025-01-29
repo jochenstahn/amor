@@ -351,19 +351,23 @@ class AmorReduction:
             lamda_e          = fromHDF.lamda_e
             detZ_e           = fromHDF.detZ_e
             self.normMonitor = np.sum(fromHDF.monitorPerPulse)
-            self.norm_lz, bins_l, bins_z = np.histogram2d(lamda_e, detZ_e, bins = (self.grid.lamda(), self.grid.z()))
-            self.norm_lz = np.where(self.norm_lz>2, self.norm_lz, np.nan)
-            # correct for the SM reflectivity
-            lamda_l  = self.grid.lamda()
-            theta_z  = self.normAngle + fromHDF.delta_z
-            lamda_lz = (self.grid.lz().T*lamda_l[:-1]).T
-            theta_lz = self.grid.lz()*theta_z
-            qz_lz    = 4.0*np.pi * np.sin(np.deg2rad(theta_lz)) / lamda_lz
-            Rsm_lz   = np.ones(np.shape(qz_lz))
-            Rsm_lz   = np.where(qz_lz>0.0217, 1-(qz_lz-0.0217)*(0.0625/0.0217), Rsm_lz)
-            # TODO: introduce variable for `m` and propably for the decay
-            Rsm_lz   = np.where(qz_lz>0.0217*5, np.nan, Rsm_lz)
-            self.norm_lz  = self.norm_lz / Rsm_lz
+            norm_lz, bins_l, bins_z = np.histogram2d(lamda_e, detZ_e, bins = (self.grid.lamda(), self.grid.z()))
+            norm_lz = np.where(norm_lz>2, norm_lz, np.nan)
+            if self.reduction_config.normalisationMethod == 'd':
+                # direct reference => invert map vertically
+                self.norm_lz = np.flip(norm_lz, 1)
+            else:
+                # correct for reference sm reflectivity
+                lamda_l  = self.grid.lamda()
+                theta_z  = self.normAngle + fromHDF.delta_z
+                lamda_lz = (self.grid.lz().T*lamda_l[:-1]).T
+                theta_lz = self.grid.lz()*theta_z
+                qz_lz    = 4.0*np.pi * np.sin(np.deg2rad(theta_lz)) / lamda_lz
+                # TODO: introduce variable for `m` and propably for the slope
+                Rsm_lz   = np.ones(np.shape(qz_lz))
+                Rsm_lz   = np.where(qz_lz>0.0217, 1-(qz_lz-0.0217)*(0.0625/0.0217), Rsm_lz)
+                Rsm_lz   = np.where(qz_lz>0.0217*5, np.nan, Rsm_lz)
+                self.norm_lz  = norm_lz / Rsm_lz
 
             if len(lamda_e) > 1e6:
                 with open(n_path, 'wb') as fh:
@@ -391,12 +395,7 @@ class AmorReduction:
         lamda_lz  = (self.grid.lz().T*lamda_l[:-1]).T
         alphaF_lz = self.grid.lz()*alphaF_z
 
-        thetaN_z  = fromHDF.delta_z + normAngle
-        thetaN_lz = np.ones(np.shape(norm_lz))*thetaN_z
-        thetaN_lz = np.where(np.absolute(thetaN_lz)>5e-3, thetaN_lz, np.nan)
-
         mask_lz   = np.where(np.isnan(norm_lz), False, True)
-        mask_lz   = np.logical_and(mask_lz, np.where(np.absolute(thetaN_lz)>5e-3, True, False))
         mask_lz   = np.logical_and(mask_lz, np.where(np.absolute(alphaF_lz)>5e-3, True, False))
         if self.reduction_config.thetaRangeR[1]<12:
           t0 = fromHDF.nu - fromHDF.mu
@@ -434,17 +433,20 @@ class AmorReduction:
 
         if self.reduction_config.normalisationMethod == 'o':
             logging.debug('      assuming an overilluminated sample and correcting for the angle of incidence')
+            thetaN_z  = fromHDF.delta_z + normAngle
+            thetaN_lz = np.ones(np.shape(norm_lz))*thetaN_z
+            thetaN_lz = np.where(np.absolute(thetaN_lz)>5e-3, thetaN_lz, np.nan)
+            mask_lz   = np.logical_and(mask_lz, np.where(np.absolute(thetaN_lz)>5e-3, True, False))
             ref_lz    = (int_lz * np.absolute(thetaN_lz)) / (norm_lz * np.absolute(thetaF_lz))
         elif self.reduction_config.normalisationMethod == 'u':
             logging.debug('      assuming an underilluminated sample and ignoring the angle of incidence')
             ref_lz    = (int_lz / norm_lz)
         elif self.reduction_config.normalisationMethod == 'd':
             logging.debug('      assuming direct beam for normalisation and ignoring the angle of incidence')
-            norm_lz = np.flip(norm_lz,1)
             ref_lz    = (int_lz / norm_lz)
         else:
-            logging.error('unknown normalisation method! Use [u], [o] or [d]')
-            ref_lz    = (int_lz * np.absolute(thetaN_lz)) / (norm_lz * np.absolute(thetaF_lz))
+            logging.error('unknown normalisation method! Use [u]nder, [o]ver or [d]irect illumination')
+            ref_lz    = (int_lz / norm_lz)
         if self.monitor > 1e-6 :
             ref_lz   *= self.normMonitor / self.monitor
         else:
