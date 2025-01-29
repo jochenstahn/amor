@@ -236,7 +236,6 @@ class AmorData:
 
         # fill in missing pulse times 
         # TODO: check for real end time
-        self.pulseTimeS = np.array([], dtype=np.int64)
         try:
             # further files
             # TODO: use the first pulse of the respective measurement
@@ -247,12 +246,26 @@ class AmorData:
             # first file
             nextPulseTime = pulseTime[0] % np.int64(self.tau*2e9)
 
-        for tt in pulseTime:
-            while tt - nextPulseTime > self.tau*1e9:
-                self.pulseTimeS = np.append(self.pulseTimeS, nextPulseTime)
-                nextPulseTime += chopperPeriod
-            self.pulseTimeS = np.append(self.pulseTimeS, tt)
-            nextPulseTime = self.pulseTimeS[-1] + chopperPeriod
+        # calculate where time tiefference between pulses exceeds its time by more than 1/2
+        # this yields the number of missing pulses
+        pulseLengths = pulseTime[1:]-pulseTime[:-1]
+        pulseExtra = (pulseLengths-np.int64(self.tau*1e9))//np.int64(self.tau*2e9)
+        gap_indices = np.where(pulseExtra>0)[0]
+
+        if len(gap_indices)==0:
+            # no missing pulses, just use given array
+            self.pulseTimeS = np.array(pulseTime, dtype=np.int64)
+            return
+        self.pulseTimeS = np.array(pulseTime[:gap_indices[0]+1], dtype=np.int64)
+        last_index = gap_indices[0]
+        for gapi in gap_indices[1:]:
+            # insert missing pulses into each gap
+            gap_pulses = pulseTime[last_index]+np.arange(1, pulseExtra[last_index]+1)*chopperPeriod
+            self.pulseTimeS = np.append(self.pulseTimeS, gap_pulses)
+            self.pulseTimeS = np.append(self.pulseTimeS, pulseTime[last_index+1:gapi+1])
+            last_index = gapi
+        if last_index<len(pulseTime):
+            self.pulseTimeS = np.append(self.pulseTimeS, pulseTime[last_index:-1])
 
     def get_current_per_pulse(self, pulseTimeS, currentTimeS, currents):
         # add currents for early pulses and current time value after last pulse (j+1)
