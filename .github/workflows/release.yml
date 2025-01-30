@@ -92,8 +92,11 @@ jobs:
     - uses: actions/download-artifact@v4
       with:
         name: windows-dist
+    - name: get latest version tag
+      run: echo "RELEASE_TAG=$(git describe --abbrev=0 --tags)" >> $GITHUB_ENV
     - uses: ncipollo/release-action@v1
       with:
         artifacts: "amor*.tar.gz,*.zip"
         token: ${{ secrets.GITHUB_TOKEN }}
         allowUpdates: true
+        tag: ${{ env.RELEASE_TAG }}
