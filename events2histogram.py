@@ -860,7 +860,7 @@ def process(dataPath, ident, clas):
         try: lamdaMax
         except NameError: lamdaMax = lamdaMin + tau * hdm/chopperDetectorDistance * 1e13
     
-        tofOffset = tau * chopperPhase / 180.                       # mismatch of chopper pulse and time-zero
+        tofOffset = -tau * chopperPhase / 180.                       # mismatch of chopper pulse and time-zero
         tofCut = lamdaCut * chopperDetectorDistance / hdm * 1.e-13  # tof of frame start
 
         tof_e  = np.array(ev['/entry1/Amor/detector/data/event_time_offset'][:], dtype=np.uint64)/1.e9 + tofOffset # tof 
@@ -960,7 +960,7 @@ def commandLineArgs():
                             type=float,
                             help ="value of nu")
     clas.add_argument("-P", "--chopperPhase",    
-                            default=7.5,                     
+                            default=-7.5,                     
                             type=float,
                             help ="chopper phase offset")
     clas.add_argument("-p", "--plot",            
