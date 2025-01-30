@@ -24,6 +24,8 @@ jobs:
   build-ubuntu-latest:
     runs-on: ubuntu-latest
     if: ${{ (github.event_name != 'workflow_dispatch') || (contains(fromJson('["all", "linux"]'), github.event.inputs.build-items)) }}
+    permissions:
+      id-token: write
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-python@v5
