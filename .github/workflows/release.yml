@@ -19,7 +19,6 @@ on:
           - all
           - windows
           - linux
-          - mac
 
 jobs:
   build-ubuntu-latest:
@@ -45,11 +44,11 @@ jobs:
         path: |
           dist/*.tar.gz
     - name: Upload to PyPI
-      if: github.event_name != 'workflow_dispatch'
+      #if: github.event_name != 'workflow_dispatch'
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
-        user: __token__
-        password: ${{ secrets.PYPI_TOKEN }}
+      #  user: __token__
+      #  password: ${{ secrets.PYPI_TOKEN }}
         skip-existing: true
 
   build-windows:
