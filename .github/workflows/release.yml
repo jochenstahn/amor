@@ -19,11 +19,12 @@ on:
           - all
           - windows
           - linux
+          - all_incl_release
 
 jobs:
   build-ubuntu-latest:
     runs-on: ubuntu-latest
-    if: ${{ (github.event_name != 'workflow_dispatch') || (contains(fromJson('["all", "linux"]'), github.event.inputs.build-items)) }}
+    if: ${{ (github.event_name != 'workflow_dispatch') || (contains(fromJson('["all", "linux", "all_incl_release"]'), github.event.inputs.build-items)) }}
     permissions:
       id-token: write
     steps:
@@ -55,7 +56,7 @@ jobs:
 
   build-windows:
     runs-on: windows-latest
-    if: ${{ (github.event_name != 'workflow_dispatch') || (contains(fromJson('["all", "windows"]'), github.event.inputs.build-items)) }}
+    if: ${{ (github.event_name != 'workflow_dispatch') || (contains(fromJson('["all", "windows", "all_incl_release"]'), github.event.inputs.build-items)) }}
 
     steps:
     - uses: actions/checkout@v4
@@ -80,7 +81,7 @@ jobs:
           eos.zip
 
   release:
-    if: github.event_name != 'workflow_dispatch'
+    if:  ${{ (github.event_name != 'workflow_dispatch') || (contains(fromJson('["all_incl_release"]'), github.event.inputs.build-items)) }}
     runs-on: ubuntu-latest
     needs: [build-ubuntu-latest, build-windows]
     steps:
