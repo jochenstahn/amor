@@ -2,7 +2,7 @@ import logging
 import os
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta
 try:
     import zoneinfo
 except ImportError:
@@ -26,7 +26,7 @@ except Exception:
     nb_helpers = None
 
 # Time zone used to interpret time strings
-AMOR_LOCAL_TIMEZONE = zoneinfo.ZoneInfo(key='Europe/Zurich')
+#AMOR_LOCAL_TIMEZONE = zoneinfo.ZoneInfo(key='Europe/Zurich')
 
 class AmorData:
     """read meta-data and event streams from .hdf file(s), apply filters and conversions"""
@@ -458,7 +458,15 @@ class AmorData:
 
         # extract start time as unix time, adding UTC offset of 1h to time string
         dz = datetime.fromisoformat(self.hdf['/entry1/start_time'][0].decode('utf-8'))
-        self.fileDate=dz.replace(tzinfo=AMOR_LOCAL_TIMEZONE)
+        #self.fileDate=dz.replace(tzinfo=AMOR_LOCAL_TIMEZONE)
+
+        # Fix for the time difference between 'epoc' and 'local time'.
+        # I am not sure about the influence of daylight saving time. 
+        # Without it, the offset between Zurich and Maryland is 6 h.
+        self.fileDate=dz + timedelta(hours=+6)
+
+
+        logging.info(f'    date and time: {self.fileDate}')
         self.startTime = np.int64( (self.fileDate.timestamp() ) * 1e9 )
         if self.seriesStartTime is None:
             self.seriesStartTime = self.startTime 
