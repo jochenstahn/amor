@@ -469,7 +469,8 @@ class AmorData:
         logging.info(f'    date and time: {self.fileDate}')
         self.startTime = np.int64( (self.fileDate.timestamp() ) * 1e9 )
         if self.seriesStartTime is None:
-            self.seriesStartTime = self.startTime 
+            #self.seriesStartTime = self.startTime 
+            self.seriesStartTime = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][:], dtype=np.int64)[0]
 
     def read_header_info(self):
         # read general information and first data set
