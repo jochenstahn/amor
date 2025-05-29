@@ -22,7 +22,7 @@ class AmorReduction:
         self.header = Header()
         self.header.reduction.call = config.call_string()
 
-        self.monitorUnit = {'n': 'cnts', 'p': 'mC', 't': 's'}
+        self.monitorUnit = {'n': 'cnts', 'p': 'mC', 't': 's', 'auto': 'pulses'}
 
     def reduce(self):
         if not os.path.exists(f'{self.output_config.outputPath}'):

@@ -34,6 +34,8 @@ class AmorData:
     chopperDistance: float
     chopperPhase: float
     chopperSpeed: float
+    chopper1TriggerPhase: float
+    chopper2TriggerPhase: float
     div: float
     data_file_numbers: List[int]
     delta_z: np.ndarray
@@ -96,22 +98,6 @@ class AmorData:
         self.monitorPerPulse = _monitorPerPulse   
         self.pulseTimeS    = _pulseTimeS
 
-    #-------------------------------------------------------------------------------------------------
-    #def path_generator(self, number):
-    #    fileName = f'amor{self.reader_config.year}n{number:06d}.hdf'
-    #    if os.path.exists(os.path.join(self.reader_config.dataPath,fileName)):
-    #        path = self.reader_config.dataPath
-    #    elif os.path.exists(fileName):
-    #        path = '.'
-    #    elif os.path.exists(os.path.join('.','raw', fileName)):
-    #        path = os.path.join('.','raw')
-    #    elif os.path.exists(os.path.join('..','raw', fileName)):
-    #        path = os.path.join('..','raw')
-    #    elif os.path.exists(f'/afs/psi.ch/project/sinqdata/{self.reader_config.year}/amor/{int(number/1000)}/{fileName}'):
-    #        path = f'/afs/psi.ch/project/sinqdata/{self.reader_config.year}/amor/{int(number/1000)}'
-    #    else:
-    #        sys.exit(f'# ERROR: the file {fileName} is nowhere to be found!')
-    #    return os.path.join(path, fileName)
     #-------------------------------------------------------------------------------------------------
     def path_generator(self, number):
         fileName = f'amor{self.reader_config.year}n{number:06d}.hdf'
@@ -189,14 +175,14 @@ class AmorData:
             self.header.measurement_data_files.append(fileio.File(file=fileName.split('/')[-1], timestamp=self.fileDate))
         logging.info(f'      mu = {self.mu:6.3f}, nu = {self.nu:6.3f}, kap = {self.kap:6.3f}, kad = {self.kad:6.3f}')
 
+        self.read_chopper_trigger_stream()
+
+        self.read_proton_current_stream()
+
         self.read_event_stream()
         totalNumber = np.shape(self.tof_e)[0]
-        # check for empty event stream
-        if totalNumber == 0:
-             logging.error('empty event stream: can not determine end time')
-             sys.exit()
 
-        self.sort_pulses()
+        #self.sort_pulses()
 
         self.associate_pulse_with_monitor()
 
@@ -225,47 +211,87 @@ class AmorData:
 
         logging.info(f'      number of events: total = {totalNumber:7d}, filtered = {np.shape(self.lamda_e)[0]:7d}')
 
-    def sort_pulses(self):
-        chopperPeriod = np.int64(2*self.tau*1e9)
-        pulseTime = np.sort(self.dataPacketTime_p)
-        pulseTime = pulseTime[np.abs(pulseTime[:]-np.roll(pulseTime, 1)[:])>5]
+    def read_chopper_trigger_stream(self):
+        self.chopper1TriggerTime = np.array(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_zero'][:], dtype=np.int64)
+        #self.chopper2TriggerTime = self.chopper1TriggerTime 
+        #                           + np.array(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_offset'][:], dtype=np.int64)
+        self.startTime = self.chopper1TriggerTime[0]
+        self.stopTime = self.chopper1TriggerTime[-2]
+        if self.seriesStartTime is None:
+            self.seriesStartTime = self.startTime 
+            logging.debug(f'      series start time (epoch): {self.seriesStartTime/1e9:13.2f} s')
+        self.pulseTimeS = self.chopper1TriggerTime[0:-1] - self.seriesStartTime
+        logging.debug(f'      epoch time from {self.startTime/1e9:13.2f} s to {self.stopTime/1e9:13.2f} s')
+        logging.debug(f'      => counting time {self.stopTime/1e9-self.startTime/1e9:8.2f} s')
 
-        pulseTime -= np.int64(self.seriesStartTime)
-        self.stopTime = pulseTime[-1]
-        pulseTime = pulseTime[pulseTime>=0]
+    def read_proton_current_stream(self):
+        self.currentTime = np.array(self.hdf['entry1/Amor/detector/proton_current/time'][:], dtype=np.int64)
+        self.current = np.array(self.hdf['entry1/Amor/detector/proton_current/value'][:,0], dtype=float)
 
-        # fill in missing pulse times 
-        # TODO: check for real end time
-        try:
-            # further files
-            # TODO: use the first pulse of the respective measurement
-            #nextPulseTime = startTime % np.int64(self.tau*2e9)
-            #nextPulseTime = self.pulseTimeS[-1] + chopperPeriod
-            nextPulseTime = pulseTime[0]
-        except AttributeError:
-            # first file
-            nextPulseTime = pulseTime[0] % np.int64(self.tau*2e9)
+    def read_event_stream(self):
+        self.tof_e = np.array(self.hdf['/entry1/Amor/detector/data/event_time_offset'][:])/1.e9
+        self.pixelID_e = np.array(self.hdf['/entry1/Amor/detector/data/event_id'][:], dtype=np.int64)
+        self.dataPacket_p = np.array(self.hdf['/entry1/Amor/detector/data/event_index'][:], dtype=np.uint64)
+        self.dataPacketTime_p = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][:], dtype=np.int64)
+        #if self.config.monitorType in ['auto', 'p']:
+        #    try:
+        #        self.currentTime = np.array(self.hdf['entry1/Amor/detector/proton_current/time'][:], dtype=np.int64)
+        #        self.current = np.array(self.hdf['entry1/Amor/detector/proton_current/value'][:,0], dtype=float)
+        #        if len(self.current)>4:
+        #            self.config.monitorType = 'p'
+        #        else:
+        #            self.config.monitorType = 't'
+        #    except(KeyError, IndexError):
+        #        self.config.monitorType = 't'
+        #else:
+        #    self.config.monitorType = 't'
+        #TODO: protonMonitor
 
-        # calculate where time tiefference between pulses exceeds its time by more than 1/2
-        # this yields the number of missing pulses
-        pulseLengths = pulseTime[1:]-pulseTime[:-1]
-        pulseExtra = (pulseLengths-np.int64(self.tau*1e9))//np.int64(self.tau*2e9)
-        gap_indices = np.where(pulseExtra>0)[0]
-
-        if len(gap_indices)==0:
-            # no missing pulses, just use given array
-            self.pulseTimeS = np.array(pulseTime, dtype=np.int64)
-            return
-        self.pulseTimeS = np.array(pulseTime[:gap_indices[0]+1], dtype=np.int64)
-        last_index = gap_indices[0]
-        for gapi in gap_indices[1:]:
-            # insert missing pulses into each gap
-            gap_pulses = pulseTime[last_index]+np.arange(1, pulseExtra[last_index]+1)*chopperPeriod
-            self.pulseTimeS = np.append(self.pulseTimeS, gap_pulses)
-            self.pulseTimeS = np.append(self.pulseTimeS, pulseTime[last_index+1:gapi+1])
-            last_index = gapi
-        if last_index<len(pulseTime):
-            self.pulseTimeS = np.append(self.pulseTimeS, pulseTime[last_index:-1])
+#    def sort_pulses(self):
+#        pulseTime = np.sort(self.dataPacketTime_p)
+#        print(np.shape(pulseTime))
+#        pulseTime = pulseTime[np.abs(pulseTime[:]-np.roll(pulseTime, 1)[:])>5]
+#        print(np.shape(pulseTime))
+#        pulseTime -= np.int64(self.seriesStartTime)
+#        pulseTime = pulseTime[pulseTime>=0]
+#        print(np.shape(pulseTime))
+#        pulseTime = pulseTime[pulseTime<=(self.stopTime-self.seriesStartTime)]
+#        print(np.shape(pulseTime))
+#
+#        chopperPeriod = np.int64(2*self.tau*1e9)
+#
+#        # fill in missing pulse times 
+#        # TODO: check for real end time
+#        try:
+#            # further files
+#            # TODO: use the first pulse of the respective measurement
+#            #nextPulseTime = startTime % np.int64(self.tau*2e9)
+#            #nextPulseTime = self.pulseTimeS[-1] + chopperPeriod
+#            nextPulseTime = pulseTime[0]
+#        except AttributeError:
+#            # first file
+#            nextPulseTime = pulseTime[0] % np.int64(self.tau*2e9)
+#
+#        # calculate where time tiefference between pulses exceeds its time by more than 1/2
+#        # this yields the number of missing pulses
+#        pulseLengths = pulseTime[1:]-pulseTime[:-1]
+#        pulseExtra = (pulseLengths-np.int64(self.tau*1e9))//np.int64(self.tau*2e9)
+#        gap_indices = np.where(pulseExtra>0)[0]
+#
+    #    if len(gap_indices)==0:
+    #        # no missing pulses, just use given array
+    #        self.pulseTimeS = np.array(pulseTime, dtype=np.int64)
+    #        return
+    #    self.pulseTimeS = np.array(pulseTime[:gap_indices[0]+1], dtype=np.int64)
+    #    last_index = gap_indices[0]
+    #    for gapi in gap_indices[1:]:
+    #        # insert missing pulses into each gap
+    #        gap_pulses = pulseTime[last_index]+np.arange(1, pulseExtra[last_index]+1)*chopperPeriod
+    #        self.pulseTimeS = np.append(self.pulseTimeS, gap_pulses)
+    #        self.pulseTimeS = np.append(self.pulseTimeS, pulseTime[last_index+1:gapi+1])
+    #        last_index = gapi
+    #    if last_index<len(pulseTime):
+    #        self.pulseTimeS = np.append(self.pulseTimeS, pulseTime[last_index:-1])
 
     def get_current_per_pulse(self, pulseTimeS, currentTimeS, currents):
         # add currents for early pulses and current time value after last pulse (j+1)
@@ -287,9 +313,9 @@ class AmorData:
             # filter low-current pulses
             self.monitorPerPulse = np.where(self.monitorPerPulse > 2*self.tau * self.config.lowCurrentThreshold * 1e-3, self.monitorPerPulse, 0)
         elif self.config.monitorType == 't': # countingTime
-            self.monitorPerPulse = np.ones(np.shape(self.pulseTimeS)[0])*self.tau
-        else: 
-            self.monitorPerPulse = 1./np.shape(pulseTimeS)[1]
+            self.monitorPerPulse = np.ones(np.shape(self.pulseTimeS)[0])*2*self.tau
+        else: # pulses
+            self.monitorPerPulse = np.ones(np.shape(self.pulseTimeS)[0])
 
     def extract_walltime(self, norm):
         if nb_helpers:
@@ -309,14 +335,15 @@ class AmorData:
                 logging.info(f'pulse: {i:6.0f}, events: {events:6.0f}, monitor: {self.monitorPerPulse[i]:6.2f}')
 
     def monitor_threshold(self):
-        if self.config.monitorType == 'p': # fix to check for file compatibility
+        #if self.config.monitorType == 'p': # fix to check for file compatibility
+        if True:
             goodTimeS = self.pulseTimeS[self.monitorPerPulse!=0]
             filter_e = np.where(np.isin(self.wallTime_e, goodTimeS), True, False)
             self.tof_e = self.tof_e[filter_e]
             self.pixelID_e = self.pixelID_e[filter_e]
             self.wallTime_e = self.wallTime_e[filter_e]
-            logging.info(f'      rejected {np.shape(self.monitorPerPulse)[0]-np.shape(goodTimeS)[0]} out of {np.shape(self.monitorPerPulse)[0]} pulses')
-            logging.info(f'          with {np.shape(filter_e)[0]-np.shape(self.tof_e)[0]} events due to low beam current')
+            logging.info(f'      low-beam rejected pulses: {np.shape(self.monitorPerPulse)[0]-np.shape(goodTimeS)[0]} out of {np.shape(self.monitorPerPulse)[0]}')
+            logging.info(f'          with {np.shape(filter_e)[0]-np.shape(self.tof_e)[0]} events')
             logging.info(f'      average counts per pulse =  {np.shape(self.tof_e)[0] / np.shape(goodTimeS[goodTimeS!=0])[0]:7.1f}')
 
     def filter_qz_range(self, norm):
@@ -395,39 +422,40 @@ class AmorData:
         if np.shape(filter_e)[0]-np.shape(self.tof_e)[0]>0.5:
             logging.warning(f'        strange times: {np.shape(filter_e)[0]-np.shape(self.tof_e)[0]}')
 
-    def read_event_stream(self):
-        self.tof_e = np.array(self.hdf['/entry1/Amor/detector/data/event_time_offset'][:])/1.e9
-        self.pixelID_e = np.array(self.hdf['/entry1/Amor/detector/data/event_id'][:], dtype=np.int64)
-        self.dataPacket_p = np.array(self.hdf['/entry1/Amor/detector/data/event_index'][:], dtype=np.uint64)
-        self.dataPacketTime_p = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][:], dtype=np.int64)
-        if self.config.monitorType in ['auto', 'p']:
-            try:
-                self.currentTime = np.array(self.hdf['entry1/Amor/detector/proton_current/time'][:], dtype=np.int64)
-                self.current = np.array(self.hdf['entry1/Amor/detector/proton_current/value'][:,0], dtype=float)
-                if len(self.current)>4:
-                    self.config.monitorType = 'p'
-                else:
-                    self.config.monitorType = 't'
-            except(KeyError, IndexError):
-                self.config.monitorType = 't'
-        else:
-            self.config.monitorType = 't'
-        #TODO: protonMonitor
-
     def read_individual_header(self):
         self.chopperDistance = float(np.take(self.hdf['entry1/Amor/chopper/pair_separation'], 0))
         self.detectorDistance = float(np.take(self.hdf['entry1/Amor/detector/transformation/distance'], 0))
         self.chopperDetectorDistance = self.detectorDistance-float(np.take(self.hdf['entry1/Amor/chopper/distance'], 0))
         self.tofCut = const.lamdaCut*self.chopperDetectorDistance/const.hdm*1.e-13
 
+        polarizationStates = [
+                'undefined',
+                'unpolarized',
+                'po',
+                'mo',
+                'op',
+                'pp',
+                'mp',
+                'om',
+                'pm',
+                'mm',
+                ]
         try:
             self.mu   = float(np.take(self.hdf['/entry1/Amor/master_parameters/mu/value'], 0))
             self.nu   = float(np.take(self.hdf['/entry1/Amor/master_parameters/nu/value'], 0))
-            self.kap  = float(np.take(self.hdf['/entry1/Amor/master_parameters/kap/value'], 0))
+            self.kap  = 0.245
+            #self.kap  = float(np.take(self.hdf['/entry1/Amor/master_parameters/kap/value'], 0))
             self.kad  = float(np.take(self.hdf['/entry1/Amor/master_parameters/kad/value'], 0))
             self.div  = float(np.take(self.hdf['/entry1/Amor/master_parameters/div/value'], 0))
-            self.chopperSpeed = float(np.take(self.hdf['/entry1/Amor/chopper/rotation_speed/value'], 0))
-            self.chopperPhase = float(np.take(self.hdf['/entry1/Amor/chopper/phase/value'], 0))
+            self.chopperSpeed = float(np.take(self.hdf['/entry1/Amor/chopper/rotation_speed'], 0))
+            #self.chopperSpeed = float(np.take(self.hdf['/entry1/Amor/chopper/rotation_speed/value'], 0))
+            self.chopperPhase = float(np.take(self.hdf['/entry1/Amor/chopper/phase'], 0))
+            #self.chopperPhase = float(np.take(self.hdf['/entry1/Amor/chopper/phase/value'], 0))
+            self.ch1TriggerPhase = float(np.take(self.hdf['/entry1/Amor/chopper/ch1_trigger_phase'], 0))
+            self.ch2TriggerPhase = float(np.take(self.hdf['/entry1/Amor/chopper/ch2_trigger_phase'], 0))
+            polarizationState = float(np.take(self.hdf['/entry1/Amor/polarization/spin_encoding/value'], 0))
+            polarization  = polarizationStates[int(polarizationState)]
+            logging.debug(f'      polarization: {polarization}')
         except(KeyError, IndexError):
             logging.warning("     using parameters from nicos cache")
             year_date = str(self.start_date).replace('-', '/', 1)
@@ -459,9 +487,9 @@ class AmorData:
         # extract start time as unix time, adding UTC offset of 1h to time string
         dz = datetime.fromisoformat(self.hdf['/entry1/start_time'][0].decode('utf-8'))
         self.fileDate=dz.replace(tzinfo=AMOR_LOCAL_TIMEZONE)
-        self.startTime = np.int64( (self.fileDate.timestamp() ) * 1e9 )
-        if self.seriesStartTime is None:
-            self.seriesStartTime = self.startTime 
+        #self.startTime = np.int64( (self.fileDate.timestamp() ) * 1e9 )
+        #if self.seriesStartTime is None:
+        #    self.seriesStartTime = self.startTime 
 
     def read_header_info(self):
         # read general information and first data set
