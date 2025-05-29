@@ -203,6 +203,8 @@ class AmorData:
 
         self.filter_project_x()
 
+        self.correct_for_chopper_phases()
+
         self.correct_for_chopper_opening()
 
         self.calculate_derived_properties()
@@ -216,7 +218,7 @@ class AmorData:
         #self.chopper2TriggerTime = self.chopper1TriggerTime 
         #                           + np.array(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_offset'][:], dtype=np.int64)
         self.startTime = self.chopper1TriggerTime[0]
-        self.stopTime = self.chopper1TriggerTime[-2]
+        self.stopTime = self.chopper1TriggerTime[-3]
         if self.seriesStartTime is None:
             self.seriesStartTime = self.startTime 
             logging.debug(f'      series start time (epoch): {self.seriesStartTime/1e9:13.2f} s')
@@ -233,65 +235,6 @@ class AmorData:
         self.pixelID_e = np.array(self.hdf['/entry1/Amor/detector/data/event_id'][:], dtype=np.int64)
         self.dataPacket_p = np.array(self.hdf['/entry1/Amor/detector/data/event_index'][:], dtype=np.uint64)
         self.dataPacketTime_p = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][:], dtype=np.int64)
-        #if self.config.monitorType in ['auto', 'p']:
-        #    try:
-        #        self.currentTime = np.array(self.hdf['entry1/Amor/detector/proton_current/time'][:], dtype=np.int64)
-        #        self.current = np.array(self.hdf['entry1/Amor/detector/proton_current/value'][:,0], dtype=float)
-        #        if len(self.current)>4:
-        #            self.config.monitorType = 'p'
-        #        else:
-        #            self.config.monitorType = 't'
-        #    except(KeyError, IndexError):
-        #        self.config.monitorType = 't'
-        #else:
-        #    self.config.monitorType = 't'
-        #TODO: protonMonitor
-
-#    def sort_pulses(self):
-#        pulseTime = np.sort(self.dataPacketTime_p)
-#        print(np.shape(pulseTime))
-#        pulseTime = pulseTime[np.abs(pulseTime[:]-np.roll(pulseTime, 1)[:])>5]
-#        print(np.shape(pulseTime))
-#        pulseTime -= np.int64(self.seriesStartTime)
-#        pulseTime = pulseTime[pulseTime>=0]
-#        print(np.shape(pulseTime))
-#        pulseTime = pulseTime[pulseTime<=(self.stopTime-self.seriesStartTime)]
-#        print(np.shape(pulseTime))
-#
-#        chopperPeriod = np.int64(2*self.tau*1e9)
-#
-#        # fill in missing pulse times 
-#        # TODO: check for real end time
-#        try:
-#            # further files
-#            # TODO: use the first pulse of the respective measurement
-#            #nextPulseTime = startTime % np.int64(self.tau*2e9)
-#            #nextPulseTime = self.pulseTimeS[-1] + chopperPeriod
-#            nextPulseTime = pulseTime[0]
-#        except AttributeError:
-#            # first file
-#            nextPulseTime = pulseTime[0] % np.int64(self.tau*2e9)
-#
-#        # calculate where time tiefference between pulses exceeds its time by more than 1/2
-#        # this yields the number of missing pulses
-#        pulseLengths = pulseTime[1:]-pulseTime[:-1]
-#        pulseExtra = (pulseLengths-np.int64(self.tau*1e9))//np.int64(self.tau*2e9)
-#        gap_indices = np.where(pulseExtra>0)[0]
-#
-    #    if len(gap_indices)==0:
-    #        # no missing pulses, just use given array
-    #        self.pulseTimeS = np.array(pulseTime, dtype=np.int64)
-    #        return
-    #    self.pulseTimeS = np.array(pulseTime[:gap_indices[0]+1], dtype=np.int64)
-    #    last_index = gap_indices[0]
-    #    for gapi in gap_indices[1:]:
-    #        # insert missing pulses into each gap
-    #        gap_pulses = pulseTime[last_index]+np.arange(1, pulseExtra[last_index]+1)*chopperPeriod
-    #        self.pulseTimeS = np.append(self.pulseTimeS, gap_pulses)
-    #        self.pulseTimeS = np.append(self.pulseTimeS, pulseTime[last_index+1:gapi+1])
-    #        last_index = gapi
-    #    if last_index<len(pulseTime):
-    #        self.pulseTimeS = np.append(self.pulseTimeS, pulseTime[last_index:-1])
 
     def get_current_per_pulse(self, pulseTimeS, currentTimeS, currents):
         # add currents for early pulses and current time value after last pulse (j+1)
@@ -356,7 +299,8 @@ class AmorData:
 
     def calculate_derived_properties(self):
         self.lamdaMax = const.lamdaCut+1.e13*self.tau*const.hdm/(self.chopperDetectorDistance+124.)
-        if nb_helpers:
+        #if nb_helpers:
+        if False:
             self.lamda_e, self.qz_e, self.mask_e = nb_helpers.calculate_derived_properties_focussing(
                     self.tof_e, self.detXdist_e, self.delta_e, self.mask_e,
                     self.config.lambdaRange[0], self.config.lambdaRange[1], self.nu, self.mu,
@@ -364,6 +308,7 @@ class AmorData:
                     )
             return
         # lambda
+        print(self.chopperDetectorDistance)
         self.lamda_e = (1.e13*const.hdm)*self.tof_e/(self.chopperDetectorDistance+self.detXdist_e)
         self.mask_e = np.logical_and(self.mask_e, (self.config.lambdaRange[0]<=self.lamda_e) & (
                     self.lamda_e<=self.config.lambdaRange[1]))
@@ -386,6 +331,9 @@ class AmorData:
             self.qx_e = 2*np.pi * ((np.cos(np.deg2rad(alphaF_e)) - np.cos(np.deg2rad(alphaI)))/self.lamda_e)
             self.header.measurement_scheme = 'energy-dispersive'
 
+    def correct_for_chopper_phases(self):
+        self.tof_e += self.tau * (self.ch1TriggerPhase + self.chopperPhase/2)/180
+
     def correct_for_chopper_opening(self):
         # correct tof for beam size effect at chopper:  t_cor = (delta / 180 deg) * tau
         if self.config.incidentAngle == 'alphaF':
@@ -407,7 +355,7 @@ class AmorData:
             self.mask_e = (self.config.yRange[0]<=detY_e) & (detY_e<=self.config.yRange[1])
 
     def merge_frames(self):
-        total_offset = self.tofCut+self.tau*self.config.chopperPhaseOffset/180.
+        total_offset = self.tofCut + self.tau * (self.ch1TriggerPhase + self.chopperPhase/2)/180
         if nb_helpers:
             self.tof_e = nb_helpers.merge_frames(self.tof_e, self.tofCut, self.tau, total_offset)
         else:
@@ -425,7 +373,8 @@ class AmorData:
     def read_individual_header(self):
         self.chopperDistance = float(np.take(self.hdf['entry1/Amor/chopper/pair_separation'], 0))
         self.detectorDistance = float(np.take(self.hdf['entry1/Amor/detector/transformation/distance'], 0))
-        self.chopperDetectorDistance = self.detectorDistance-float(np.take(self.hdf['entry1/Amor/chopper/distance'], 0))
+        #self.chopperDetectorDistance = self.detectorDistance-float(np.take(self.hdf['entry1/Amor/chopper/distance'], 0))
+        self.chopperDetectorDistance = 19000
         self.tofCut = const.lamdaCut*self.chopperDetectorDistance/const.hdm*1.e-13
 
         polarizationStates = [
@@ -441,12 +390,12 @@ class AmorData:
                 'mm',
                 ]
         try:
-            self.mu   = float(np.take(self.hdf['/entry1/Amor/master_parameters/mu/value'], 0))
-            self.nu   = float(np.take(self.hdf['/entry1/Amor/master_parameters/nu/value'], 0))
+            self.mu   = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/mu'], 0))
+            self.nu   = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/nu'], 0))
             self.kap  = 0.245
-            #self.kap  = float(np.take(self.hdf['/entry1/Amor/master_parameters/kap/value'], 0))
-            self.kad  = float(np.take(self.hdf['/entry1/Amor/master_parameters/kad/value'], 0))
-            self.div  = float(np.take(self.hdf['/entry1/Amor/master_parameters/div/value'], 0))
+            #self.kap  = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/kap/value'], 0))
+            self.kad  = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/kad'], 0))
+            self.div  = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/div'], 0))
             self.chopperSpeed = float(np.take(self.hdf['/entry1/Amor/chopper/rotation_speed'], 0))
             #self.chopperSpeed = float(np.take(self.hdf['/entry1/Amor/chopper/rotation_speed/value'], 0))
             self.chopperPhase = float(np.take(self.hdf['/entry1/Amor/chopper/phase'], 0))
@@ -459,6 +408,7 @@ class AmorData:
         except(KeyError, IndexError):
             logging.warning("     using parameters from nicos cache")
             year_date = str(self.start_date).replace('-', '/', 1)
+            # TODO: check new cache pathes
             #cachePath = '/home/amor/nicosdata/amor/cache/'
             #cachePath = '/home/nicos/amorcache/'
             cachePath = '/home/amor/cache/'
@@ -474,7 +424,8 @@ class AmorData:
             self.div = float(value)
             value = str(subprocess.getoutput(f'/usr/bin/grep "value" {cachePath}nicos-ch1_speed/{year_date}')).split('\t')[-1]
             self.chopperSpeed = float(value)
-            self.chopperPhase = self.config.chopperPhase
+            value = str(subprocess.getoutput(f'/usr/bin/grep "value" {cachePath}nicos-chopper_phase/{year_date}')).split('\t')[-1]
+            self.chopperPhase = float(value)
         self.tau     = 30. / self.chopperSpeed
 
         if self.config.muOffset:
