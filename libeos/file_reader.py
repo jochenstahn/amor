@@ -179,12 +179,12 @@ class AmorData:
 
         self.read_proton_current_stream()
 
-        self.read_event_stream()
-        totalNumber = np.shape(self.tof_e)[0]
-
-        #self.sort_pulses()
-
         self.associate_pulse_with_monitor()
+
+        self.read_event_stream()
+        totalNumber = np.shape(self.tof_e[self.tof_e<=self.stopTime])[0]
+
+        self.correct_for_chopper_phases()
 
         self.extract_walltime(norm)
 
@@ -199,11 +199,9 @@ class AmorData:
 
         self.filter_strange_times()
 
-        self.merge_frames()
+        self.merge_time_frames()
 
         self.filter_project_x()
-
-        self.correct_for_chopper_phases()
 
         self.correct_for_chopper_opening()
 
@@ -214,27 +212,21 @@ class AmorData:
         logging.info(f'      number of events: total = {totalNumber:7d}, filtered = {np.shape(self.lamda_e)[0]:7d}')
 
     def read_chopper_trigger_stream(self):
-        self.chopper1TriggerTime = np.array(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_zero'][:], dtype=np.int64)
+        self.chopper1TriggerTime = np.array(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_zero'][:-2], dtype=np.int64)
         #self.chopper2TriggerTime = self.chopper1TriggerTime 
         #                           + np.array(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_offset'][:], dtype=np.int64)
         self.startTime = self.chopper1TriggerTime[0]
-        self.stopTime = self.chopper1TriggerTime[-3]
+        self.stopTime = self.chopper1TriggerTime[-1]
         if self.seriesStartTime is None:
             self.seriesStartTime = self.startTime 
             logging.debug(f'      series start time (epoch): {self.seriesStartTime/1e9:13.2f} s')
-        self.pulseTimeS = self.chopper1TriggerTime[0:-1] - self.seriesStartTime
+        self.pulseTimeS = self.chopper1TriggerTime - self.seriesStartTime
         logging.debug(f'      epoch time from {self.startTime/1e9:13.2f} s to {self.stopTime/1e9:13.2f} s')
         logging.debug(f'      => counting time {self.stopTime/1e9-self.startTime/1e9:8.2f} s')
 
     def read_proton_current_stream(self):
         self.currentTime = np.array(self.hdf['entry1/Amor/detector/proton_current/time'][:], dtype=np.int64)
         self.current = np.array(self.hdf['entry1/Amor/detector/proton_current/value'][:,0], dtype=float)
-
-    def read_event_stream(self):
-        self.tof_e = np.array(self.hdf['/entry1/Amor/detector/data/event_time_offset'][:])/1.e9
-        self.pixelID_e = np.array(self.hdf['/entry1/Amor/detector/data/event_id'][:], dtype=np.int64)
-        self.dataPacket_p = np.array(self.hdf['/entry1/Amor/detector/data/event_index'][:], dtype=np.uint64)
-        self.dataPacketTime_p = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][:], dtype=np.int64)
 
     def get_current_per_pulse(self, pulseTimeS, currentTimeS, currents):
         # add currents for early pulses and current time value after last pulse (j+1)
@@ -259,6 +251,15 @@ class AmorData:
             self.monitorPerPulse = np.ones(np.shape(self.pulseTimeS)[0])*2*self.tau
         else: # pulses
             self.monitorPerPulse = np.ones(np.shape(self.pulseTimeS)[0])
+
+    def read_event_stream(self):
+        self.tof_e = np.array(self.hdf['/entry1/Amor/detector/data/event_time_offset'][:])/1.e9
+        self.pixelID_e = np.array(self.hdf['/entry1/Amor/detector/data/event_id'][:], dtype=np.int64)
+        self.dataPacket_p = np.array(self.hdf['/entry1/Amor/detector/data/event_index'][:], dtype=np.uint64)
+        self.dataPacketTime_p = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][:], dtype=np.int64)
+
+    def correct_for_chopper_phases(self):
+        self.tof_e += self.tau * (self.ch1TriggerPhase + self.chopperPhase/2)/180
 
     def extract_walltime(self, norm):
         if nb_helpers:
@@ -285,7 +286,7 @@ class AmorData:
             self.tof_e = self.tof_e[filter_e]
             self.pixelID_e = self.pixelID_e[filter_e]
             self.wallTime_e = self.wallTime_e[filter_e]
-            logging.info(f'      low-beam rejected pulses: {np.shape(self.monitorPerPulse)[0]-np.shape(goodTimeS)[0]} out of {np.shape(self.monitorPerPulse)[0]}')
+            logging.info(f'      low-beam rejected pulses: {np.shape(self.monitorPerPulse)[0]-1-np.shape(goodTimeS)[0]} out of {np.shape(self.monitorPerPulse)[0]-1}')
             logging.info(f'          with {np.shape(filter_e)[0]-np.shape(self.tof_e)[0]} events')
             logging.info(f'      average counts per pulse =  {np.shape(self.tof_e)[0] / np.shape(goodTimeS[goodTimeS!=0])[0]:7.1f}')
 
@@ -308,7 +309,6 @@ class AmorData:
                     )
             return
         # lambda
-        print(self.chopperDetectorDistance)
         self.lamda_e = (1.e13*const.hdm)*self.tof_e/(self.chopperDetectorDistance+self.detXdist_e)
         self.mask_e = np.logical_and(self.mask_e, (self.config.lambdaRange[0]<=self.lamda_e) & (
                     self.lamda_e<=self.config.lambdaRange[1]))
@@ -331,9 +331,6 @@ class AmorData:
             self.qx_e = 2*np.pi * ((np.cos(np.deg2rad(alphaF_e)) - np.cos(np.deg2rad(alphaI)))/self.lamda_e)
             self.header.measurement_scheme = 'energy-dispersive'
 
-    def correct_for_chopper_phases(self):
-        self.tof_e += self.tau * (self.ch1TriggerPhase + self.chopperPhase/2)/180
-
     def correct_for_chopper_opening(self):
         # correct tof for beam size effect at chopper:  t_cor = (delta / 180 deg) * tau
         if self.config.incidentAngle == 'alphaF':
@@ -354,7 +351,8 @@ class AmorData:
             # define mask and filter y range
             self.mask_e = (self.config.yRange[0]<=detY_e) & (detY_e<=self.config.yRange[1])
 
-    def merge_frames(self):
+    # TODO: - handle each neutron pulse individually, - associate with correct monitor also for slow neutrons
+    def merge_time_frames(self):
         total_offset = self.tofCut + self.tau * (self.ch1TriggerPhase + self.chopperPhase/2)/180
         if nb_helpers:
             self.tof_e = nb_helpers.merge_frames(self.tof_e, self.tofCut, self.tau, total_offset)
@@ -373,22 +371,10 @@ class AmorData:
     def read_individual_header(self):
         self.chopperDistance = float(np.take(self.hdf['entry1/Amor/chopper/pair_separation'], 0))
         self.detectorDistance = float(np.take(self.hdf['entry1/Amor/detector/transformation/distance'], 0))
-        #self.chopperDetectorDistance = self.detectorDistance-float(np.take(self.hdf['entry1/Amor/chopper/distance'], 0))
-        self.chopperDetectorDistance = 19000
+        self.chopperDetectorDistance = self.detectorDistance-float(np.take(self.hdf['entry1/Amor/chopper/distance'], 0))
         self.tofCut = const.lamdaCut*self.chopperDetectorDistance/const.hdm*1.e-13
 
-        polarizationStates = [
-                'undefined',
-                'unpolarized',
-                'po',
-                'mo',
-                'op',
-                'pp',
-                'mp',
-                'om',
-                'pm',
-                'mm',
-                ]
+        polarizationConfigs = ['undefined', 'unpolarized', 'po', 'mo', 'op', 'pp', 'mp', 'om', 'pm', 'mm']
         try:
             self.mu   = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/mu'], 0))
             self.nu   = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/nu'], 0))
@@ -397,14 +383,12 @@ class AmorData:
             self.kad  = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/kad'], 0))
             self.div  = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/div'], 0))
             self.chopperSpeed = float(np.take(self.hdf['/entry1/Amor/chopper/rotation_speed'], 0))
-            #self.chopperSpeed = float(np.take(self.hdf['/entry1/Amor/chopper/rotation_speed/value'], 0))
             self.chopperPhase = float(np.take(self.hdf['/entry1/Amor/chopper/phase'], 0))
-            #self.chopperPhase = float(np.take(self.hdf['/entry1/Amor/chopper/phase/value'], 0))
             self.ch1TriggerPhase = float(np.take(self.hdf['/entry1/Amor/chopper/ch1_trigger_phase'], 0))
             self.ch2TriggerPhase = float(np.take(self.hdf['/entry1/Amor/chopper/ch2_trigger_phase'], 0))
-            polarizationState = float(np.take(self.hdf['/entry1/Amor/polarization/spin_encoding/value'], 0))
-            polarization  = polarizationStates[int(polarizationState)]
-            logging.debug(f'      polarization: {polarization}')
+            polarizationConfigLabel = float(np.take(self.hdf['/entry1/Amor/polarization/configuration/value'], 0))
+            polarizationConfig = polarizationConfigs[int(polarizationConfigLabel)]
+            logging.debug(f'      polarization configuration: {polarizationConfig}')
         except(KeyError, IndexError):
             logging.warning("     using parameters from nicos cache")
             year_date = str(self.start_date).replace('-', '/', 1)
