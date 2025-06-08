@@ -410,6 +410,11 @@ class AmorData:
             self.chopperSpeed = float(value)
             value = str(subprocess.getoutput(f'/usr/bin/grep "value" {cachePath}nicos-chopper_phase/{year_date}')).split('\t')[-1]
             self.chopperPhase = float(value)
+            value = str(subprocess.getoutput(f'/usr/bin/grep "value" {cachePath}nicos-ch1_trigger_phase/{year_date}')).split('\t')[-1]
+            self.ch1TriggerPhase = float(value)
+            value = str(subprocess.getoutput(f'/usr/bin/grep "value" {cachePath}nicos-ch2_trigger_phase/{year_date}')).split('\t')[-1]
+            self.ch2TriggerPhase = float(value)
+            
         self.tau     = 30. / self.chopperSpeed
 
         if self.config.muOffset:
