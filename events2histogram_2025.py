@@ -144,8 +144,7 @@ class Meta:
         year_date = str(datetime.today()).split(' ')[0].replace("-", "/", 1)
 
         # deside from where to take the control paralemters
-        #try:
-        if True:
+        try:
             self.mu   = float(np.take(fh['/entry1/Amor/instrument_control_parameters/mu'], 0))
             self.nu   = float(np.take(fh['/entry1/Amor/instrument_control_parameters/nu'], 0))
             self.kap  = float(np.take(fh['/entry1/Amor/instrument_control_parameters/kap'], 0))
@@ -155,26 +154,26 @@ class Meta:
             chopperPhase      = float(np.take(fh['/entry1/Amor/chopper/phase'], 0))
             ch1TriggerPhase   = float(np.take(fh['/entry1/Amor/chopper/ch1_trigger_phase'], 0))
             polarizationConfigLabel = float(np.take(fh['/entry1/Amor/polarization/configuration/value'], 0))
-        #except (KeyError, IndexError):
-        #    logging.warning(f"     using parameters from nicos cache")
-        #    cachePath = '/home/amor/cache/'
-        #    value = str(subprocess.getoutput('/usr/bin/grep "value" '+cachePath+'nicos-mu/'+year_date)).split('\t')[-1]
-        #    self.mu = float(value)
-        #    value = str(subprocess.getoutput('/usr/bin/grep "value" '+cachePath+'nicos-nu/'+year_date)).split('\t')[-1]
-        #    self.nu = float(value)
-        #    value = str(subprocess.getoutput('/usr/bin/grep "value" '+cachePath+'nicos-kap/'+year_date)).split('\t')[-1]
-        #    self.kap = float(value)
-        #    value = str(subprocess.getoutput('/usr/bin/grep "value" '+cachePath+'nicos-kad/'+year_date)).split('\t')[-1]
-        #    self.kad = float(value)
-        #    value = str(subprocess.getoutput('/usr/bin/grep "value" '+cachePath+'nicos-div/'+year_date)).split('\t')[-1]
-        #    self.div = float(value)
-        #    value = str(subprocess.getoutput('/usr/bin/grep "value" '+cachePath+'nicos-ch1_speed/'+year_date)).split('\t')[-1]
-        #    chopperSpeed = float(value)
-        #    value = str(subprocess.getoutput('/usr/bin/grep "value" '+cachePath+'nicos-chopper_speed'+year_date)).split('\t')[-1]
-        #    chopperPhase = float(value)
-        #    value = str(subprocess.getoutput('/usr/bin/grep "value" '+cachePath+'nicos-chopper_phase'+year_date)).split('\t')[-1]
-        #    ch1TriggerPhase = float(value)
-        #    value = str(subprocess.getoutput('/usr/bin/grep "value" '+cachePath+'nicos-ch1_trigger_phase'+year_date)).split('\t')[-1]
+        except (KeyError, IndexError):
+            logging.warning(f"     using parameters from nicos cache")
+            cachePath = '/home/amor/cache/'
+            value = str(subprocess.getoutput('/usr/bin/grep "value" '+cachePath+'nicos-mu/'+year_date)).split('\t')[-1]
+            self.mu = float(value)
+            value = str(subprocess.getoutput('/usr/bin/grep "value" '+cachePath+'nicos-nu/'+year_date)).split('\t')[-1]
+            self.nu = float(value)
+            value = str(subprocess.getoutput('/usr/bin/grep "value" '+cachePath+'nicos-kap/'+year_date)).split('\t')[-1]
+            self.kap = float(value)
+            value = str(subprocess.getoutput('/usr/bin/grep "value" '+cachePath+'nicos-kad/'+year_date)).split('\t')[-1]
+            self.kad = float(value)
+            value = str(subprocess.getoutput('/usr/bin/grep "value" '+cachePath+'nicos-div/'+year_date)).split('\t')[-1]
+            self.div = float(value)
+            value = str(subprocess.getoutput('/usr/bin/grep "value" '+cachePath+'nicos-ch1_speed/'+year_date)).split('\t')[-1]
+            chopperSpeed = float(value)
+            value = str(subprocess.getoutput('/usr/bin/grep "value" '+cachePath+'nicos-chopper_speed'+year_date)).split('\t')[-1]
+            chopperPhase = float(value)
+            value = str(subprocess.getoutput('/usr/bin/grep "value" '+cachePath+'nicos-chopper_phase'+year_date)).split('\t')[-1]
+            ch1TriggerPhase = float(value)
+            value = str(subprocess.getoutput('/usr/bin/grep "value" '+cachePath+'nicos-ch1_trigger_phase'+year_date)).split('\t')[-1]
 
         self.tau = 30. / chopperSpeed
  

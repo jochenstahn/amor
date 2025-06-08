@@ -31,8 +31,8 @@ class Defaults:
     yRange                      = [11, 41]
     qzRange                     = [0.005, 0.30]
     chopperSpeed                = 500
-    chopperPhase                = -13.5
-    chopperPhaseOffset          = 7
+    chopperPhase                = 0.0
+    chopperPhaseOffset          = -9.1
     muOffset                    = 0
     mu                          = 0
     nu                          = 0

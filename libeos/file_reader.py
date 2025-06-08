@@ -378,8 +378,7 @@ class AmorData:
         try:
             self.mu   = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/mu'], 0))
             self.nu   = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/nu'], 0))
-            self.kap  = 0.245
-            #self.kap  = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/kap/value'], 0))
+            self.kap  = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/kap'], 0))
             self.kad  = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/kad'], 0))
             self.div  = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/div'], 0))
             self.chopperSpeed = float(np.take(self.hdf['/entry1/Amor/chopper/rotation_speed'], 0))
@@ -393,8 +392,6 @@ class AmorData:
             logging.warning("     using parameters from nicos cache")
             year_date = str(self.start_date).replace('-', '/', 1)
             # TODO: check new cache pathes
-            #cachePath = '/home/amor/nicosdata/amor/cache/'
-            #cachePath = '/home/nicos/amorcache/'
             cachePath = '/home/amor/cache/'
             value = str(subprocess.getoutput(f'/usr/bin/grep "value" {cachePath}nicos-mu/{year_date}')).split('\t')[-1]
             self.mu = float(value)

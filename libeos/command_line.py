@@ -185,6 +185,7 @@ def command_line_options():
         )
     experiment_config = ExperimentConfig(
         sampleModel                  = clas.sampleModel,
+        chopperSpeed                 = clas.chopperSpeed,
         chopperPhase                 = clas.chopperPhase,
         chopperPhaseOffset           = clas.chopperPhaseOffset,
         yRange                       = clas.yRange,
