@@ -2,6 +2,9 @@ __version__ = '2025-06-07'
 
 # essential changes with regard to 2024 version 
 # - accepts new hdf structure
+# TODO:
+# - data path for output
+# - solve confusion between negative file number and ranges (check for '-')
 
 import os
 import sys
