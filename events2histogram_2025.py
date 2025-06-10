@@ -908,6 +908,8 @@ def commandLineArgs():
                             help ="chopper speed in rpm")
     clas.add_argument("-d", "--dataPath",  
                             help ="relative path to directory with .hdf files")
+    clas.add_argument("-D", "--absDataPath",  
+                            help ="absolute path to directory with .hdf files")
     clas.add_argument("-f", "--fileIdent",       
                             default='0',                               
                             help ="file number or offset (if negative)")
@@ -983,12 +985,14 @@ def get_dataPath(clas):
         dataPath = clas.dataPath + '/'
         if not os.path.exists(dataPath):
              sys.exit('# *** the directory "'+dataPath+'" does not exist ***')
+    if clas.absDataPath:
+        dataPath = clas.absDataPath + '/'
     elif os.path.exists('./raw'):
         dataPath  = "./raw/"
     elif os.path.exists('../raw'):
         dataPath  = "../raw/"
     else:
-        sys.exit('# *** please provide the path to the .hdf data files (-d <path>, default is "./raw")')
+        sys.exit('# *** please provide the path to the .hdf data files (-d <rel path> | -D <abs path>, default is "./raw")')
 
     return dataPath
 
