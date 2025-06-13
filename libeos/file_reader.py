@@ -175,18 +175,17 @@ class AmorData:
             self.header.measurement_data_files.append(fileio.File(file=fileName.split('/')[-1], timestamp=self.fileDate))
         logging.info(f'      mu = {self.mu:6.3f}, nu = {self.nu:6.3f}, kap = {self.kap:6.3f}, kad = {self.kad:6.3f}')
 
+        self.read_event_stream()
+
+        self.correct_for_chopper_phases()
+
         self.read_chopper_trigger_stream()
+
+        self.extract_walltime(norm)
 
         self.read_proton_current_stream()
 
         self.associate_pulse_with_monitor()
-
-        self.read_event_stream()
-        totalNumber = np.shape(self.tof_e[self.tof_e<=self.stopTime])[0]
-
-        self.correct_for_chopper_phases()
-
-        self.extract_walltime(norm)
 
         # following lines: debugging output to trace the time-offset of proton current and neutron pulses
         if self.config.monitorType == 'x':
@@ -209,18 +208,45 @@ class AmorData:
 
         self.filter_qz_range(norm)
 
-        logging.info(f'      number of events: total = {totalNumber:7d}, filtered = {np.shape(self.lamda_e)[0]:7d}')
+        logging.info(f'      number of events: total = {self.totalNumber:7d}, filtered = {np.shape(self.lamda_e)[0]:7d}')
+
+    def read_event_stream(self):
+        self.tof_e = np.array(self.hdf['/entry1/Amor/detector/data/event_time_offset'][:])/1.e9
+        self.pixelID_e = np.array(self.hdf['/entry1/Amor/detector/data/event_id'][:], dtype=np.int64)
+        self.dataPacket_p = np.array(self.hdf['/entry1/Amor/detector/data/event_index'][:], dtype=np.uint64)
+        self.dataPacketTime_p = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][:], dtype=np.int64)
+
+    def correct_for_chopper_phases(self):
+        self.tof_e += self.tau * (self.ch1TriggerPhase + self.chopperPhase/2)/180
+
+    def extract_walltime(self, norm):
+        if nb_helpers:
+            self.wallTime_e = nb_helpers.extract_walltime(self.tof_e, self.dataPacket_p, self.dataPacketTime_p)
+        else:
+            self.wallTime_e = np.empty(np.shape(self.tof_e)[0], dtype=np.int64)
+            for i in range(len(self.dataPacket_p)-1):
+                self.wallTime_e[self.dataPacket_p[i]:self.dataPacket_p[i+1]] = self.dataPacketTime_p[i]
+            self.wallTime_e[self.dataPacket_p[-1]:] = self.dataPacketTime_p[-1]
+        self.wallTime_e -= np.int64(self.seriesStartTime)
+        logging.debug(f'      wall time from {self.wallTime_e[0]/1e9:6.1f} s to {self.wallTime_e[-1]/1e9:6.1f} s')
 
     def read_chopper_trigger_stream(self):
         self.chopper1TriggerTime = np.array(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_zero'][:-2], dtype=np.int64)
-        #self.chopper2TriggerTime = self.chopper1TriggerTime 
+        #self.chopper2TriggerTime = self.chopper1TriggerTime + np.array(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time'][:-2], dtype=np.int64)
         #                           + np.array(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_offset'][:], dtype=np.int64)
-        self.startTime = self.chopper1TriggerTime[0]
-        self.stopTime = self.chopper1TriggerTime[-1]
+        if np.shape(self.chopper1TriggerTime)[0] > 2:
+            self.startTime = self.chopper1TriggerTime[0]
+            self.stopTime = self.chopper1TriggerTime[-1]
+            self.pulseTimeS = self.chopper1TriggerTime
+        else:
+            logging.warn('     no chopper trigger data available, using event steram instead')
+            self.startTime = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][0], dtype=np.int64)
+            self.stopTime = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][-2], dtype=np.int64)
+            self.pulseTimeS = np.arange(self.startTime, self.stopTime, tau) 
         if self.seriesStartTime is None:
-            self.seriesStartTime = self.startTime 
+            self.seriesStartTime = self.startTime
             logging.debug(f'      series start time (epoch): {self.seriesStartTime/1e9:13.2f} s')
-        self.pulseTimeS = self.chopper1TriggerTime - self.seriesStartTime
+        self.pulseTimeS -= self.seriesStartTime
         logging.debug(f'      epoch time from {self.startTime/1e9:13.2f} s to {self.stopTime/1e9:13.2f} s')
         logging.debug(f'      => counting time {self.stopTime/1e9-self.startTime/1e9:8.2f} s')
 
@@ -252,26 +278,6 @@ class AmorData:
         else: # pulses
             self.monitorPerPulse = np.ones(np.shape(self.pulseTimeS)[0])
 
-    def read_event_stream(self):
-        self.tof_e = np.array(self.hdf['/entry1/Amor/detector/data/event_time_offset'][:])/1.e9
-        self.pixelID_e = np.array(self.hdf['/entry1/Amor/detector/data/event_id'][:], dtype=np.int64)
-        self.dataPacket_p = np.array(self.hdf['/entry1/Amor/detector/data/event_index'][:], dtype=np.uint64)
-        self.dataPacketTime_p = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][:], dtype=np.int64)
-
-    def correct_for_chopper_phases(self):
-        self.tof_e += self.tau * (self.ch1TriggerPhase + self.chopperPhase/2)/180
-
-    def extract_walltime(self, norm):
-        if nb_helpers:
-            self.wallTime_e = nb_helpers.extract_walltime(self.tof_e, self.dataPacket_p, self.dataPacketTime_p)
-        else:
-            self.wallTime_e = np.empty(np.shape(self.tof_e)[0], dtype=np.int64)
-            for i in range(len(self.dataPacket_p)-1):
-                self.wallTime_e[self.dataPacket_p[i]:self.dataPacket_p[i+1]] = self.dataPacketTime_p[i]
-            self.wallTime_e[self.dataPacket_p[-1]:] = self.dataPacketTime_p[-1]
-        self.wallTime_e -= np.int64(self.seriesStartTime)
-        logging.debug(f'      wall time from {self.wallTime_e[0]/1e9:6.1f} s to {self.wallTime_e[-1]/1e9:6.1f} s')
-
     def average_events_per_pulse(self):
         if self.config.monitorType == 'p':
             for i, time in enumerate(self.pulseTimeS):
@@ -280,6 +286,7 @@ class AmorData:
 
     def monitor_threshold(self):
         #if self.config.monitorType == 'p': # fix to check for file compatibility
+        self.totalNumber = np.shape(self.tof_e[self.tof_e<=self.stopTime])[0]
         if True:
             goodTimeS = self.pulseTimeS[self.monitorPerPulse!=0]
             filter_e = np.where(np.isin(self.wallTime_e, goodTimeS), True, False)

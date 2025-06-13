@@ -52,6 +52,7 @@ class ReaderConfig:
 class ExperimentConfig:
     incidentAngle: str 
     chopperPhase: float
+    chopperSpeed: float
     yRange: Tuple[float, float]
     lambdaRange: Tuple[float, float]
     qzRange: Tuple[float, float]
