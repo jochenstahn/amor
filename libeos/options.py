@@ -29,7 +29,7 @@ class Defaults:
     thetaRange                  = [-12., 12.]
     thetaRangeR                 = [-0.75, 0.75]
     yRange                      = [11, 41]
-    qzRange                     = [0.005, 0.30]
+    qzRange                     = [0.005, 0.51]
     chopperSpeed                = 500
     chopperPhase                = 0.0
     chopperPhaseOffset          = -9.1

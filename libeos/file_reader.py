@@ -217,6 +217,7 @@ class AmorData:
         self.dataPacketTime_p = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][:], dtype=np.int64)
 
     def correct_for_chopper_phases(self):
+        #print(f'chopperTriggerPhase: {self.ch1TriggerPhase}')
         self.tof_e += self.tau * (self.ch1TriggerPhase + self.chopperPhase/2)/180
 
     def extract_walltime(self, norm):
@@ -242,7 +243,7 @@ class AmorData:
             logging.warn('     no chopper trigger data available, using event steram instead')
             self.startTime = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][0], dtype=np.int64)
             self.stopTime = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][-2], dtype=np.int64)
-            self.pulseTimeS = np.arange(self.startTime, self.stopTime, tau) 
+            self.pulseTimeS = np.arange(self.startTime, self.stopTime, self.tau*1e9) 
         if self.seriesStartTime is None:
             self.seriesStartTime = self.startTime
             logging.debug(f'      series start time (epoch): {self.seriesStartTime/1e9:13.2f} s')
@@ -298,7 +299,7 @@ class AmorData:
             logging.info(f'      average counts per pulse =  {np.shape(self.tof_e)[0] / np.shape(goodTimeS[goodTimeS!=0])[0]:7.1f}')
 
     def filter_qz_range(self, norm):
-        if self.config.qzRange[1]<0.3 and not norm:
+        if self.config.qzRange[1]<0.5 and not norm:
             self.mask_e = np.logical_and(self.mask_e,
                                          (self.config.qzRange[0]<=self.qz_e) & (self.qz_e<=self.config.qzRange[1]))
         self.detZ_e = self.detZ_e[self.mask_e]
@@ -388,11 +389,26 @@ class AmorData:
             self.kap  = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/kap'], 0))
             self.kad  = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/kad'], 0))
             self.div  = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/div'], 0))
-            self.chopperSpeed = float(np.take(self.hdf['/entry1/Amor/chopper/rotation_speed'], 0))
-            self.chopperPhase = float(np.take(self.hdf['/entry1/Amor/chopper/phase'], 0))
             self.ch1TriggerPhase = float(np.take(self.hdf['/entry1/Amor/chopper/ch1_trigger_phase'], 0))
             self.ch2TriggerPhase = float(np.take(self.hdf['/entry1/Amor/chopper/ch2_trigger_phase'], 0))
-            polarizationConfigLabel = float(np.take(self.hdf['/entry1/Amor/polarization/configuration/value'], 0))
+            try: 
+                chopperTriggerTime = float(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_zero'][2])\
+                                     - float(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_zero'][1])
+                self.tau = int(1e-6*chopperTriggerTime/2)*(1e-3)
+                self.chopperSpeed = 30/self.tau
+                chopperTriggerTimeDiff =  float(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_offset'][2])
+                chopperTriggerPhase = 180e-9*chopperTriggerTimeDiff/self.tau
+                #TODO: check the next line
+                self.chopperPhase = chopperTriggerPhase + self.ch1TriggerPhase - self.ch2TriggerPhase
+            except(KeyError, IndexError):
+                logging.debug('      chopper speed and phase taken from .hdf file')
+                self.chopperSpeed = float(np.take(self.hdf['/entry1/Amor/chopper/rotation_speed'], 0))
+                self.chopperPhase = float(np.take(self.hdf['/entry1/Amor/chopper/phase'], 0))
+                self.tau = 30/self.chopperSpeed
+            try:
+                polarizationConfigLabel = float(np.take(self.hdf['/entry1/Amor/polarization/configuration/value'], 0))
+            except(KeyError, IndexError):
+                polarizationConfigLabel = 0
             polarizationConfig = polarizationConfigs[int(polarizationConfigLabel)]
             logging.debug(f'      polarization configuration: {polarizationConfig}')
         except(KeyError, IndexError):
@@ -419,14 +435,20 @@ class AmorData:
             value = str(subprocess.getoutput(f'/usr/bin/grep "value" {cachePath}nicos-ch2_trigger_phase/{year_date}')).split('\t')[-1]
             self.ch2TriggerPhase = float(value)
             
-        self.tau     = 30. / self.chopperSpeed
+            self.tau     = 30. / self.chopperSpeed
 
         if self.config.muOffset:
+            logging.debug(f'        set muOffset = {self.config.muOffset}')
             self.mu += self.config.muOffset
         if self.config.mu:
+            logging.debug(f'        replaced mu = {self.mu} with {self.config.mu}')
             self.mu = self.config.mu
         if self.config.nu:
+            logging.debug(f'        replaced nu = {self.nu} with {self.config.nu}')
             self.nu = self.config.nu
+        if self.config.chopperPhaseOffset:
+            logging.debug(f'        replaced ch1TriggerPhase = {self.ch1TriggerPhase} with {self.config.chopperPhaseOffset}')
+            self.ch1TriggerPhase = self.config.chopperPhaseOffset
 
         # extract start time as unix time, adding UTC offset of 1h to time string
         dz = datetime.fromisoformat(self.hdf['/entry1/start_time'][0].decode('utf-8'))
