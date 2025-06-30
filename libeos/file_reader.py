@@ -161,7 +161,8 @@ class AmorData:
                                                    round(self.mu+self.kap+self.kad+0.5*self.div, 3),
                                                    'deg'),
                 wavelength = fileio.ValueRange(const.lamdaCut, self.config.lambdaRange[1], 'angstrom'),
-                polarization = fileio.Polarization.unpolarized,
+                #polarization = fileio.Polarization.unpolarized,
+                polarization = self.polarizationConfig
                 )
             self.header.measurement_instrument_settings.mu = fileio.Value(round(self.mu, 3), 'deg', comment='sample angle to horizon')
             self.header.measurement_instrument_settings.nu = fileio.Value(round(self.nu, 3), 'deg', comment='detector angle to horizon')
@@ -394,7 +395,7 @@ class AmorData:
             try: 
                 chopperTriggerTime = float(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_zero'][2])\
                                      - float(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_zero'][1])
-                self.tau = int(1e-6*chopperTriggerTime/2)*(1e-3)
+                self.tau = int(1e-6*chopperTriggerTime/2+0.5)*(1e-3)
                 self.chopperSpeed = 30/self.tau
                 chopperTriggerTimeDiff =  float(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_offset'][2])
                 chopperTriggerPhase = 180e-9*chopperTriggerTimeDiff/self.tau
@@ -406,11 +407,11 @@ class AmorData:
                 self.chopperPhase = float(np.take(self.hdf['/entry1/Amor/chopper/phase'], 0))
                 self.tau = 30/self.chopperSpeed
             try:
-                polarizationConfigLabel = float(np.take(self.hdf['/entry1/Amor/polarization/configuration/value'], 0))
+                polarizationConfigLabel = int(self.hdf['/entry1/Amor/polarization/configuration/value'][0])
             except(KeyError, IndexError):
                 polarizationConfigLabel = 0
-            polarizationConfig = polarizationConfigs[int(polarizationConfigLabel)]
-            logging.debug(f'      polarization configuration: {polarizationConfig}')
+            self.polarizationConfig = polarizationConfigs[polarizationConfigLabel]
+            logging.debug(f'      polarization configuration: {self.polarizationConfig} (index {polarizationConfigLabel} (index {polarizationConfigLabel}))')
         except(KeyError, IndexError):
             logging.warning("     using parameters from nicos cache")
             year_date = str(self.start_date).replace('-', '/', 1)
@@ -437,6 +438,7 @@ class AmorData:
             
             self.tau     = 30. / self.chopperSpeed
 
+        logging.debug(f'        tau = {self.tau} s')
         if self.config.muOffset:
             logging.debug(f'        set muOffset = {self.config.muOffset}')
             self.mu += self.config.muOffset
