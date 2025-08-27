@@ -8,7 +8,7 @@ from orsopy import fileio
 from .command_line import expand_file_list
 from .file_reader import AmorData
 from .header import Header
-from .options import EOSConfig
+from .options import EOSConfig, IncidentAngle, MonitorType, NormalisationMethod
 from .instrument import Grid
 
 class AmorReduction:
@@ -22,7 +22,10 @@ class AmorReduction:
         self.header = Header()
         self.header.reduction.call = config.call_string()
 
-        self.monitorUnit = {'n': 'cnts', 'p': 'mC', 't': 's', 'auto': 'pulses'}
+        self.monitorUnit = {MonitorType.neutron_monitor: 'cnts',
+                            MonitorType.proton_charge: 'mC',
+                            MonitorType.time: 's',
+                            MonitorType.auto: 'various'}
 
     def reduce(self):
         if not os.path.exists(f'{self.output_config.outputPath}'):
@@ -353,8 +356,7 @@ class AmorReduction:
             self.normMonitor = np.sum(fromHDF.monitorPerPulse)
             norm_lz, bins_l, bins_z = np.histogram2d(lamda_e, detZ_e, bins = (self.grid.lamda(), self.grid.z()))
             norm_lz = np.where(norm_lz>2, norm_lz, np.nan)
-            if self.reduction_config.normalisationMethod == 'd':
-                # direct reference => invert map vertically
+            if self.reduction_config.normalisationMethod == NormalisationMethod.direct_beam:
                 self.norm_lz = np.flip(norm_lz, 1)
             else:
                 # correct for reference sm reflectivity
@@ -426,7 +428,7 @@ class AmorReduction:
         #alphaF_lz += np.rad2deg( np.arctan( 3.07e-10 * (fromHDF.detectorDistance + detXdist_e) * lamda_lz**2 ) )
         alphaF_lz += np.rad2deg( np.arctan( 3.07e-10 * fromHDF.detectorDistance * lamda_lz**2 ) )
 
-        if self.experiment_config.incidentAngle == 'alphaF':
+        if self.experiment_config.incidentAngle == IncidentAngle.alphaF:
           #alphaI_lz = alphaF_lz
           qz_lz     = 4.0*np.pi * np.sin(np.deg2rad(alphaF_lz)) / lamda_lz
           qx_lz     = self.grid.lz() * 0.
@@ -440,17 +442,17 @@ class AmorReduction:
         int_lz    = np.where(mask_lz, int_lz, np.nan)
         thetaF_lz = np.where(mask_lz, alphaF_lz, np.nan)
 
-        if self.reduction_config.normalisationMethod == 'o':
+        if self.reduction_config.normalisationMethod == NormalisationMethod.over_illuminated:
             logging.debug('      assuming an overilluminated sample and correcting for the angle of incidence')
             thetaN_z  = fromHDF.delta_z + normAngle
             thetaN_lz = np.ones(np.shape(norm_lz))*thetaN_z
             thetaN_lz = np.where(np.absolute(thetaN_lz)>5e-3, thetaN_lz, np.nan)
             mask_lz   = np.logical_and(mask_lz, np.where(np.absolute(thetaN_lz)>5e-3, True, False))
             ref_lz    = (int_lz * np.absolute(thetaN_lz)) / (norm_lz * np.absolute(thetaF_lz))
-        elif self.reduction_config.normalisationMethod == 'u':
+        elif self.reduction_config.normalisationMethod == NormalisationMethod.under_illuminated:
             logging.debug('      assuming an underilluminated sample and ignoring the angle of incidence')
             ref_lz    = (int_lz / norm_lz)
-        elif self.reduction_config.normalisationMethod == 'd':
+        elif self.reduction_config.normalisationMethod == NormalisationMethod.direct_beam:
             logging.debug('      assuming direct beam for normalisation and ignoring the angle of incidence')
             ref_lz    = (int_lz / norm_lz)
         else:

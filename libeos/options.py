@@ -1,8 +1,10 @@
 """
 Classes for stroing various configurations needed for reduction.
 """
-from dataclasses import dataclass, field
-from typing import Optional, Tuple
+import argparse
+from dataclasses import dataclass, field, Field, fields, MISSING
+from enum import StrEnum
+from typing import get_args, get_origin, List, Optional, Tuple, Union
 from datetime import datetime
 from os import path
 import numpy as np
@@ -39,52 +41,196 @@ class Defaults:
     sampleModel                 = None
     lowCurrentThreshold         = 50
     #
-    
-    
 
 @dataclass
-class ReaderConfig:
-    year: int
-    rawPath: Tuple[str]
-    startTime: Optional[float] = 0
+class CommandlineParameterConfig:
+    argument: str # default parameter for command line resutign ins "--argument"
+    add_argument_args: dict # all arguments that will be passed to add_argument method
+    short_form: Optional[str] = None
+    group: str = 'misc'
+    priority: int = 0
+
+    def __gt__(self, other):
+        """
+        Sort required arguments first, then use priority, then name
+        """
+        return (not self.add_argument_args.get('required', False), -self.priority, self.argument)>(
+            not other.add_argument_args.get('required', False), -other.priority, other.argument)
+
+class ArgParsable:
+    def __init_subclass__(cls):
+        # create a nice documentation string that takes help into account
+        cls.__doc__ = cls.__name__ + " Parameters:\n"
+        for key, typ in cls.__annotations__.items():
+            if get_origin(typ) is Union and type(None) in get_args(typ):
+                optional = True
+                typ = get_args(typ)[0]
+            else:
+                optional = False
+
+            value = getattr(cls, key, None)
+            cls.__doc__ += f"    {key} ({typ.__name__})"
+            if isinstance(value, Field):
+                if value.default is not MISSING:
+                    cls.__doc__ += f" = {value.default}"
+                if 'help' in value.metadata:
+                    cls.__doc__ += f" - {value.metadata['help']}"
+            elif value is not None:
+                    cls.__doc__ += f" = {value}"
+            if optional:
+                cls.__doc__ += " [Optional]"
+            cls.__doc__ += "\n"
+        return cls
+
+    @classmethod
+    def get_commandline_parameters(cls) -> List[CommandlineParameterConfig]:
+        """
+        Return a list of arguments used in building the command line parameters.
+
+        Union types besides Optional are not supported.
+        """
+        output = []
+        for field in fields(cls):
+            args={}
+            if field.default is not MISSING:
+                args['default'] = field.default
+                args['required'] = False
+            elif field.default_factory is not MISSING:
+                args['default'] = field.default_factory()
+                args['required'] = False
+            else:
+                args['required'] = True
+            if get_origin(field.type) is Union and type(None) in get_args(field.type):
+                # optional argument
+                typ = get_args(field.type)[0]
+                del(args['default'])
+            else:
+                typ = field.type
+            if get_origin(typ) is list:
+                args['nargs'] = '+'
+                typ = get_args(typ)[0]
+            elif get_origin(typ) is tuple:
+                args['nargs'] = len(get_args(typ))
+                typ = get_args(typ)[0]
+
+            if issubclass(typ, StrEnum):
+                args['choices'] = [ci.value for ci in typ]
+                if field.default is not MISSING:
+                    args['default'] = field.default.value
+                typ = str
+
+            if typ is bool:
+                args['action'] = 'store_false' if field.default else 'store_true'
+            else:
+                args['type'] = typ
+
+            if 'help' in field.metadata:
+                args['help'] = field.metadata['help']
+
+            output.append(CommandlineParameterConfig(
+                    field.name,
+                    add_argument_args=args,
+                    group=field.metadata.get('group', 'misc'),
+                    short_form=field.metadata.get('short', None),
+                    priority=field.metadata.get('priority', 0),
+                    ))
+        return output
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace):
+        """
+        Create the child class from the command line argument Namespace object.
+        All attributes that are not needed for this class are ignored.
+        """
+        inpargs = {}
+        for field in fields(cls):
+            value = getattr(args, field.name)
+            typ = field.type
+            if get_origin(field.type) is Union and type(None) in get_args(field.type):
+                # optional argument
+                typ = get_args(field.type)[0]
+
+            if issubclass(typ, StrEnum):
+                # convert str to enum
+                try:
+                    value = typ(value)
+                except ValueError:
+                    choices = [ci.value for ci in typ]
+                    raise ValueError(f"Parameter --{field.name} has to be one of {choices}")
+
+            inpargs[field.name] = value
+        return cls(**inpargs)
 
 @dataclass
-class ExperimentConfig:
-    incidentAngle: str 
+class ReaderConfig(ArgParsable):
+    year: int = field(default=datetime.now().year,
+                      metadata={'short': 'Y', 'group': 'input data', 'help': 'year the measurement was performed'})
+    rawPath: List[str] = field(default_factory=lambda: ['.', path.join('.','raw'), path.join('..','raw'), path.join('..','..','raw')],
+                               metadata={
+                                   'short': 'rp',
+                                   'group': 'input data',
+                                   'help': 'Search paths for hdf files'})
+    startTime: Optional[float] = None
+
+class IncidentAngle(StrEnum):
+    alphaF = 'alphaF'
+    mu = 'mu'
+    nu = 'nu'
+
+class MonitorType(StrEnum):
+    auto = 'a'
+    proton_charge = 'p'
+    time = 't'
+    neutron_monitor = 'n'
+    debug = 'x'
+
+@dataclass
+class ExperimentConfig(ArgParsable):
     chopperPhase: float
     chopperSpeed: float
     yRange: Tuple[float, float]
     lambdaRange: Tuple[float, float]
-    qzRange: Tuple[float, float]
-    monitorType: str
     lowCurrentThreshold: float
 
+    incidentAngle: IncidentAngle = IncidentAngle.alphaF
     sampleModel: Optional[str] = None
     chopperPhaseOffset: float = 0
     mu: Optional[float] = None
     nu: Optional[float] = None
     muOffset: Optional[float] = None
+    monitorType: MonitorType = field(default=MonitorType.auto, metadata={'short': 'mt',
+        'group': 'input data', 'help': 'one of [a]uto, [p]rotonCurrent, [t]ime or [n]eutronMonitor'})
+
+class NormalisationMethod(StrEnum):
+    direct_beam = 'd'
+    over_illuminated = 'o'
+    under_illuminated = 'u'
 
 @dataclass
-class ReductionConfig:
-    normalisationMethod: str
+class ReductionConfig(ArgParsable):
     qResolution: float
     qzRange: Tuple[float, float]
     thetaRange: Tuple[float, float]
     #thetaRangeR: Tuple[float, float]
-    thetaRangeR: list
+    thetaRangeR: List[float]
+    fileIdentifier: List[str] = field(metadata={'short': 'f', 'priority': 100,
+                                                'group': 'input data', 'help': 'file number(s) or offset (if < 1)'})
 
-    fileIdentifier: list = field(default_factory=lambda: ["0"])
-    scale: list = field(default_factory=lambda: [1]) #per file scaling; if less elements than files use the last one
+    normalisationMethod: NormalisationMethod = field(default=NormalisationMethod.over_illuminated,
+                   metadata={'short': 'nm', 'priority': 90, 'group': 'input data',
+                    'help': 'normalisation method: [o]verillumination, [u]nderillumination, [d]irect_beam'})
+    scale: List[float] = field(default_factory=lambda: [1.]) #per file scaling; if less elements than files use the last one
 
-    autoscale: Optional[Tuple[bool, bool]] = None
-    subtract: Optional[str] = None
-    normalisationFileIdentifier: Optional[list] = None
-    timeSlize: Optional[list] = None
+    autoscale: bool = False # TODO: This made no sense, it is used as single bool.
+    subtract: Optional[str] = field(default=None, metadata={'short': 'sub',
+                    'group': 'input data', 'help': 'File with R(q_z) curve to be subtracted (in .Rqz.ort format)'})
+    normalisationFileIdentifier: Optional[List[str]] = field(default=None, metadata={'short': 'n', 'priority': 90,
+                                  'group': 'input data', 'help': 'file number(s) of normalisation measurement'})
+    timeSlize: Optional[List[float]] = None
 
 @dataclass
-class OutputConfig:
-    outputFormats: list
+class OutputConfig(ArgParsable):
+    outputFormats: List[str]
     outputName: str
     outputPath: str
 

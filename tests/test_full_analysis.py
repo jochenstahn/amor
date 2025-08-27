@@ -35,6 +35,7 @@ class FullAmorTest(TestCase):
 
     def test_time_slicing(self):
         experiment_config = options.ExperimentConfig(
+                chopperSpeed=options.Defaults.chopperSpeed,
                 chopperPhase=-13.5,
                 chopperPhaseOffset=-5,
                 monitorType=options.Defaults.monitorType,
@@ -75,6 +76,7 @@ class FullAmorTest(TestCase):
 
     def test_noslicing(self):
         experiment_config = options.ExperimentConfig(
+                chopperSpeed=options.Defaults.chopperSpeed,
                 chopperPhase=-13.5,
                 chopperPhaseOffset=-5,
                 monitorType=options.Defaults.monitorType,

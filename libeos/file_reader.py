@@ -18,7 +18,7 @@ from orsopy.fileio.model_language import SampleModel
 from . import const
 from .header import Header
 from .instrument import Detector
-from .options import ExperimentConfig, ReaderConfig
+from .options import ExperimentConfig, IncidentAngle, MonitorType, ReaderConfig
 
 try:
     from . import nb_helpers
@@ -162,7 +162,7 @@ class AmorData:
                                                    'deg'),
                 wavelength = fileio.ValueRange(const.lamdaCut, self.config.lambdaRange[1], 'angstrom'),
                 #polarization = fileio.Polarization.unpolarized,
-                polarization = self.polarizationConfig
+                polarization = fileio.Polarization(self.polarizationConfig)
                 )
             self.header.measurement_instrument_settings.mu = fileio.Value(round(self.mu, 3), 'deg', comment='sample angle to horizon')
             self.header.measurement_instrument_settings.nu = fileio.Value(round(self.nu, 3), 'deg', comment='detector angle to horizon')
@@ -189,7 +189,7 @@ class AmorData:
         self.associate_pulse_with_monitor()
 
         # following lines: debugging output to trace the time-offset of proton current and neutron pulses
-        if self.config.monitorType == 'x':
+        if self.config.monitorType == MonitorType.debug:
             cpp, t_bins = np.histogram(self.wallTime_e, self.pulseTimeS)
             np.savetxt('tme.hst', np.vstack((self.pulseTimeS[:-1], cpp, self.monitorPerPulse[:-1])).T)
 
@@ -255,21 +255,21 @@ class AmorData:
     def read_proton_current_stream(self):
         self.currentTime = np.array(self.hdf['entry1/Amor/detector/proton_current/time'][:], dtype=np.int64)
         self.current = np.array(self.hdf['entry1/Amor/detector/proton_current/value'][:,0], dtype=float)
-        if self.config.monitorType == "auto":
+        if self.config.monitorType == MonitorType.auto:
             if self.current.sum() > 1:
-                self.monitorType = 'p'
+                self.monitorType = MonitorType.proton_charge
                 logging.warn('      monitor type set to "proton current"')
             else:
-                self.monitorType = 't'
+                self.monitorType = MonitorType.time
                 logging.warn('      monitor type set to "time"')
 
     def associate_pulse_with_monitor(self):
-        if self.config.monitorType == 'p': # protonCharge
+        if self.config.monitorType == MonitorType.proton_charge:
             self.currentTime -= np.int64(self.seriesStartTime)
             self.monitorPerPulse = self.get_current_per_pulse(self.pulseTimeS, self.currentTime, self.current) * 2*self.tau * 1e-3
             # filter low-current pulses
             self.monitorPerPulse = np.where(self.monitorPerPulse > 2*self.tau * self.config.lowCurrentThreshold * 1e-3, self.monitorPerPulse, 0)
-        elif self.config.monitorType == 't': # countingTime
+        elif self.config.monitorType == MonitorType.time:
             self.monitorPerPulse = np.ones(np.shape(self.pulseTimeS)[0])*2*self.tau
         else: # pulses
             self.monitorPerPulse = np.ones(np.shape(self.pulseTimeS)[0])
@@ -288,13 +288,13 @@ class AmorData:
         return pulseCurrentS
 
     def average_events_per_pulse(self):
-        if self.config.monitorType == 'p':
+        if self.config.monitorType == MonitorType.proton_charge:
             for i, time in enumerate(self.pulseTimeS):
                 events = np.shape(self.wallTime_e[self.wallTime_e == time])[0]
                 logging.info(f'pulse: {i:6.0f}, events: {events:6.0f}, monitor: {self.monitorPerPulse[i]:6.2f}')
 
     def monitor_threshold(self):
-        #if self.config.monitorType == 'p': # fix to check for file compatibility
+        #if self.config.monitorType == MonitorType.proton_charge: # fix to check for file compatibility
         self.totalNumber = np.shape(self.tof_e[self.tof_e<=self.stopTime])[0]
         if True:
             goodTimeS = self.pulseTimeS[self.monitorPerPulse!=0]
@@ -337,7 +337,7 @@ class AmorData:
 
     def correct_for_chopper_opening(self):
         # correct tof for beam size effect at chopper:  t_cor = (delta / 180 deg) * tau
-        if self.config.incidentAngle == 'alphaF':
+        if self.config.incidentAngle == IncidentAngle.alphaF:
             self.tof_e    -= ( self.delta_e / 180. ) * self.tau
         else:
             # TODO: check sign of correction
@@ -359,12 +359,12 @@ class AmorData:
                     self.lamda_e<=self.config.lambdaRange[1]))
         # alpha_f
         # q_z
-        if self.config.incidentAngle == 'alphaF':
+        if self.config.incidentAngle == IncidentAngle.alphaF:
             alphaF_e  = self.nu - self.mu + self.delta_e
             self.qz_e = 4*np.pi*(np.sin(np.deg2rad(alphaF_e))/self.lamda_e)
             # qx_e    = 0.
             self.header.measurement_scheme = 'angle- and energy-dispersive'
-        elif self.config.incidentAngle == 'nu':
+        elif self.config.incidentAngle == IncidentAngle.nu:
             alphaF_e  = (self.nu + self.delta_e + self.kap + self.kad) / 2.
             self.qz_e = 4*np.pi*(np.sin(np.deg2rad(alphaF_e))/self.lamda_e)
             # qx_e    = 0.

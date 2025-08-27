@@ -33,10 +33,10 @@ def setup_logging():
     logfile.setLevel(logging.DEBUG)
     logger.addHandler(logfile)
 
-def update_loglevel(verbose=False, debug=False):
-    if verbose:
+def update_loglevel(verbose=0):
+    if verbose==1:
         logging.getLogger().handlers[0].setLevel(logging.INFO)
-    if debug:
+    if verbose>1:
         console = logging.getLogger().handlers[0]
         console.setLevel(logging.DEBUG)
         formatter = logging.Formatter('%(levelname).1s %(message)s')

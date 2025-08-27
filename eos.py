@@ -20,7 +20,6 @@ import logging
 
 from libeos.command_line import command_line_options
 from libeos.logconfig import setup_logging
-from libeos.reduction import AmorReduction
 
 #=====================================================================================================
 # TODO:
@@ -35,6 +34,9 @@ def main():
 
     # read command line arguments and generate classes holding configuration parameters
     config = command_line_options()
+
+    # only import heavy module if sufficient command line parameters were provieded
+    from libeos.reduction import AmorReduction
     # Create reducer with these arguments
     reducer = AmorReduction(config)
     # Perform actual reduction
