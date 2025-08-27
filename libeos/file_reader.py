@@ -218,19 +218,8 @@ class AmorData:
         self.dataPacketTime_p = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][:], dtype=np.int64)
 
     def correct_for_chopper_phases(self):
-        #print(f'chopperTriggerPhase: {self.ch1TriggerPhase}')
-        self.tof_e += self.tau * (self.ch1TriggerPhase + self.chopperPhase/2)/180
-
-    def extract_walltime(self, norm):
-        if nb_helpers:
-            self.wallTime_e = nb_helpers.extract_walltime(self.tof_e, self.dataPacket_p, self.dataPacketTime_p)
-        else:
-            self.wallTime_e = np.empty(np.shape(self.tof_e)[0], dtype=np.int64)
-            for i in range(len(self.dataPacket_p)-1):
-                self.wallTime_e[self.dataPacket_p[i]:self.dataPacket_p[i+1]] = self.dataPacketTime_p[i]
-            self.wallTime_e[self.dataPacket_p[-1]:] = self.dataPacketTime_p[-1]
-        self.wallTime_e -= np.int64(self.seriesStartTime)
-        logging.debug(f'      wall time from {self.wallTime_e[0]/1e9:6.1f} s to {self.wallTime_e[-1]/1e9:6.1f} s')
+        print(f'tof phase-offset: {self.ch1TriggerPhase - self.chopperPhase/2}')
+        self.tof_e += self.tau * (self.ch1TriggerPhase - self.chopperPhase/2)/180
 
     def read_chopper_trigger_stream(self):
         self.chopper1TriggerTime = np.array(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_zero'][:-2], dtype=np.int64)
@@ -252,9 +241,38 @@ class AmorData:
         logging.debug(f'      epoch time from {self.startTime/1e9:13.2f} s to {self.stopTime/1e9:13.2f} s')
         logging.debug(f'      => counting time {self.stopTime/1e9-self.startTime/1e9:8.2f} s')
 
+    def extract_walltime(self, norm):
+        if nb_helpers:
+            self.wallTime_e = nb_helpers.extract_walltime(self.tof_e, self.dataPacket_p, self.dataPacketTime_p)
+        else:
+            self.wallTime_e = np.empty(np.shape(self.tof_e)[0], dtype=np.int64)
+            for i in range(len(self.dataPacket_p)-1):
+                self.wallTime_e[self.dataPacket_p[i]:self.dataPacket_p[i+1]] = self.dataPacketTime_p[i]
+            self.wallTime_e[self.dataPacket_p[-1]:] = self.dataPacketTime_p[-1]
+        self.wallTime_e -= np.int64(self.seriesStartTime)
+        logging.debug(f'      wall time from {self.wallTime_e[0]/1e9:6.1f} s to {self.wallTime_e[-1]/1e9:6.1f} s')
+
     def read_proton_current_stream(self):
         self.currentTime = np.array(self.hdf['entry1/Amor/detector/proton_current/time'][:], dtype=np.int64)
         self.current = np.array(self.hdf['entry1/Amor/detector/proton_current/value'][:,0], dtype=float)
+        if self.config.monitorType == "auto":
+            if self.current.sum() > 1:
+                self.monitorType = 'p'
+                logging.warn('      monitor type set to "proton current"')
+            else:
+                self.monitorType = 't'
+                logging.warn('      monitor type set to "time"')
+
+    def associate_pulse_with_monitor(self):
+        if self.config.monitorType == 'p': # protonCharge
+            self.currentTime -= np.int64(self.seriesStartTime)
+            self.monitorPerPulse = self.get_current_per_pulse(self.pulseTimeS, self.currentTime, self.current) * 2*self.tau * 1e-3
+            # filter low-current pulses
+            self.monitorPerPulse = np.where(self.monitorPerPulse > 2*self.tau * self.config.lowCurrentThreshold * 1e-3, self.monitorPerPulse, 0)
+        elif self.config.monitorType == 't': # countingTime
+            self.monitorPerPulse = np.ones(np.shape(self.pulseTimeS)[0])*2*self.tau
+        else: # pulses
+            self.monitorPerPulse = np.ones(np.shape(self.pulseTimeS)[0])
 
     def get_current_per_pulse(self, pulseTimeS, currentTimeS, currents):
         # add currents for early pulses and current time value after last pulse (j+1)
@@ -268,17 +286,6 @@ class AmorData:
             pulseCurrentS[i] = currents[j]
             #print(f' {i}  {pulseTimeS[i]}  {pulseCurrentS[i]}') 
         return pulseCurrentS
-
-    def associate_pulse_with_monitor(self):
-        if self.config.monitorType == 'p': # protonCharge
-            self.currentTime -= np.int64(self.seriesStartTime)
-            self.monitorPerPulse = self.get_current_per_pulse(self.pulseTimeS, self.currentTime, self.current) * 2*self.tau * 1e-3
-            # filter low-current pulses
-            self.monitorPerPulse = np.where(self.monitorPerPulse > 2*self.tau * self.config.lowCurrentThreshold * 1e-3, self.monitorPerPulse, 0)
-        elif self.config.monitorType == 't': # countingTime
-            self.monitorPerPulse = np.ones(np.shape(self.pulseTimeS)[0])*2*self.tau
-        else: # pulses
-            self.monitorPerPulse = np.ones(np.shape(self.pulseTimeS)[0])
 
     def average_events_per_pulse(self):
         if self.config.monitorType == 'p':
@@ -299,13 +306,42 @@ class AmorData:
             logging.info(f'          with {np.shape(filter_e)[0]-np.shape(self.tof_e)[0]} events')
             logging.info(f'      average counts per pulse =  {np.shape(self.tof_e)[0] / np.shape(goodTimeS[goodTimeS!=0])[0]:7.1f}')
 
-    def filter_qz_range(self, norm):
-        if self.config.qzRange[1]<0.5 and not norm:
-            self.mask_e = np.logical_and(self.mask_e,
-                                         (self.config.qzRange[0]<=self.qz_e) & (self.qz_e<=self.config.qzRange[1]))
-        self.detZ_e = self.detZ_e[self.mask_e]
-        self.lamda_e = self.lamda_e[self.mask_e]
-        self.wallTime_e = self.wallTime_e[self.mask_e]
+    def filter_strange_times(self):
+        # 'strange' tof times are those with t > 2 tau (originating from the efu)
+        filter_e = (self.tof_e<=2*self.tau)
+        self.tof_e = self.tof_e[filter_e]
+        self.pixelID_e = self.pixelID_e[filter_e]
+        self.wallTime_e = self.wallTime_e[filter_e]
+        if np.shape(filter_e)[0]-np.shape(self.tof_e)[0]>0.5:
+            logging.warning(f'        strange times: {np.shape(filter_e)[0]-np.shape(self.tof_e)[0]}')
+
+    # TODO: - handle each neutron pulse individually, - associate with correct monitor also for slow neutrons
+    def merge_time_frames(self):
+        total_offset = self.tofCut + self.tau * (self.ch1TriggerPhase + self.chopperPhase/2)/180
+        if nb_helpers:
+            self.tof_e = nb_helpers.merge_frames(self.tof_e, self.tofCut, self.tau, total_offset)
+        else:
+            self.tof_e = np.remainder(self.tof_e-(self.tofCut-self.tau), self.tau)+total_offset  # tof shifted to 1 frame
+
+    def filter_project_x(self):
+        pixelLookUp = self.resolve_pixels()
+        if nb_helpers:
+            (self.detZ_e, self.detXdist_e, self.delta_e, self.mask_e) = nb_helpers.filter_project_x(
+                    pixelLookUp, self.pixelID_e.astype(np.int64), self.config.yRange[0], self.config.yRange[1]
+                    )
+        else:
+            # resolve pixel ID into y and z indicees, x position and angle
+            (detY_e, self.detZ_e, self.detXdist_e, self.delta_e) = pixelLookUp[np.int_(self.pixelID_e)-1, :].T
+            # define mask and filter y range
+            self.mask_e = (self.config.yRange[0]<=detY_e) & (detY_e<=self.config.yRange[1])
+
+    def correct_for_chopper_opening(self):
+        # correct tof for beam size effect at chopper:  t_cor = (delta / 180 deg) * tau
+        if self.config.incidentAngle == 'alphaF':
+            self.tof_e    -= ( self.delta_e / 180. ) * self.tau
+        else:
+            # TODO: check sign of correction
+            self.tof_e    -= ( self.kad / 180. ) * self.tau
 
     def calculate_derived_properties(self):
         self.lamdaMax = const.lamdaCut+1.e13*self.tau*const.hdm/(self.chopperDetectorDistance+124.)
@@ -340,42 +376,15 @@ class AmorData:
             self.qx_e = 2*np.pi * ((np.cos(np.deg2rad(alphaF_e)) - np.cos(np.deg2rad(alphaI)))/self.lamda_e)
             self.header.measurement_scheme = 'energy-dispersive'
 
-    def correct_for_chopper_opening(self):
-        # correct tof for beam size effect at chopper:  t_cor = (delta / 180 deg) * tau
-        if self.config.incidentAngle == 'alphaF':
-            self.tof_e    -= ( self.delta_e / 180. ) * self.tau
-        else:
-            # TODO: check sign of correction
-            self.tof_e    -= ( self.kad / 180. ) * self.tau
+    def filter_qz_range(self, norm):
+        if self.config.qzRange[1]<0.5 and not norm:
+            self.mask_e = np.logical_and(self.mask_e,
+                                         (self.config.qzRange[0]<=self.qz_e) & (self.qz_e<=self.config.qzRange[1]))
+        self.detZ_e = self.detZ_e[self.mask_e]
+        self.lamda_e = self.lamda_e[self.mask_e]
+        self.wallTime_e = self.wallTime_e[self.mask_e]
 
-    def filter_project_x(self):
-        pixelLookUp = self.resolve_pixels()
-        if nb_helpers:
-            (self.detZ_e, self.detXdist_e, self.delta_e, self.mask_e) = nb_helpers.filter_project_x(
-                    pixelLookUp, self.pixelID_e.astype(np.int64), self.config.yRange[0], self.config.yRange[1]
-                    )
-        else:
-            # resolve pixel ID into y and z indicees, x position and angle
-            (detY_e, self.detZ_e, self.detXdist_e, self.delta_e) = pixelLookUp[np.int_(self.pixelID_e)-1, :].T
-            # define mask and filter y range
-            self.mask_e = (self.config.yRange[0]<=detY_e) & (detY_e<=self.config.yRange[1])
 
-    # TODO: - handle each neutron pulse individually, - associate with correct monitor also for slow neutrons
-    def merge_time_frames(self):
-        total_offset = self.tofCut + self.tau * (self.ch1TriggerPhase + self.chopperPhase/2)/180
-        if nb_helpers:
-            self.tof_e = nb_helpers.merge_frames(self.tof_e, self.tofCut, self.tau, total_offset)
-        else:
-            self.tof_e = np.remainder(self.tof_e-(self.tofCut-self.tau), self.tau)+total_offset  # tof shifted to 1 frame
-
-    def filter_strange_times(self):
-        # 'strange' tof times are those with t > 2 tau (originating from the efu)
-        filter_e = (self.tof_e<=2*self.tau)
-        self.tof_e = self.tof_e[filter_e]
-        self.pixelID_e = self.pixelID_e[filter_e]
-        self.wallTime_e = self.wallTime_e[filter_e]
-        if np.shape(filter_e)[0]-np.shape(self.tof_e)[0]>0.5:
-            logging.warning(f'        strange times: {np.shape(filter_e)[0]-np.shape(self.tof_e)[0]}')
 
     def read_individual_header(self):
         self.chopperDistance = float(np.take(self.hdf['entry1/Amor/chopper/pair_separation'], 0))
@@ -387,6 +396,8 @@ class AmorData:
         try:
             self.mu   = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/mu'], 0))
             self.nu   = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/nu'], 0))
+            #self.kap  = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/kappa'], 0))
+            #self.kad  = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/kappa_offset'], 0))
             self.kap  = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/kap'], 0))
             self.kad  = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/kad'], 0))
             self.div  = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/div'], 0))
@@ -401,6 +412,7 @@ class AmorData:
                 chopperTriggerPhase = 180e-9*chopperTriggerTimeDiff/self.tau
                 #TODO: check the next line
                 self.chopperPhase = chopperTriggerPhase + self.ch1TriggerPhase - self.ch2TriggerPhase
+                #print(f'chopperTriggerPhase: {chopperTriggerPhase} + {self.ch1TriggerPhase} - {self.ch2TriggerPhase} chopper phase: {self.chopperPhase}')
             except(KeyError, IndexError):
                 logging.debug('      chopper speed and phase taken from .hdf file')
                 self.chopperSpeed = float(np.take(self.hdf['/entry1/Amor/chopper/rotation_speed'], 0))
@@ -411,17 +423,17 @@ class AmorData:
             except(KeyError, IndexError):
                 polarizationConfigLabel = 0
             self.polarizationConfig = polarizationConfigs[polarizationConfigLabel]
-            logging.debug(f'      polarization configuration: {self.polarizationConfig} (index {polarizationConfigLabel} (index {polarizationConfigLabel}))')
+            logging.debug(f'      polarization configuration: {self.polarizationConfig} (index {polarizationConfigLabel})')
         except(KeyError, IndexError):
             logging.warning("     using parameters from nicos cache")
             year_date = str(self.start_date).replace('-', '/', 1)
             # TODO: check new cache pathes
-            cachePath = '/home/amor/cache/'
+            cachePath = '/home/amor/nicosdata/amor/cache/'
             value = str(subprocess.getoutput(f'/usr/bin/grep "value" {cachePath}nicos-mu/{year_date}')).split('\t')[-1]
             self.mu = float(value)
             value = str(subprocess.getoutput(f'/usr/bin/grep "value" {cachePath}nicos-nu/{year_date}')).split('\t')[-1]
             self.nu = float(value)
-            value = str(subprocess.getoutput(f'/usr/bin/grep "value" {cachePath}nicos-kap/{year_date}')).split('\t')[-1]
+            value = str(subprocess.getoutput(f'/usr/bin/grep "value" {cachePath}nicos-kappa/{year_date}')).split('\t')[-1]
             self.kap = float(value)
             value = str(subprocess.getoutput(f'/usr/bin/grep "value" {cachePath}nicos-kad/{year_date}')).split('\t')[-1]
             self.kad = float(value)

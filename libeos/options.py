@@ -71,7 +71,8 @@ class ReductionConfig:
     qResolution: float
     qzRange: Tuple[float, float]
     thetaRange: Tuple[float, float]
-    thetaRangeR: Tuple[float, float]
+    #thetaRangeR: Tuple[float, float]
+    thetaRangeR: list
 
     fileIdentifier: list = field(default_factory=lambda: ["0"])
     scale: list = field(default_factory=lambda: [1]) #per file scaling; if less elements than files use the last one

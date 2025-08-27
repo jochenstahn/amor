@@ -395,12 +395,16 @@ class AmorReduction:
         lamda_lz  = (self.grid.lz().T*lamda_l[:-1]).T
         alphaF_lz = self.grid.lz()*alphaF_z
 
-        mask_lz   = np.where(np.isnan(norm_lz), False, True)
-        mask_lz   = np.logical_and(mask_lz, np.where(np.absolute(alphaF_lz)>5e-3, True, False))
+        # assemble mask for filtering I(lambda, theta)
+        mask_lz = np.zeros_like(alphaF_lz, dtype=bool)
+        #   theta
         if self.reduction_config.thetaRangeR[1]<12:
           t0 = fromHDF.nu - fromHDF.mu
-          mask_lz   = np.logical_and(mask_lz, np.where(alphaF_lz-t0 >= self.reduction_config.thetaRangeR[0], True, False))
-          mask_lz   = np.logical_and(mask_lz, np.where(alphaF_lz-t0 <= self.reduction_config.thetaRangeR[1], True, False))
+          values = self.reduction_config.thetaRangeR
+          while values:
+              mask_lz   = np.logical_or(mask_lz, np.where(alphaF_lz-t0 >= self.reduction_config.thetaRangeR[0], True, mask_lz))
+              mask_lz   = np.logical_and(mask_lz, np.where(alphaF_lz-t0 >= self.reduction_config.thetaRangeR[1], False, mask_lz))
+              values = values[2:]
         elif self.reduction_config.thetaRange[1]<12:
           mask_lz   = np.logical_and(mask_lz, np.where(alphaF_lz >= self.reduction_config.thetaRange[0], True, False))
           mask_lz   = np.logical_and(mask_lz, np.where(alphaF_lz <= self.reduction_config.thetaRange[1], True, False))
@@ -409,9 +413,14 @@ class AmorReduction:
                                               fromHDF.nu - fromHDF.mu + fromHDF.div/2]
           mask_lz   = np.logical_and(mask_lz, np.where(alphaF_lz >= self.reduction_config.thetaRange[0], True, False))
           mask_lz   = np.logical_and(mask_lz, np.where(alphaF_lz <= self.reduction_config.thetaRange[1], True, False))
+        #   small angles
+        mask_lz   = np.logical_and(mask_lz, np.where(np.absolute(alphaF_lz)>5e-3, True, False))
+        #   wavelength
         if self.experiment_config.lambdaRange[1]<15:
           mask_lz   = np.logical_and(mask_lz, np.where(lamda_lz >= self.experiment_config.lambdaRange[0], True, False))
           mask_lz   = np.logical_and(mask_lz, np.where(lamda_lz <= self.experiment_config.lambdaRange[1], True, False))
+        #   low statistics normalisation
+        mask_lz   = np.logical_and(mask_lz, np.where(np.isnan(norm_lz), False, True))
 
         #           gravity correction
         #alphaF_lz += np.rad2deg( np.arctan( 3.07e-10 * (fromHDF.detectorDistance + detXdist_e) * lamda_lz**2 ) )
