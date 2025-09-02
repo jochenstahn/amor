@@ -11,35 +11,35 @@ import numpy as np
 
 import logging
 
-class Defaults:
+#class Defaults:
     # fileIdentifier
-    outputPath                  = '.'
-    rawPath                     = ['.', path.join('.','raw'), path.join('..','raw'), path.join('..','..','raw')]
-    year                        = datetime.now().year
-    normalisationFileIdentifier = []
-    normalisationMethod         = 'o'
-    monitorType                 = 'auto'
+    #outputPath                  = '.'
+    #rawPath                     = ['.', path.join('.','raw'), path.join('..','raw'), path.join('..','..','raw')]
+    #year                        = datetime.now().year
+    #normalisationFileIdentifier = []
+    #normalisationMethod         = 'o'
+    #monitorType                 = 'auto'
     # subtract
-    outputName                  = "fromEOS"
-    outputFormat                = ['Rqz.ort']
-    incidentAngle               = 'alphaF'
-    qResolution                 = 0.01
+    #outputName                  = "fromEOS"
+    #outputFormat                = ['Rqz.ort']
+    #incidentAngle               = 'alphaF'
+    #qResolution                 = 0.01
     #timeSlize
-    scale                       = [1]
+    #scale                       = [1]
     # autoscale
-    lambdaRange                 = [2., 15.]
-    thetaRange                  = [-12., 12.]
-    thetaRangeR                 = [-0.75, 0.75]
-    yRange                      = [11, 41]
-    qzRange                     = [0.005, 0.51]
-    chopperSpeed                = 500
-    chopperPhase                = 0.0
-    chopperPhaseOffset          = -9.1
-    muOffset                    = 0
-    mu                          = 0
-    nu                          = 0
-    sampleModel                 = None
-    lowCurrentThreshold         = 50
+    #lambdaRange                 = [2., 15.]
+    #thetaRange                  = [-12., 12.]
+    #thetaRangeR                 = [-0.75, 0.75]
+    #yRange                      = [11, 41]
+    #qzRange                     = [0.005, 0.51]
+    #chopperSpeed                = 500
+    #chopperPhase                = 0.0
+    #chopperPhaseOffset          = -9.1
+    #muOffset                    = 0
+    #mu                          = 0
+    #nu                          = 0
+    #sampleModel                 = None
+    #lowCurrentThreshold         = 50
     #
 
 @dataclass
@@ -150,6 +150,8 @@ class ArgParsable:
                 # optional argument
                 typ = get_args(field.type)[0]
 
+            import inspect
+            print('typ', inspect.isclass(typ))
             if issubclass(typ, StrEnum):
                 # convert str to enum
                 try:
@@ -161,16 +163,34 @@ class ArgParsable:
             inpargs[field.name] = value
         return cls(**inpargs)
 
+# definition of command line arguments
+
 @dataclass
 class ReaderConfig(ArgParsable):
-    year: int = field(default=datetime.now().year,
-                      metadata={'short': 'Y', 'group': 'input data', 'help': 'year the measurement was performed'})
-    rawPath: List[str] = field(default_factory=lambda: ['.', path.join('.','raw'), path.join('..','raw'), path.join('..','..','raw')],
-                               metadata={
-                                   'short': 'rp',
-                                   'group': 'input data',
-                                   'help': 'Search paths for hdf files'})
-    startTime: Optional[float] = None
+    year: int = field(
+            default=datetime.now().year,
+            metadata={
+                'short': 'Y', 
+                'group': 'input data', 
+                'help': 'year the measurement was performed',
+                },
+            )
+    rawPath: List[str] = field(
+            default_factory=lambda: ['.', path.join('.','raw'), path.join('..','raw'), path.join('..','..','raw')],
+            metadata={
+                'short': 'rp',
+                'group': 'input data',
+                'help': 'Search paths for hdf files',
+                },
+            )
+    startTime: Optional[float] = field(
+            default = None,
+            metadata={         
+                'short': '?',     
+                'group': '?',
+                'help': '?',
+                },
+            )
 
 class IncidentAngle(StrEnum):
     alphaF = 'alphaF'
@@ -186,20 +206,103 @@ class MonitorType(StrEnum):
 
 @dataclass
 class ExperimentConfig(ArgParsable):
-    chopperPhase: float
-    chopperSpeed: float
-    yRange: Tuple[float, float]
-    lambdaRange: Tuple[float, float]
-    lowCurrentThreshold: float
+    #chopperPhase: float
+    chopperPhase: float = field(
+            default=0,
+            metadata={
+                'short': 'cp',
+                'group': 'instrument settings',
+                'help': 'phase between opening of chopper 1 and closing of chopper 2 window',
+                },
+            ) 
+    chopperPhaseOffset: float = field(
+            default=-5,
+            metadata={
+                'short': 'co',
+                'group': 'instrument settings',  
+                'help': 'phase between chopper 1 index pulse and closing edge',
+                },                               
+            )                          
+    #chopperSpeed: float
+    chopperSpeed: float = field(
+            default=500,
+            metadata={
+                'short': 'cs',
+                'group': 'instrument settings',
+                'help': 'rotation speed of the chopper disks in rpm',
+                },
+            )
+    #yRange: Tuple[float, float]
+    yRange: Tuple[float, float] = field(
+            default_factory=lambda: [18, 48],
+            #default=[18, 48],
+            metadata={
+                'short': 'y',
+                'group': 'instrument settings',
+                'help': 'horizontal pixel range on the detector to be used',
+                },
+            )
+    #lambdaRange: Tuple[float, float]
+    lambdaRange: Tuple[float, float] = field(
+            default_factory=lambda: [3, 12.5],
+            metadata={
+                'short': 'l',
+                'group': 'instrument settings',
+                'help': 'wavelength range to be used (in angstrom)',
+                },
+            )
+    #lowCurrentThreshold: float
+    lowCurrentThreshold: float = field(
+            default=50,
+            metadata={
+                'short': 'pt',
+                'group': 'instrument settings',
+                'help': 'proton current below which the events are ignored (per chopper pulse)',
+                },
+            )
 
     incidentAngle: IncidentAngle = IncidentAngle.alphaF
-    sampleModel: Optional[str] = None
-    chopperPhaseOffset: float = 0
-    mu: Optional[float] = None
-    nu: Optional[float] = None
-    muOffset: Optional[float] = None
-    monitorType: MonitorType = field(default=MonitorType.auto, metadata={'short': 'mt',
-        'group': 'input data', 'help': 'one of [a]uto, [p]rotonCurrent, [t]ime or [n]eutronMonitor'})
+    #sampleModel: Optional[str] = None
+    sampleModel: Optional[str] = field(
+            default=None,
+            metadata={
+                'short': 'ai?',
+                'group': '?',  
+                'help': 'orso type string to describe the sample in one line',
+                },                               
+            )                          
+    mu: Optional[float] = field(
+            default=None,
+            metadata={
+                'short': 'mu',
+                'group': '?',  
+                'help': 'inclination of the sample surface w.r.t. the instrument horizon',
+                },                               
+            )                          
+    nu: Optional[float] = field(
+            default=None,
+            metadata={
+                'short': 'nu',
+                'group': '?',  
+                'help': 'inclination of the detector w.r.t. the instrument horizon',
+                },                               
+            )                          
+    muOffset: Optional[float] = field(
+            default=0,
+            metadata={
+                'short': 'm',
+                'group': '?',  
+                'help': 'correction offset for mu misalignment (mu_real = mu_file + mu_offset)',
+                },                               
+            )                          
+    monitorType: MonitorType = field(
+            default=MonitorType.auto,
+            metadata={
+                'short': 'mt',
+                'group': 'instrument settings',
+                'help': 'one of [a]uto, [p]rotonCurrent, [t]ime or [n]eutronMonitor',
+                },                               
+            )                          
 
 class NormalisationMethod(StrEnum):
     direct_beam = 'd'
@@ -208,31 +311,111 @@ class NormalisationMethod(StrEnum):
 
 @dataclass
 class ReductionConfig(ArgParsable):
-    qResolution: float
-    qzRange: Tuple[float, float]
-    thetaRange: Tuple[float, float]
+    qResolution: float = field(
+            default=0.01,
+            metadata={
+                'short': 'r',
+                'group': '?',
+                'help': '?',
+                },
+            )
+    qzRange: Tuple[float, float] = field(
+            default_factory=lambda: [0.005, 0.51],
+            metadata={
+                'short': 'q',
+                'group': '?',
+                'help': '?',
+                },
+            )
+    thetaRange: Tuple[float, float] = field(
+            default_factory=lambda: [-12., 12.],
+            metadata={
+                'short': 't',
+                'group': '?',
+                'help': '?',
+                },
+            )
     #thetaRangeR: Tuple[float, float]
-    thetaRangeR: List[float]
-    fileIdentifier: List[str] = field(metadata={'short': 'f', 'priority': 100,
-                                                'group': 'input data', 'help': 'file number(s) or offset (if < 1)'})
+    thetaRangeR: Tuple[float, float] = field(
+            default_factory=lambda: [-0.75, 0.75],
+            metadata={
+                'short': 'T',
+                'group': '?',
+                'help': '?',
+                },
+            )
+    fileIdentifier: List[str] = field(
+            default_factory=lambda: ['0'],
+            metadata={
+                'short': 'f', 
+                'priority': 100,
+                'group': 'input data', 
+                'help': 'file number(s) or offset (if < 1)',
+                },
+            )
 
-    normalisationMethod: NormalisationMethod = field(default=NormalisationMethod.over_illuminated,
-                   metadata={'short': 'nm', 'priority': 90, 'group': 'input data',
-                    'help': 'normalisation method: [o]verillumination, [u]nderillumination, [d]irect_beam'})
-    scale: List[float] = field(default_factory=lambda: [1.]) #per file scaling; if less elements than files use the last one
+    normalisationMethod: NormalisationMethod = field(
+            default=NormalisationMethod.over_illuminated,
+            metadata={
+                'short': 'nm', 
+                'priority': 90,
+                'group': 'input data',
+                'help': 'normalisation method: [o]verillumination, [u]nderillumination, [d]irect_beam'})
+    scale: List[float] = field(
+            default_factory=lambda: [1.]
+            ) #per file scaling; if less elements than files use the last one
 
     autoscale: bool = False # TODO: This made no sense, it is used as single bool.
-    subtract: Optional[str] = field(default=None, metadata={'short': 'sub',
-                    'group': 'input data', 'help': 'File with R(q_z) curve to be subtracted (in .Rqz.ort format)'})
-    normalisationFileIdentifier: Optional[List[str]] = field(default=None, metadata={'short': 'n', 'priority': 90,
-                                  'group': 'input data', 'help': 'file number(s) of normalisation measurement'})
-    timeSlize: Optional[List[float]] = None
+    subtract: Optional[str] = field(
+            default=None, 
+            metadata={
+                'short': 'sub',
+                'group': 'input data', 
+                'help': 'File with R(q_z) curve to be subtracted (in .Rqz.ort format)'})
+    normalisationFileIdentifier: Optional[List[str]] = field(
+            default_factory=lambda: [None], 
+            metadata={
+                'short': 'n', 
+                'priority': 90,
+                'group': 'input data', 
+                'help': 'file number(s) of normalisation measurement'})
+    timeSlize: Optional[List[float]] = field(
+            default_factory=lambda: [None],
+            metadata={
+                'short': 'ts',
+                'group': '?',
+                'help': 'time slizing <interval> ,[<start> [,stop]]',
+                },
+            )
 
 @dataclass
 class OutputConfig(ArgParsable):
-    outputFormats: List[str]
-    outputName: str
-    outputPath: str
+    outputFormats: List[str] = field(
+            default_factory=lambda: ['Rqz.ort'],
+            metadata={
+                'short': 'of',
+                'group': '?',
+                'help': '?',
+                },
+            )
+    outputName: str = field(
+            default='fromEOS',
+            metadata={
+                'short': 'o',
+                'group': '?',
+                'help': '?',
+                },
+            )
+    outputPath: str = field(
+            default='.',
+            metadata={
+                'short': 'op',
+                'group': '?',
+                'help': '?',
+                },
+            )
+
+# ===================================
 
 @dataclass
 class EOSConfig:
