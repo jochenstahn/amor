@@ -150,9 +150,7 @@ class ArgParsable:
                 # optional argument
                 typ = get_args(field.type)[0]
 
-            import inspect
-            print('typ', inspect.isclass(typ))
-            if issubclass(typ, StrEnum):
+            if isinstance(typ, type) and issubclass(typ, StrEnum):
                 # convert str to enum
                 try:
                     value = typ(value)
@@ -460,23 +458,18 @@ class EOSConfig:
         if self.output.outputFormats != ['Rqz.ort']:
             otpt += f' -of {" ".join(self.output.outputFormats)}'
             
-        mask = ''    
-        if self.experiment.yRange != Defaults.yRange:
-            mask += f' -y {" ".join(str(ii) for ii in self.experiment.yRange)}'
-        if self.experiment.lambdaRange!= Defaults.lambdaRange:
-            mask += f' -l {" ".join(str(ff) for ff in self.experiment.lambdaRange)}'
-        if self.reduction.thetaRange != Defaults.thetaRange:
-            mask += f' -t {" ".join(str(ff) for ff in self.reduction.thetaRange)}'
-        elif self.reduction.thetaRangeR != Defaults.thetaRangeR:
-            mask += f' -T {" ".join(str(ff) for ff in self.reduction.thetaRangeR)}'
-        if self.experiment.qzRange!= Defaults.qzRange:
-            mask += f' -q {" ".join(str(ff) for ff in self.experiment.qzRange)}'
+        mask = ''
+        # TODO: Check if you want these parameters for the case of default call
+        mask += f' -y {" ".join(str(ii) for ii in self.experiment.yRange)}'
+        mask += f' -l {" ".join(str(ff) for ff in self.experiment.lambdaRange)}'
+        mask += f' -t {" ".join(str(ff) for ff in self.reduction.thetaRange)}'
+        mask += f' -T {" ".join(str(ff) for ff in self.reduction.thetaRangeR)}'
+        mask += f' -q {" ".join(str(ff) for ff in self.reduction.qzRange)}'
 
         para = ''
-        if self.experiment.chopperPhase != Defaults.chopperPhase:
-            para += f' --chopperPhase {self.experiment.chopperPhase}'
-        if self.experiment.chopperPhaseOffset != Defaults.chopperPhaseOffset:
-            para += f' --chopperPhaseOffset {self.experiment.chopperPhaseOffset}'
+        # TODO: Check if we want these parameters for defaults
+        para += f' --chopperPhase {self.experiment.chopperPhase}'
+        para += f' --chopperPhaseOffset {self.experiment.chopperPhaseOffset}'
         if self.experiment.mu:
             para += f' --mu {self.experiment.mu}'
         elif self.experiment.muOffset:
@@ -491,8 +484,8 @@ class EOSConfig:
         acts = ''
         if self.reduction.autoscale:
             acts += f' --autoscale {" ".join(str(ff) for ff in self.reduction.autoscale)}'
-        if self.reduction.scale != Defaults.scale:
-            acts += f' --scale {self.reduction.scale}'
+        # TODO: Check if should be shown if not default
+        acts += f' --scale {self.reduction.scale}'
         if self.reduction.timeSlize:
             acts += f' --timeSlize {" ".join(str(ff) for ff in self.reduction.timeSlize)}'
 

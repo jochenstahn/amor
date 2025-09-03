@@ -17,7 +17,9 @@ class AmorReduction:
         self.reader_config = config.reader
         self.reduction_config = config.reduction
         self.output_config = config.output
-        self.grid = Grid(config.reduction.qResolution, config.experiment.qzRange)
+        # TODO: bad work-around, should make better destriction of parameters usage
+        self.experiment_config.qzRange = self.reduction_config.qzRange
+        self.grid = Grid(config.reduction.qResolution, config.reduction.qzRange)
 
         self.header = Header()
         self.header.reduction.call = config.call_string()
