@@ -333,7 +333,10 @@ class AmorData:
             self.wallTime_e = self.wallTime_e[filter_e]
             logging.info(f'      low-beam (<{self.config.lowCurrentThreshold} mC) rejected pulses: {np.shape(self.monitorPerPulse)[0]-1-np.shape(goodTimeS)[0]} out of {np.shape(self.monitorPerPulse)[0]-1}')
             logging.info(f'          with {np.shape(filter_e)[0]-np.shape(self.tof_e)[0]} events')
-            logging.info(f'      average counts per pulse =  {np.shape(self.tof_e)[0] / np.shape(goodTimeS[goodTimeS!=0])[0]:7.1f}')
+            if np.shape(goodTimeS[goodTimeS!=0])[0]:
+                logging.info(f'      average counts per pulse =  {np.shape(self.tof_e)[0] / np.shape(goodTimeS[goodTimeS!=0])[0]:7.1f}')
+            else:
+                logging.info(f'      average counts per pulse = undefined')
 
     def filter_strange_times(self):
         # 'strange' tof times are those with t > 2 tau (originating from the efu)
