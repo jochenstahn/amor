@@ -371,14 +371,15 @@ class ReductionConfig(ArgParsable):
                 },
             ) 
     # TODO: This made no sense, it is used as single bool.
-    autoscale: Tuple[float, float] = field(
-            default_factory=lambda: [None, None], 
-            metadata={
-                'short': 'S',
-                'group': 'data manicure',
-                'help': '',
-                },
-            )
+    autoscale: bool = False
+    #autoscale: Tuple[float, float] = field(
+    #        default_factory=lambda: [None, None], 
+    #        metadata={
+    #            'short': 'S',
+    #            'group': 'data manicure',
+    #            'help': '',
+    #            },
+    #        )
     subtract: Optional[str] = field(
             default=None, 
             metadata={
