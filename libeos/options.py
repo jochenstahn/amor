@@ -178,15 +178,15 @@ class ReaderConfig(ArgParsable):
             metadata={
                 'short': 'rp',
                 'group': 'input data',
-                'help': 'Search paths for hdf files',
+                'help': 'search paths for hdf files',
                 },
             )
     startTime: Optional[float] = field(
             default = None,
             metadata={         
-                'short': '?',     
-                'group': '?',
-                'help': '?',
+                'short': 'st',     
+                'group': 'data manicure',
+                'help': 'set time zero other than the start of the data aquisition',
                 },
             )
 
@@ -204,7 +204,6 @@ class MonitorType(StrEnum):
 
 @dataclass
 class ExperimentConfig(ArgParsable):
-    #chopperPhase: float
     chopperPhase: float = field(
             default=0,
             metadata={
@@ -221,7 +220,6 @@ class ExperimentConfig(ArgParsable):
                 'help': 'phase between chopper 1 index pulse and closing edge',
                 },                               
             )                          
-    #chopperSpeed: float
     chopperSpeed: float = field(
             default=500,
             metadata={
@@ -230,26 +228,22 @@ class ExperimentConfig(ArgParsable):
                 'help': 'rotation speed of the chopper disks in rpm',
                 },
             )
-    #yRange: Tuple[float, float]
     yRange: Tuple[float, float] = field(
             default_factory=lambda: [18, 48],
-            #default=[18, 48],
             metadata={
                 'short': 'y',
-                'group': 'instrument settings',
+                'group': 'region of interest',
                 'help': 'horizontal pixel range on the detector to be used',
                 },
             )
-    #lambdaRange: Tuple[float, float]
     lambdaRange: Tuple[float, float] = field(
             default_factory=lambda: [3, 12.5],
             metadata={
                 'short': 'l',
-                'group': 'instrument settings',
+                'group': 'region of interest',
                 'help': 'wavelength range to be used (in angstrom)',
                 },
             )
-    #lowCurrentThreshold: float
     lowCurrentThreshold: float = field(
             default=50,
             metadata={
@@ -259,13 +253,22 @@ class ExperimentConfig(ArgParsable):
                 },
             )
 
-    incidentAngle: IncidentAngle = IncidentAngle.alphaF
-    #sampleModel: Optional[str] = None
+    incidentAngle: str = field(
+            default=IncidentAngle.alphaF,
+            metadata={
+                'short': 'ai',
+                'group': 'instrument settings',
+                'help': 'calculate alphaI = [alphaF], [mu]+kappa+delta_kappa or ([nu]+kappa+delta_kappa)/2',
+                },
+            )
+    alphaF = 'alphaF'
+    mu = 'mu'
+    nu = 'nu'
     sampleModel: Optional[str] = field(
             default=None,
             metadata={
                 'short': 'sm',
-                'group': '?',  
+                'group': 'sample',  
                 'help': 'orso type string to describe the sample in one line',
                 },                               
             )                          
@@ -273,7 +276,7 @@ class ExperimentConfig(ArgParsable):
             default=None,
             metadata={
                 'short': 'mu',
-                'group': '?',  
+                'group': 'sample',  
                 'help': 'inclination of the sample surface w.r.t. the instrument horizon',
                 },                               
             )                          
@@ -281,7 +284,7 @@ class ExperimentConfig(ArgParsable):
             default=None,
             metadata={
                 'short': 'nu',
-                'group': '?',  
+                'group': 'sample',  
                 'help': 'inclination of the detector w.r.t. the instrument horizon',
                 },                               
             )                          
@@ -289,7 +292,7 @@ class ExperimentConfig(ArgParsable):
             default=0,
             metadata={
                 'short': 'm',
-                'group': '?',  
+                'group': 'sample',  
                 'help': 'correction offset for mu misalignment (mu_real = mu_file + mu_offset)',
                 },                               
             )                          
@@ -313,15 +316,15 @@ class ReductionConfig(ArgParsable):
             default=0.01,
             metadata={
                 'short': 'r',
-                'group': '?',
-                'help': '?',
+                'group': 'data manicure',
+                'help': 'output resolution of q-scale Delta q / q',
                 },
             )
     qzRange: Tuple[float, float] = field(
             default_factory=lambda: [0.005, 0.51],
             metadata={
                 'short': 'q',
-                'group': '?',
+                'group': 'region of interest',
                 'help': '?',
                 },
             )
@@ -329,8 +332,8 @@ class ReductionConfig(ArgParsable):
             default_factory=lambda: [-12., 12.],
             metadata={
                 'short': 't',
-                'group': '?',
-                'help': '?',
+                'group': 'region of interest',
+                'help': 'absolute theta region of interest',
                 },
             )
     #thetaRangeR: Tuple[float, float]
@@ -338,8 +341,8 @@ class ReductionConfig(ArgParsable):
             default_factory=lambda: [-0.75, 0.75],
             metadata={
                 'short': 'T',
-                'group': '?',
-                'help': '?',
+                'group': 'region of interest',
+                'help': 'theta region of interest w.r.t. beam center',
                 },
             )
     fileIdentifier: List[str] = field(
@@ -360,10 +363,22 @@ class ReductionConfig(ArgParsable):
                 'group': 'input data',
                 'help': 'normalisation method: [o]verillumination, [u]nderillumination, [d]irect_beam'})
     scale: List[float] = field(
-            default_factory=lambda: [1.]
-            ) #per file scaling; if less elements than files use the last one
-
-    autoscale: bool = False # TODO: This made no sense, it is used as single bool.
+            default_factory=lambda: [1.],
+            metadata={
+                'short': 's',
+                'group': 'data manicure',
+                'help': '(list of) scaling factors, if less elements than files use the last one',
+                },
+            ) 
+    # TODO: This made no sense, it is used as single bool.
+    autoscale: Tuple[float, float] = field(
+            default_factory=lambda: [None, None], 
+            metadata={
+                'short': 'S',
+                'group': 'data manicure',
+                'help': '',
+                },
+            )
     subtract: Optional[str] = field(
             default=None, 
             metadata={
@@ -381,7 +396,7 @@ class ReductionConfig(ArgParsable):
             default_factory=lambda: [None],
             metadata={
                 'short': 'ts',
-                'group': '?',
+                'group': 'region of interest',
                 'help': 'time slizing <interval> ,[<start> [,stop]]',
                 },
             )
@@ -392,15 +407,15 @@ class OutputConfig(ArgParsable):
             default_factory=lambda: ['Rqz.ort'],
             metadata={
                 'short': 'of',
-                'group': '?',
-                'help': '?',
+                'group': 'output',
+                'help': 'one of "Rqz[.ort]", "Rlt[.ort]" or both with "ort"',
                 },
             )
     outputName: str = field(
             default='fromEOS',
             metadata={
                 'short': 'o',
-                'group': '?',
+                'group': 'output',
                 'help': '?',
                 },
             )
@@ -408,7 +423,7 @@ class OutputConfig(ArgParsable):
             default='.',
             metadata={
                 'short': 'op',
-                'group': '?',
+                'group': 'output',
                 'help': '?',
                 },
             )

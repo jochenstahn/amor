@@ -465,7 +465,8 @@ class AmorReduction:
         if self.monitor > 1e-6 :
             ref_lz   *= self.normMonitor / self.monitor
         else:
-            logging.info('                               low monitor -> zero output')
+            logging.info('                               low monitor -> nan output')
+            ref_lz   *= np.nan
         err_lz    = ref_lz * np.sqrt( 1/(int_lz+.1) + 1/norm_lz ) 
 
         # TODO: allow for non-ideal Delta lambda / lambda (rather than 2.2%)
