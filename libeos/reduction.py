@@ -27,7 +27,9 @@ class AmorReduction:
         self.monitorUnit = {MonitorType.neutron_monitor: 'cnts',
                             MonitorType.proton_charge: 'mC',
                             MonitorType.time: 's',
-                            MonitorType.auto: 'various'}
+                            MonitorType.auto: 'various',
+                            MonitorType.debug: 'mC',
+                            }
 
     def reduce(self):
         if not os.path.exists(f'{self.output_config.outputPath}'):

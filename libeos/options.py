@@ -264,7 +264,7 @@ class ExperimentConfig(ArgParsable):
     sampleModel: Optional[str] = field(
             default=None,
             metadata={
-                'short': 'ai?',
+                'short': 'sm',
                 'group': '?',  
                 'help': 'orso type string to describe the sample in one line',
                 },                               

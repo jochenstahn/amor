@@ -121,10 +121,14 @@ class AmorData:
             if '-' in i:
                 if ':' in i:
                     step = i.split(':', 1)[1]
-                    file_list += range(int(i.split('-', 1)[0]), int((i.rsplit('-', 1)[1]).split(':', 1)[0])+1, int(step))
+                    file_list += range(int(i.split('-', 1)[0]),
+                                       int((i.rsplit('-', 1)[1]).split(':', 1)[0])+1,
+                                       int(step))
                 else:
                     step = 1
-                    file_list += range(int(i.split('-', 1)[0]), int(i.split('-', 1)[1])+1, int(step))
+                    file_list += range(int(i.split('-', 1)[0]),
+                                       int(i.split('-', 1)[1])+1,
+                                       int(step))
             else:
                 file_list += [int(i)]
         self.data_file_numbers=sorted(file_list)
@@ -164,16 +168,36 @@ class AmorData:
                 #polarization = fileio.Polarization.unpolarized,
                 polarization = fileio.Polarization(self.polarizationConfig)
                 )
-            self.header.measurement_instrument_settings.mu = fileio.Value(round(self.mu, 3), 'deg', comment='sample angle to horizon')
-            self.header.measurement_instrument_settings.nu = fileio.Value(round(self.nu, 3), 'deg', comment='detector angle to horizon')
-            self.header.measurement_instrument_settings.div = fileio.Value(round(self.div, 3), 'deg', comment='incoming beam divergence')
-            self.header.measurement_instrument_settings.kap = fileio.Value(round(self.kap, 3), 'deg', comment='incoming beam inclination')
+            self.header.measurement_instrument_settings.mu = fileio.Value(
+                    round(self.mu, 3),
+                    'deg',
+                    comment='sample angle to horizon')
+            self.header.measurement_instrument_settings.nu = fileio.Value(
+                    round(self.nu, 3),
+                    'deg',
+                    comment='detector angle to horizon')
+            self.header.measurement_instrument_settings.div = fileio.Value(
+                    round(self.div, 3),
+                    'deg',
+                    comment='incoming beam divergence')
+            self.header.measurement_instrument_settings.kap = fileio.Value(
+                    round(self.kap, 3),
+                    'deg',
+                    comment='incoming beam inclination')
             if abs(self.kad)>0.02:
-                self.header.measurement_instrument_settings.kad = fileio.Value(round(self.kad, 3), 'deg', comment='incoming beam angular offset')
+                self.header.measurement_instrument_settings.kad = fileio.Value(
+                        round(self.kad, 3),
+                        'deg',
+                        comment='incoming beam angular offset')
         if norm:
-            self.header.measurement_additional_files.append(fileio.File(file=fileName.split('/')[-1], timestamp=self.fileDate))
+            self.header.measurement_additional_files.append(fileio.File(
+                file=fileName.split('/')[-1],
+                timestamp=self.fileDate))
         else:
-            self.header.measurement_data_files.append(fileio.File(file=fileName.split('/')[-1], timestamp=self.fileDate))
+            self.header.measurement_data_files.append(fileio.File(
+                file=fileName.split('/')[-1],
+                timestamp=self.fileDate))
+
         logging.info(f'      mu = {self.mu:6.3f}, nu = {self.nu:6.3f}, kap = {self.kap:6.3f}, kad = {self.kad:6.3f}')
 
         self.read_event_stream()
@@ -218,11 +242,12 @@ class AmorData:
         self.dataPacketTime_p = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][:], dtype=np.int64)
 
     def correct_for_chopper_phases(self):
-        print(f'tof phase-offset: {self.ch1TriggerPhase - self.chopperPhase/2}')
+        #print(f'tof phase-offset: {self.ch1TriggerPhase - self.chopperPhase/2}')
         self.tof_e += self.tau * (self.ch1TriggerPhase - self.chopperPhase/2)/180
 
     def read_chopper_trigger_stream(self):
-        self.chopper1TriggerTime = np.array(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_zero'][:-2], dtype=np.int64)
+        self.chopper1TriggerTime = np.array(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_zero'][:-2],
+                                            dtype=np.int64)
         #self.chopper2TriggerTime = self.chopper1TriggerTime + np.array(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time'][:-2], dtype=np.int64)
         #                           + np.array(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_offset'][:], dtype=np.int64)
         if np.shape(self.chopper1TriggerTime)[0] > 2:
@@ -264,11 +289,16 @@ class AmorData:
                 logging.warn('      monitor type set to "time"')
 
     def associate_pulse_with_monitor(self):
-        if self.config.monitorType == MonitorType.proton_charge:
+        if self.config.monitorType == MonitorType.proton_charge or MonitorType.debug:
             self.currentTime -= np.int64(self.seriesStartTime)
-            self.monitorPerPulse = self.get_current_per_pulse(self.pulseTimeS, self.currentTime, self.current) * 2*self.tau * 1e-3
+            self.monitorPerPulse = self.get_current_per_pulse(self.pulseTimeS,
+                                                              self.currentTime,
+                                                              self.current)\
+                                                              * 2*self.tau * 1e-3
             # filter low-current pulses
-            self.monitorPerPulse = np.where(self.monitorPerPulse > 2*self.tau * self.config.lowCurrentThreshold * 1e-3, self.monitorPerPulse, 0)
+            self.monitorPerPulse = np.where(self.monitorPerPulse > 2*self.tau * self.config.lowCurrentThreshold * 1e-3,
+                                            self.monitorPerPulse,
+                                            0)
         elif self.config.monitorType == MonitorType.time:
             self.monitorPerPulse = np.ones(np.shape(self.pulseTimeS)[0])*2*self.tau
         else: # pulses
@@ -281,10 +311,9 @@ class AmorData:
         pulseCurrentS = np.zeros(pulseTimeS.shape[0], dtype=float)
         j = 0
         for i, ti in enumerate(pulseTimeS):
-            if ti >= currentTimeS[j+1]: 
+            while ti >= currentTimeS[j+1]: 
                 j += 1
             pulseCurrentS[i] = currents[j]
-            #print(f' {i}  {pulseTimeS[i]}  {pulseCurrentS[i]}') 
         return pulseCurrentS
 
     def average_events_per_pulse(self):
@@ -302,7 +331,7 @@ class AmorData:
             self.tof_e = self.tof_e[filter_e]
             self.pixelID_e = self.pixelID_e[filter_e]
             self.wallTime_e = self.wallTime_e[filter_e]
-            logging.info(f'      low-beam rejected pulses: {np.shape(self.monitorPerPulse)[0]-1-np.shape(goodTimeS)[0]} out of {np.shape(self.monitorPerPulse)[0]-1}')
+            logging.info(f'      low-beam (<{self.config.lowCurrentThreshold} mC) rejected pulses: {np.shape(self.monitorPerPulse)[0]-1-np.shape(goodTimeS)[0]} out of {np.shape(self.monitorPerPulse)[0]-1}')
             logging.info(f'          with {np.shape(filter_e)[0]-np.shape(self.tof_e)[0]} events')
             logging.info(f'      average counts per pulse =  {np.shape(self.tof_e)[0] / np.shape(goodTimeS[goodTimeS!=0])[0]:7.1f}')
 
@@ -396,16 +425,17 @@ class AmorData:
         try:
             self.mu   = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/mu'], 0))
             self.nu   = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/nu'], 0))
-            #self.kap  = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/kappa'], 0))
-            #self.kad  = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/kappa_offset'], 0))
-            self.kap  = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/kap'], 0))
-            self.kad  = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/kad'], 0))
+            self.kap  = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/kappa'], 0))
+            self.kad  = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/kappa_offset'], 0))
+            #self.kap  = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/kap'], 0))
+            #self.kad  = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/kad'], 0))
             self.div  = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/div'], 0))
             self.ch1TriggerPhase = float(np.take(self.hdf['/entry1/Amor/chopper/ch1_trigger_phase'], 0))
             self.ch2TriggerPhase = float(np.take(self.hdf['/entry1/Amor/chopper/ch2_trigger_phase'], 0))
             try: 
-                chopperTriggerTime = float(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_zero'][2])\
-                                     - float(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_zero'][1])
+                chopperTriggerTime = (float(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_zero'][7])\
+                                     - float(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_zero'][0]))\
+                                     / 7
                 self.tau = int(1e-6*chopperTriggerTime/2+0.5)*(1e-3)
                 self.chopperSpeed = 30/self.tau
                 chopperTriggerTimeDiff =  float(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_offset'][2])
@@ -429,28 +459,29 @@ class AmorData:
             year_date = str(self.start_date).replace('-', '/', 1)
             # TODO: check new cache pathes
             cachePath = '/home/amor/nicosdata/amor/cache/'
-            value = str(subprocess.getoutput(f'/usr/bin/grep "value" {cachePath}nicos-mu/{year_date}')).split('\t')[-1]
+            grp = '/usr/bin/grep "value"'
+            value = str(subprocess.getoutput(f'{grp} {cachePath}nicos-mu/{year_date}')).split('\t')[-1]
             self.mu = float(value)
-            value = str(subprocess.getoutput(f'/usr/bin/grep "value" {cachePath}nicos-nu/{year_date}')).split('\t')[-1]
+            value = str(subprocess.getoutput(f'{grp} {cachePath}nicos-nu/{year_date}')).split('\t')[-1]
             self.nu = float(value)
-            value = str(subprocess.getoutput(f'/usr/bin/grep "value" {cachePath}nicos-kappa/{year_date}')).split('\t')[-1]
+            value = str(subprocess.getoutput(f'{grp} {cachePath}nicos-kappa/{year_date}')).split('\t')[-1]
             self.kap = float(value)
-            value = str(subprocess.getoutput(f'/usr/bin/grep "value" {cachePath}nicos-kad/{year_date}')).split('\t')[-1]
+            value = str(subprocess.getoutput(f'{grp} {cachePath}nicos-kad/{year_date}')).split('\t')[-1]
             self.kad = float(value)
-            value = str(subprocess.getoutput(f'/usr/bin/grep "value" {cachePath}nicos-div/{year_date}')).split('\t')[-1]
+            value = str(subprocess.getoutput(f'{grp} {cachePath}nicos-div/{year_date}')).split('\t')[-1]
             self.div = float(value)
-            value = str(subprocess.getoutput(f'/usr/bin/grep "value" {cachePath}nicos-ch1_speed/{year_date}')).split('\t')[-1]
+            value = str(subprocess.getoutput(f'{grp} {cachePath}nicos-ch1_speed/{year_date}')).split('\t')[-1]
             self.chopperSpeed = float(value)
-            value = str(subprocess.getoutput(f'/usr/bin/grep "value" {cachePath}nicos-chopper_phase/{year_date}')).split('\t')[-1]
+            value = str(subprocess.getoutput(f'{grp} {cachePath}nicos-chopper_phase/{year_date}')).split('\t')[-1]
             self.chopperPhase = float(value)
-            value = str(subprocess.getoutput(f'/usr/bin/grep "value" {cachePath}nicos-ch1_trigger_phase/{year_date}')).split('\t')[-1]
+            value = str(subprocess.getoutput(f'{grp} {cachePath}nicos-ch1_trigger_phase/{year_date}')).split('\t')[-1]
             self.ch1TriggerPhase = float(value)
-            value = str(subprocess.getoutput(f'/usr/bin/grep "value" {cachePath}nicos-ch2_trigger_phase/{year_date}')).split('\t')[-1]
+            value = str(subprocess.getoutput(f'{grp} {cachePath}nicos-ch2_trigger_phase/{year_date}')).split('\t')[-1]
             self.ch2TriggerPhase = float(value)
             
             self.tau     = 30. / self.chopperSpeed
 
-        logging.debug(f'        tau = {self.tau} s')
+        logging.debug(f'        tau = {self.tau:5.3f} s')
         if self.config.muOffset:
             logging.debug(f'        set muOffset = {self.config.muOffset}')
             self.mu += self.config.muOffset
