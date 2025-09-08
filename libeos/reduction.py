@@ -5,7 +5,6 @@ import sys
 import numpy as np
 from orsopy import fileio
 
-from .command_line import expand_file_list
 from .file_reader import AmorData
 from .header import Header
 from .options import EOSConfig, IncidentAngle, MonitorType, NormalisationMethod
@@ -242,7 +241,7 @@ class AmorReduction:
             self.datasetsRqz.append(orso_data)
         # reset normal logging behavior
         #logging.StreamHandler.terminator = "\n"
-        logging.info(f'      done  {time+interval:5.0f}')
+        logging.info(f'      done  {min(time+interval, pulseTimeS[-1]):5.0f}')
 
     def save_Rqz(self):
         fname = os.path.join(self.output_config.outputPath, f'{self.output_config.outputName}.Rqz.ort')
@@ -331,9 +330,27 @@ class AmorReduction:
 
         return q_q, Sq_q, dS_q, fileName
 
+    def expand_file_list(short_notation):
+        """Evaluate string entry for file number lists"""
+        #log().debug('Executing get_flist')
+        file_list=[]
+        for i in short_notation.split(','):
+            if '-' in i:
+                if ':' in i:
+                    step = i.split(':', 1)[1]
+                    file_list += range(int(i.split('-', 1)[0]), int((i.rsplit('-', 1)[1]).split(':', 1)[0])+1, int(step))
+                else:
+                    step = 1
+                    file_list += range(int(i.split('-', 1)[0]), int(i.split('-', 1)[1])+1, int(step))
+            else:
+                file_list += [int(i)]
+    
+        return sorted(file_list)
+
+
     def create_normalisation_map(self, short_notation):
         outputPath = self.output_config.outputPath
-        normalisation_list = expand_file_list(short_notation)
+        normalisation_list = self.expand_file_list(short_notation)
         name = str(normalisation_list[0])
         for i in range(1, len(normalisation_list), 1):
             name = f'{name}_{normalisation_list[i]}'
