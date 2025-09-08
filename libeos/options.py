@@ -402,9 +402,20 @@ class ReductionConfig(ArgParsable):
                 },
             )
 
+class OutputFomatOption(StrEnum):
+    Rqz_ort = "Rqz.ort"
+    Rqz_orb = "Rqz.orb"
+    Rlt_ort = "Rlt.ort"
+    Rlt_orb = "Rlt.orb"
+    ort = "ort"
+    orb = "orb"
+    Rqz = "Rqz"
+    Rlt = "Rlt"
+
+
 @dataclass
 class OutputConfig(ArgParsable):
-    outputFormats: List[str] = field(
+    outputFormats: List[OutputFomatOption] = field(
             default_factory=lambda: ['Rqz.ort'],
             metadata={
                 'short': 'of',
@@ -428,6 +439,22 @@ class OutputConfig(ArgParsable):
                 'help': '?',
                 },
             )
+
+    def _output_format_list(self, outputFormat):
+        format_list = []
+        if OutputFomatOption.ort in outputFormat or OutputFomatOption.Rqz_ort in outputFormat or OutputFomatOption.Rqz in outputFormat:
+            format_list.append(OutputFomatOption.Rqz_ort)
+        if OutputFomatOption.ort in outputFormat or OutputFomatOption.Rlt_ort in outputFormat or OutputFomatOption.Rlt in outputFormat:
+            format_list.append(OutputFomatOption.Rlt_ort)
+        if OutputFomatOption.orb in outputFormat or OutputFomatOption.Rqz_orb in outputFormat or OutputFomatOption.Rqz in outputFormat:
+            format_list.append(OutputFomatOption.Rqz_orb)
+        if OutputFomatOption.orb in outputFormat or OutputFomatOption.Rlt_orb in outputFormat or OutputFomatOption.Rlt in outputFormat:
+            format_list.append(OutputFomatOption.Rlt_orb)
+        return sorted(format_list, reverse=True)
+
+    def __post_init__(self):
+        self.outputFormats = self._output_format_list(self.outputFormats)
+
 
 # ===================================
 

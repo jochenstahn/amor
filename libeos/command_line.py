@@ -154,18 +154,6 @@ def expand_file_list(short_notation):
     return sorted(file_list)
 
 
-def output_format_list(outputFormat):
-    format_list = []
-    if 'ort' in outputFormat or 'Rqz.ort' in outputFormat or 'Rqz' in outputFormat:
-        format_list.append('Rqz.ort')
-    if 'ort' in outputFormat or 'Rlt.ort' in outputFormat or 'Rlt' in outputFormat:
-        format_list.append('Rlt.ort')
-    if 'orb' in outputFormat or 'Rqz.orb' in outputFormat or 'Rqz' in outputFormat:
-        format_list.append('Rqz.orb')
-    if 'orb' in outputFormat or 'Rlt.orb' in outputFormat or 'Rlt' in outputFormat:
-        format_list.append('Rlt.orb')
-    return sorted(format_list, reverse=True)
-
 def command_line_options():
     clas   = commandLineArgs()
     update_loglevel(clas.verbose)
