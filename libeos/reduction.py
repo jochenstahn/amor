@@ -330,7 +330,7 @@ class AmorReduction:
 
         return q_q, Sq_q, dS_q, fileName
 
-    def expand_file_list(short_notation):
+    def expand_file_list(self, short_notation):
         """Evaluate string entry for file number lists"""
         #log().debug('Executing get_flist')
         file_list=[]

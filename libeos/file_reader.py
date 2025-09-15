@@ -424,6 +424,7 @@ class AmorData:
         self.chopperDetectorDistance = self.detectorDistance-float(np.take(self.hdf['entry1/Amor/chopper/distance'], 0))
         self.tofCut = const.lamdaCut*self.chopperDetectorDistance/const.hdm*1.e-13
 
+        #TODO: 'undefined' is not orso compatible - but should be.
         polarizationConfigs = ['undefined', 'unpolarized', 'po', 'mo', 'op', 'pp', 'mp', 'om', 'pm', 'mm']
         try:
             self.mu   = float(np.take(self.hdf['/entry1/Amor/instrument_control_parameters/mu'], 0))
@@ -455,8 +456,6 @@ class AmorData:
                 polarizationConfigLabel = int(self.hdf['/entry1/Amor/polarization/configuration/value'][0])
             except(KeyError, IndexError):
                 polarizationConfigLabel = 0
-            self.polarizationConfig = polarizationConfigs[polarizationConfigLabel]
-            logging.debug(f'      polarization configuration: {self.polarizationConfig} (index {polarizationConfigLabel})')
         except(KeyError, IndexError):
             logging.warning("     using parameters from nicos cache")
             year_date = str(self.start_date).replace('-', '/', 1)
@@ -481,8 +480,13 @@ class AmorData:
             self.ch1TriggerPhase = float(value)
             value = str(subprocess.getoutput(f'{grp} {cachePath}nicos-ch2_trigger_phase/{year_date}')).split('\t')[-1]
             self.ch2TriggerPhase = float(value)
+            value = str(subprocess.getoutput(f'{grp} {cachePath}nicos-polarizer_config_label/{year_date}')).split('\t')[-1]
+            self. polarizationConfigLabel = int(value)
             
             self.tau     = 30. / self.chopperSpeed
+
+        self.polarizationConfig = polarizationConfigs[polarizationConfigLabel]
+        logging.debug(f'      polarization configuration: {self.polarizationConfig} (index {polarizationConfigLabel})')
 
         logging.debug(f'        tau = {self.tau:5.3f} s')
         if self.config.muOffset:
