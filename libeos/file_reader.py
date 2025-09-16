@@ -263,7 +263,7 @@ class AmorData:
         pulseCurrentS = np.zeros(pulseTimeS.shape[0], dtype=float)
         j = 0
         for i, ti in enumerate(pulseTimeS):
-            if ti >= currentTimeS[j+1]: 
+            while ti >= currentTimeS[j+1]: 
                 j += 1
             pulseCurrentS[i] = currents[j]
             #print(f' {i}  {pulseTimeS[i]}  {pulseCurrentS[i]}') 
