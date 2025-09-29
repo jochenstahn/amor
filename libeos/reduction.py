@@ -10,25 +10,35 @@ from .header import Header
 from .options import EOSConfig, IncidentAngle, MonitorType, NormalisationMethod
 from .instrument import Grid
 
+MONITOR_UNITS = {
+    MonitorType.neutron_monitor: 'cnts',
+    MonitorType.proton_charge: 'mC',
+    MonitorType.time: 's',
+    MonitorType.auto: 'various',
+    MonitorType.debug: 'mC',
+    }
+
 class AmorReduction:
     def __init__(self, config: EOSConfig):
         self.experiment_config = config.experiment
         self.reader_config = config.reader
         self.reduction_config = config.reduction
         self.output_config = config.output
-        # TODO: bad work-around, should make better destriction of parameters usage
-        self.experiment_config.qzRange = self.reduction_config.qzRange
-        self.grid = Grid(config.reduction.qResolution, config.reduction.qzRange)
 
         self.header = Header()
         self.header.reduction.call = config.call_string()
 
-        self.monitorUnit = {MonitorType.neutron_monitor: 'cnts',
-                            MonitorType.proton_charge: 'mC',
-                            MonitorType.time: 's',
-                            MonitorType.auto: 'various',
-                            MonitorType.debug: 'mC',
-                            }
+        self.prepare_actions()
+
+    def prepare_actions(self):
+        """
+        TODO: Evaluates configuration to define a list of actions to be performed.
+        Does not do any actual reduction.
+        """
+        # TODO: bad work-around, should make better destriction of parameters usage
+        self.experiment_config.qzRange = self.reduction_config.qzRange
+
+        self.grid = Grid(self.reduction_config.qResolution, self.reduction_config.qzRange)
 
     def reduce(self):
         if not os.path.exists(f'{self.output_config.outputPath}'):
@@ -85,7 +95,7 @@ class AmorReduction:
         lamda_e = self.file_reader.lamda_e
         detZ_e  = self.file_reader.detZ_e
         self.monitor = np.sum(self.file_reader.monitorPerPulse)
-        logging.warning(f'    monitor = {self.monitor:8.2f} {self.monitorUnit[self.experiment_config.monitorType]}')
+        logging.warning(f'    monitor = {self.monitor:8.2f} {self.MONITOR_UNITS[self.experiment_config.monitorType]}')
         qz_lz, qx_lz, ref_lz, err_lz, res_lz, lamda_lz, theta_lz, int_lz, self.mask_lz = self.project_on_lz(
                 self.file_reader, self.norm_lz, self.normAngle, lamda_e, detZ_e)
         #if self.monitor>1 :
@@ -201,7 +211,7 @@ class AmorReduction:
             detZ_e = self.file_reader.detZ_e[filter_e]
             filter_m = np.where((time<pulseTimeS) & (pulseTimeS<time+interval), True, False)
             self.monitor = np.sum(self.file_reader.monitorPerPulse[filter_m])
-            logging.info(f'      {ti:<4d}  {time:6.0f}  {self.monitor:7.2f} {self.monitorUnit[self.experiment_config.monitorType]}')
+            logging.info(f'      {ti:<4d}  {time:6.0f}  {self.monitor:7.2f} {self.MONITOR_UNITS[self.experiment_config.monitorType]}')
 
             qz_lz, qx_lz, ref_lz, err_lz, res_lz, lamda_lz, theta_lz, int_lz, mask_lz = self.project_on_lz(
                     self.file_reader, self.norm_lz, self.normAngle, lamda_e, detZ_e)

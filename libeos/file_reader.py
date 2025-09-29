@@ -2,13 +2,16 @@ import logging
 import os
 import subprocess
 import sys
+import platform
 from datetime import datetime, timezone
+from dataclasses import dataclass
 try:
     import zoneinfo
 except ImportError:
     # for python versions < 3.9 try to use the backports version
     from backports import zoneinfo
 from typing import List
+from abc import ABC, abstractmethod
 
 import yaml
 import h5py
@@ -24,6 +27,317 @@ from .helpers import merge_frames, extract_walltime, filter_project_x, calculate
 
 # Time zone used to interpret time strings
 AMOR_LOCAL_TIMEZONE = zoneinfo.ZoneInfo(key='Europe/Zurich')
+
+if  platform.node().startswith('amor'):
+    NICOS_CACHE_DIR = '/home/amor/nicosdata/amor/cache/'
+    GREP = '/usr/bin/grep "%s"'
+else:
+    NICOS_CACHE_DIR = None
+
+
+@dataclass
+class AmorGeometry:
+    mu:float
+    nu:float
+    kap:float
+    kad:float
+    div:float
+
+    chopperSeparation: float
+    detectorDistance: float
+    chopperDetectorDistance: float
+
+
+@dataclass
+class AmorTiming:
+    ch1TriggerPhase: float
+    ch2TriggerPhase: float
+    chopperSpeed: float
+    chopperPhase: float
+    tau: float
+
+@dataclass
+class AmorEventStream:
+    tof_e: np.ndarray
+    pixelID_e: np.ndarray
+    dataPacket_p: np.ndarray
+    dataPacketTime_p: np.ndarray
+
+
+class AmorEventData:
+    """
+    Read one amor NeXus datafile and extract relevant header information.
+    """
+    fileName: str
+    owner: fileio.Person
+    experiment: fileio.Experiment
+    sample: fileio.Sample
+    instrument_settings: fileio.InstrumentSettings
+    geometry: AmorGeometry
+    timing: AmorTiming
+    events: AmorEventStream
+
+    def __init__(self, fileName):
+        self.fileName = fileName
+        self.hdf = h5py.File(fileName, 'r', swmr=True)
+
+        self.read_header_info()
+        self.read_instrument_configuration()
+        self.read_event_stream()
+
+        # actions applied to any dataset
+        self.correct_for_chopper_phases()
+        self.read_chopper_trigger_stream()
+        self.extract_walltime()
+
+        # close the input file to free memory
+        del(self.hdf)
+
+    def _replace_if_missing(self, key, nicos_key, dtype=float):
+        try:
+            return dtype(np.take(self.hdf[f'/entry1/Amor/{key}'], 0))
+        except(KeyError, IndexError):
+            if NICOS_CACHE_DIR:
+                try:
+                    logging.warning(f"     using parameter {nicos_key} from nicos cache")
+                    year_date = self.fileDate.strftime('%Y')
+                    value = str(subprocess.getoutput(f'{GREP} {NICOS_CACHE_DIR}nicos-{nicos_key}/{year_date}')).split('\t')[-1]
+                    return dtype(value)
+                except Exception:
+                    logging.error("Couldn't get value from nicos cache", exc_info=True)
+                    return dtype(0)
+            else:
+                logging.warning(f"     parameter {key} not found, relpace by zero")
+                return dtype(0)
+
+    def read_header_info(self):
+        # read general information and first data set
+        title = self.hdf['entry1/title'][0].decode('utf-8')
+        proposal_id = self.hdf['entry1/proposal_id'][0].decode('utf-8')
+        user_name = self.hdf['entry1/user/name'][0].decode('utf-8')
+        user_affiliation = 'unknown'
+        user_email = self.hdf['entry1/user/email'][0].decode('utf-8')
+        user_orcid = None
+        sampleName = self.hdf['entry1/sample/name'][0].decode('utf-8')
+        model = self.hdf['entry1/sample/model'][0].decode('utf-8')
+        instrumentName = 'Amor'
+        source = self.hdf['entry1/Amor/source/name'][0].decode('utf-8')
+        sourceProbe = 'neutron'
+        start_time = self.hdf['entry1/start_time'][0].decode('utf-8')
+        # extract start time as unix time, adding UTC offset of 1h to time string
+        start_date = datetime.fromisoformat(start_time)
+        self.fileDate = start_date.replace(tzinfo=AMOR_LOCAL_TIMEZONE)
+
+        self.owner = fileio.Person(
+                name=user_name,
+                affiliation=user_affiliation,
+                contact=user_email,
+                )
+        if user_orcid:
+            self.owner.orcid = user_orcid
+
+        self.experiment = fileio.Experiment(
+                title=title,
+                instrument=instrumentName,
+                start_date=start_date,
+                probe=sourceProbe,
+                facility=source,
+                proposalID=proposal_id
+                )
+        self.sample = fileio.Sample(
+                name=sampleName,
+                model=SampleModel(stack=model),
+                sample_parameters=None,
+                )
+
+    def read_instrument_configuration(self):
+        chopperSeparation = float(np.take(self.hdf['entry1/Amor/chopper/pair_separation'], 0))
+        detectorDistance = float(np.take(self.hdf['entry1/Amor/detector/transformation/distance'], 0))
+        chopperDetectorDistance = detectorDistance-float(np.take(self.hdf['entry1/Amor/chopper/distance'], 0))
+
+        polarizationConfigs = ['unpolarized', 'unpolarized', 'po', 'mo', 'op', 'pp', 'mp', 'om', 'pm', 'mm']
+
+        mu = self._replace_if_missing('instrument_control_parameters/mu', 'mu', float)
+        nu = self._replace_if_missing('instrument_control_parameters/nu', 'nu', float)
+        kap = self._replace_if_missing('instrument_control_parameters/kappa', 'kappa', float)
+        kad = self._replace_if_missing('instrument_control_parameters/kappa_offset', 'kad', float)
+        div = self._replace_if_missing('instrument_control_parameters/div', 'div', float)
+        ch1TriggerPhase = self._replace_if_missing('chopper/ch1_trigger_phase', 'ch1_trigger_phase', float)
+        ch2TriggerPhase = self._replace_if_missing('chopper/ch2_trigger_phase', 'ch2_trigger_phase', float)
+        chopperSpeed = self._replace_if_missing('chopper/rotation_speed', 'chopper_phase', float)
+        chopperPhase = self._replace_if_missing('chopper/phase', 'chopper_phase', float)
+        tau = 30/chopperSpeed
+
+        self.geometry = AmorGeometry(mu, nu, kap, kad, div,
+                                     chopperSeparation, detectorDistance, chopperDetectorDistance)
+        self.timing = AmorTiming(ch1TriggerPhase, ch2TriggerPhase, chopperSpeed, chopperPhase, tau)
+
+        polarizationConfigLabel = self._replace_if_missing('polarization/configuration/value', 'polarizer_config_label', int)
+        polarizationConfig = fileio.Polarization(polarizationConfigs[polarizationConfigLabel])
+        logging.debug(f'      polarization configuration: {polarizationConfig} (index {polarizationConfigLabel})')
+            # try:
+            #     chopperTriggerTime = (float(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_zero'][7]) \
+            #                           -float(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_zero'][0])) \
+            #                          /7
+            #     self.tau = int(1e-6*chopperTriggerTime/2+0.5)*(1e-3)
+            #     self.chopperSpeed = 30/self.tau
+            #     chopperTriggerTimeDiff = float(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_offset'][2])
+            #     chopperTriggerPhase = 180e-9*chopperTriggerTimeDiff/self.tau
+            #     # TODO: check the next line
+            # except(KeyError, IndexError):
+            #     logging.debug('      chopper speed and phase taken from .hdf file')
+
+
+        self.instrument_settings = fileio.InstrumentSettings(
+            incident_angle = fileio.ValueRange(round(mu+kap+kad-0.5*div, 3),
+                                               round(mu+kap+kad+0.5*div, 3),
+                                               'deg'),
+            wavelength = fileio.ValueRange(const.lamdaCut, const.lamdaMax, 'angstrom'),
+            #polarization = fileio.Polarization.unpolarized,
+            polarization = fileio.Polarization(polarizationConfig)
+            )
+        self.instrument_settings.mu = fileio.Value(
+                round(mu, 3),
+                'deg',
+                comment='sample angle to horizon')
+        self.instrument_settings.nu = fileio.Value(
+                round(nu, 3),
+                'deg',
+                comment='detector angle to horizon')
+        self.instrument_settings.div = fileio.Value(
+                round(div, 3),
+                'deg',
+                comment='incoming beam divergence')
+        self.instrument_settings.kap = fileio.Value(
+                round(kap, 3),
+                'deg',
+                comment='incoming beam inclination')
+        if abs(kad)>0.02:
+            self.instrument_settings.kad = fileio.Value(
+                    round(kad, 3),
+                    'deg',
+                    comment='incoming beam angular offset')
+
+
+    def update_header(self, header:Header):
+        """
+        Add dataset information into an existing header.
+        """
+        header.owner = self.owner
+        header.experiment = self.experiment
+        header.sample = self.sample
+        header.measurement_instrument_settings = self.instrument_settings
+
+    def read_event_stream(self):
+        """
+        Read the actual event data from file.
+        """
+        tof_e = np.array(self.hdf['/entry1/Amor/detector/data/event_time_offset'][:])/1.e9
+        pixelID_e = np.array(self.hdf['/entry1/Amor/detector/data/event_id'][:], dtype=np.int64)
+        dataPacket_p = np.array(self.hdf['/entry1/Amor/detector/data/event_index'][:], dtype=np.uint64)
+        dataPacketTime_p = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][:], dtype=np.int64)
+        self.events = AmorEventStream(tof_e, pixelID_e, dataPacket_p, dataPacketTime_p)
+
+    def correct_for_chopper_phases(self):
+        #print(f'tof phase-offset: {self.ch1TriggerPhase - self.chopperPhase/2}')
+        self.events.tof_e += self.timing.tau * (self.timing.ch1TriggerPhase - self.timing.chopperPhase/2)/180
+
+    def read_chopper_trigger_stream(self):
+        chopper1TriggerTime = np.array(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_zero'][:-2],
+                                            dtype=np.int64)
+        #self.chopper2TriggerTime = self.chopper1TriggerTime + np.array(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time'][:-2], dtype=np.int64)
+        #                           + np.array(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_offset'][:], dtype=np.int64)
+        if np.shape(chopper1TriggerTime)[0] > 2:
+            startTime = chopper1TriggerTime[0]
+            stopTime = chopper1TriggerTime[-1]
+            self.pulseTimeS = chopper1TriggerTime
+        else:
+            logging.warn('     no chopper trigger data available, using event steram instead')
+            startTime = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][0], dtype=np.int64)
+            stopTime = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][-2], dtype=np.int64)
+            self.pulseTimeS = np.arange(startTime, stopTime, self.timing.tau*1e9)
+        self.eventStartTime = startTime
+
+    def extract_walltime(self):
+        self.wallTime_e = extract_walltime(self.events.tof_e, self.events.dataPacket_p, self.events.dataPacketTime_p)
+
+    def read_proton_current_stream(self):
+        self.currentTime = np.array(self.hdf['entry1/Amor/detector/proton_current/time'][:], dtype=np.int64)
+        self.current = np.array(self.hdf['entry1/Amor/detector/proton_current/value'][:,0], dtype=float)
+
+    def __repr__(self):
+        output = f"AmorEventData({self.fileName!r}, "
+        for key in ['owner', 'experiment', 'sample', 'instrument_settings']:
+            value = repr(getattr(self, key)).replace("\n","\n      ")
+            output += f'\n   {key}={value},'
+        output += '\n   )'
+        return output
+
+class EventDataAction(ABC):
+    """
+    Abstract base class used for actions applied to an AmorEventData object.
+    Each action can optionally modify the header information.
+    """
+
+    @abstractmethod
+    def __call__(self, dataset: AmorEventData)->None: ...
+
+    def update_header(self, header:Header)->None:
+        if hasattr(self, 'action_name'):
+            header.reduction.corrections.append(getattr(self, 'action_name'))
+
+class CorrectSeriesTime(EventDataAction):
+    def __init__(self, seriesStartTime):
+        self.seriesStartTime = np.int64(seriesStartTime)
+
+    def __call__(self, dataset: AmorEventData)->None:
+        dataset.pulseTimeS -= self.seriesStartTime
+        dataset.wallTime_e -= self.seriesStartTime
+        dataset.currentTime -= self.seriesStartTime
+        logging.debug(f'      wall time from {dataset.wallTime_e[0]/1e9:6.1f} s to {dataset.wallTime_e[-1]/1e9:6.1f} s')
+
+class AssociatePulseWithMonitor(EventDataAction):
+    def __init__(self, monitorType:MonitorType, lowCurrentThreshold:float):
+        self.monitorType = monitorType
+        self.lowCurrentThreshold = lowCurrentThreshold
+
+    def __call__(self, dataset: AmorEventData)->None:
+        if self.monitorType in [MonitorType.proton_charge or MonitorType.debug]:
+            monitorPerPulse = self.get_current_per_pulse(dataset.pulseTimeS,
+                                                              dataset.currentTime,
+                                                              dataset.current)\
+                                                              * 2*dataset.timing.tau * 1e-3
+            # filter low-current pulses
+            dataset.monitorPerPulse = np.where(
+                    monitorPerPulse > 2*dataset.timing.tau * self.lowCurrentThreshold * 1e-3,
+                    monitorPerPulse, 0)
+        elif self.monitorType==MonitorType.time:
+            dataset.monitorPerPulse = np.ones(np.shape(dataset.pulseTimeS)[0])*2*dataset.timing.tau
+        else:  # pulses
+            dataset.monitorPerPulse = np.ones(np.shape(dataset.pulseTimeS)[0])
+
+    @staticmethod
+    def get_current_per_pulse(pulseTimeS, currentTimeS, currents):
+        # add currents for early pulses and current time value after last pulse (j+1)
+        currentTimeS = np.hstack([[0], currentTimeS, [pulseTimeS[-1]+1]])
+        currents = np.hstack([[0], currents])
+        pulseCurrentS = np.zeros(pulseTimeS.shape[0], dtype=float)
+        j = 0
+        for i, ti in enumerate(pulseTimeS):
+            while ti >= currentTimeS[j+1]:
+                j += 1
+            pulseCurrentS[i] = currents[j]
+        return pulseCurrentS
+
+class FilterStrangeTimes(EventDataAction):
+    def __call__(self, dataset: AmorEventData)->None:
+        filter_e = (dataset.events.tof_e<=2*dataset.timing.tau)
+        dataset.events.tof_e = dataset.events.tof_e[filter_e]
+        dataset.events.pixelID_e = dataset.events.pixelID_e[filter_e]
+        dataset.events.wallTime_e = dataset.events.wallTime_e[filter_e]
+        if np.shape(filter_e)[0]-np.shape(dataset.events.tof_e)[0]>0.5:
+            logging.warning(f'        strange times: {np.shape(filter_e)[0]-np.shape(dataset.events.tof_e)[0]}')
+
 
 class AmorData:
     """read meta-data and event streams from .hdf file(s), apply filters and conversions"""
