@@ -11,37 +11,6 @@ import numpy as np
 
 import logging
 
-#class Defaults:
-    # fileIdentifier
-    #outputPath                  = '.'
-    #rawPath                     = ['.', path.join('.','raw'), path.join('..','raw'), path.join('..','..','raw')]
-    #year                        = datetime.now().year
-    #normalisationFileIdentifier = []
-    #normalisationMethod         = 'o'
-    #monitorType                 = 'auto'
-    # subtract
-    #outputName                  = "fromEOS"
-    #outputFormat                = ['Rqz.ort']
-    #incidentAngle               = 'alphaF'
-    #qResolution                 = 0.01
-    #timeSlize
-    #scale                       = [1]
-    # autoscale
-    #lambdaRange                 = [2., 15.]
-    #thetaRange                  = [-12., 12.]
-    #thetaRangeR                 = [-0.75, 0.75]
-    #yRange                      = [11, 41]
-    #qzRange                     = [0.005, 0.51]
-    #chopperSpeed                = 500
-    #chopperPhase                = 0.0
-    #chopperPhaseOffset          = -9.1
-    #muOffset                    = 0
-    #mu                          = 0
-    #nu                          = 0
-    #sampleModel                 = None
-    #lowCurrentThreshold         = 50
-    #
-
 @dataclass
 class CommandlineParameterConfig:
     argument: str # default parameter for command line resutign ins "--argument"
