@@ -50,7 +50,7 @@ class AmorGeometry:
 
 # Structured datatypes used for event streams
 EVENT_TYPE = np.dtype([('tof', np.float64),('pixelID', np.uint32), ('wallTime', np.int64)])
-PACKET_TYPE = np.dtype([('ID', np.uint32), ('Time', np.int64)])
+PACKET_TYPE = np.dtype([('start_index', np.uint32), ('Time', np.int64)])
 PULSE_TYPE = np.dtype([('time', np.int64), ('monitor', np.float32)])
 PC_TYPE = np.dtype([('current', np.float32), ('time', np.int64)])
 
@@ -75,6 +75,10 @@ class AmorEventData:
     Read one amor NeXus datafile and extract relevant header information.
     """
     fileName: str
+    first_index: int
+    last_index: int = -1
+    EOF: bool = False
+    max_events: int
     owner: fileio.Person
     experiment: fileio.Experiment
     sample: fileio.Sample
@@ -87,8 +91,10 @@ class AmorEventData:
     # attributes that will only be assigned by specific actions
     monitorPerPulse:np.ndarray
 
-    def __init__(self, fileName):
+    def __init__(self, fileName, first_index=0, max_events=1_000_000):
         self.fileName = fileName
+        self.first_index = first_index
+        self.max_events = max_events
         self.hdf = h5py.File(fileName, 'r', swmr=True)
 
         self.read_header_info()
@@ -241,14 +247,35 @@ class AmorEventData:
 
     def read_event_stream(self):
         """
-        Read the actual event data from file.
+        Read the actual event data from file. If file is too large, find event index from packets
+        that allow splitting of file smaller than self.max_events.
         """
-        events = np.recarray(self.hdf['/entry1/Amor/detector/data/event_time_offset'].shape, dtype=EVENT_TYPE)
-        events.tof = np.array(self.hdf['/entry1/Amor/detector/data/event_time_offset'][:])/1.e9
-        events.pixelID = self.hdf['/entry1/Amor/detector/data/event_id'][:]
         packets = np.recarray(self.hdf['/entry1/Amor/detector/data/event_index'].shape, dtype=PACKET_TYPE)
-        packets.ID = self.hdf['/entry1/Amor/detector/data/event_index'][:]
+        packets.start_index = self.hdf['/entry1/Amor/detector/data/event_index'][:]
         packets.Time = self.hdf['/entry1/Amor/detector/data/event_time_zero'][:]
+        try:
+            # packet index that matches first event index
+            start_packet = int(np.where(packets.start_index==self.first_index)[0][0])
+        except IndexError:
+            raise IndexError(f'No event packet found starting at event #{self.first_index}')
+        packets = packets[start_packet:]
+
+        nevts = self.hdf['/entry1/Amor/detector/data/event_time_offset'].shape[0]
+        if (nevts-self.first_index)>self.max_events:
+            end_packet = np.where(packets.start_index<=(self.first_index+self.max_events))[0][-1]
+            self.last_index = packets.start_index[end_packet]-1
+            packets = packets[:end_packet]
+        else:
+            self.last_index = nevts-1
+            self.EOF = True
+        nevts = self.last_index+1-self.first_index
+
+        # adapte packet to event index relation
+        packets.start_index -= self.first_index
+
+        events = np.recarray(nevts, dtype=EVENT_TYPE)
+        events.tof = np.array(self.hdf['/entry1/Amor/detector/data/event_time_offset'][self.first_index:self.last_index+1])/1.e9
+        events.pixelID = self.hdf['/entry1/Amor/detector/data/event_id'][self.first_index:self.last_index+1]
         self.data = AmorEventStream(events, packets)
 
     def correct_for_chopper_phases(self):
@@ -269,18 +296,21 @@ class AmorEventData:
             pulseTimeS = np.arange(startTime, stopTime, self.timing.tau*1e9, dtype=np.int64)
         pulses = np.recarray(pulseTimeS.shape, dtype=PULSE_TYPE)
         pulses.time = pulseTimeS
+        # apply filter in case the events were filtered
+        if self.first_index>0 or not self.EOF:
+            pulses = pulses[(pulses.time>=self.data.packets.Time[0])&(pulses.time<=self.data.packets.Time[-1])]
         self.data.pulses = pulses
         self.eventStartTime = startTime
 
     def extract_walltime(self):
         # TODO: fix numba type definition after refactor
-        self.data.events.wallTime = extract_walltime(self.data.events['tof'],
-                                                        self.data.packets['ID'].astype(np.uint64),
-                                                        self.data.packets['Time'])
+        self.data.events.wallTime = extract_walltime(self.data.events.tof,
+                                                        self.data.packets.start_index.astype(np.uint64),
+                                                        self.data.packets.Time)
 
     def read_proton_current_stream(self):
         proton_current = np.recarray(self.hdf['entry1/Amor/detector/proton_current/time'].shape, dtype=PC_TYPE)
-        proton_current.tiem = self.hdf['entry1/Amor/detector/proton_current/time'][:]
+        proton_current.time = self.hdf['entry1/Amor/detector/proton_current/time'][:]
         proton_current.current = self.hdf['entry1/Amor/detector/proton_current/value'][:,0]
         self.data.proton_current = proton_current
 
