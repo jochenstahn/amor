@@ -2,6 +2,7 @@ import h5py
 import numpy as np
 import platform
 import logging
+import subprocess
 
 from datetime import datetime
 from dataclasses import dataclass
@@ -42,11 +43,7 @@ class AmorGeometry:
     detectorDistance: float
     chopperDetectorDistance: float
 
-# Structured datatypes used for event streams
-EVENT_TYPE = np.dtype([('tof', np.float64),('pixelID', np.uint32), ('wallTime', np.int64)])
-PACKET_TYPE = np.dtype([('start_index', np.uint32), ('Time', np.int64)])
-PULSE_TYPE = np.dtype([('time', np.int64), ('monitor', np.float32)])
-PC_TYPE = np.dtype([('current', np.float32), ('time', np.int64)])
+    delta_z: Optional[float] = None
 
 @dataclass
 class AmorTiming:
@@ -55,6 +52,12 @@ class AmorTiming:
     chopperSpeed: float
     chopperPhase: float
     tau: float
+
+# Structured datatypes used for event streams
+EVENT_TYPE = np.dtype([('tof', np.float64),('pixelID', np.uint32), ('wallTime', np.int64)])
+PACKET_TYPE = np.dtype([('start_index', np.uint32), ('Time', np.int64)])
+PULSE_TYPE = np.dtype([('time', np.int64), ('monitor', np.float32)])
+PC_TYPE = np.dtype([('current', np.float32), ('time', np.int64)])
 
 @dataclass
 class AmorEventStream:
@@ -175,9 +178,21 @@ class AmorEventData:
         div = self._replace_if_missing('instrument_control_parameters/div', 'div', float)
         ch1TriggerPhase = self._replace_if_missing('chopper/ch1_trigger_phase', 'ch1_trigger_phase', float)
         ch2TriggerPhase = self._replace_if_missing('chopper/ch2_trigger_phase', 'ch2_trigger_phase', float)
-        chopperSpeed = self._replace_if_missing('chopper/rotation_speed', 'chopper_phase', float)
-        chopperPhase = self._replace_if_missing('chopper/phase', 'chopper_phase', float)
-        tau = 30/chopperSpeed
+        try:
+            chopperTriggerTime = (float(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_zero'][7]) \
+                                  -float(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_zero'][0])) \
+                                 /7
+            chopperTriggerTimeDiff = float(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_offset'][2])
+        except (KeyError, IndexError):
+            logging.debug('      chopper speed and phase taken from .hdf file')
+            chopperSpeed = self._replace_if_missing('chopper/rotation_speed', 'chopper_phase', float)
+            chopperPhase = self._replace_if_missing('chopper/phase', 'chopper_phase', float)
+            tau = 30/chopperSpeed
+        else:
+            tau = int(1e-6*chopperTriggerTime/2+0.5)*(1e-3)
+            chopperTriggerPhase = 180e-9*chopperTriggerTimeDiff/tau
+            chopperSpeed = 30/tau
+            chopperPhase = chopperTriggerPhase+ch1TriggerPhase-ch2TriggerPhase
 
         self.geometry = AmorGeometry(mu, nu, kap, kad, div,
                                      chopperSeparation, detectorDistance, chopperDetectorDistance)
@@ -186,17 +201,6 @@ class AmorEventData:
         polarizationConfigLabel = self._replace_if_missing('polarization/configuration/value', 'polarizer_config_label', int)
         polarizationConfig = fileio.Polarization(polarizationConfigs[polarizationConfigLabel])
         logging.debug(f'      polarization configuration: {polarizationConfig} (index {polarizationConfigLabel})')
-            # try:
-            #     chopperTriggerTime = (float(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_zero'][7]) \
-            #                           -float(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_zero'][0])) \
-            #                          /7
-            #     self.tau = int(1e-6*chopperTriggerTime/2+0.5)*(1e-3)
-            #     self.chopperSpeed = 30/self.tau
-            #     chopperTriggerTimeDiff = float(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_offset'][2])
-            #     chopperTriggerPhase = 180e-9*chopperTriggerTimeDiff/self.tau
-            #     # TODO: check the next line
-            # except(KeyError, IndexError):
-            #     logging.debug('      chopper speed and phase taken from .hdf file')
 
 
         self.instrument_settings = fileio.InstrumentSettings(
