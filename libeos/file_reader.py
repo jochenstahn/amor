@@ -564,7 +564,7 @@ class AmorData:
                 )
         self.header.sample = fileio.Sample(
                 name=sampleName,
-                model=SampleModelfrom_dict(model),
+                model=SampleModel.from_dict(model),
                 sample_parameters=None,
                 )
         self.header.measurement_scheme = 'angle- and energy-dispersive'
