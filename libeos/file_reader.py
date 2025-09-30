@@ -10,6 +10,7 @@ except ImportError:
     from backports import zoneinfo
 from typing import List
 
+import yaml
 import h5py
 import numpy as np
 from orsopy import fileio
@@ -520,14 +521,31 @@ class AmorData:
         user_email = self.hdf['entry1/user/email'][0].decode('utf-8')
         user_orcid = None
         sampleName = self.hdf['entry1/sample/name'][0].decode('utf-8')
-        model = self.hdf['entry1/sample/model'][0].decode('utf-8')
         instrumentName = 'Amor'
         source = self.hdf['entry1/Amor/source/name'][0].decode('utf-8')
         sourceProbe = 'neutron'
         start_time = self.hdf['entry1/start_time'][0].decode('utf-8')
         self.start_date = start_time.split(' ')[0]
+
         if self.config.sampleModel:
-            model = self.config.sampleModel
+            if 'yml' in self.config.sampleModel or 'yaml' in self.config.sampleModel:
+                if os.path.isfile(self.config.sampleModel):
+                    with open(self.config.sampleModel, 'r') as model_yml:
+                        model = yaml.safe_load(model_yml)
+                else:
+                    logging.warning(f'  ! the file {self.config.sampleModel}.yml does not exist. Ignored!')
+            else:
+                 model = dict(stack = self.config.sampleModel)
+        try:
+            model
+        except NameError:
+            _model = self.hdf['entry1/sample/model'][0].decode('utf-8')
+            if type(_model) == dict:
+                model = yaml.safe_load(_model)
+            else:
+                model = dict(stack = _model)
+
+
         # assembling orso header information
         self.header.owner = fileio.Person(
                 name=user_name,
@@ -546,7 +564,7 @@ class AmorData:
                 )
         self.header.sample = fileio.Sample(
                 name=sampleName,
-                model=SampleModel(stack=model),
+                model=SampleModelfrom_dict(model),
                 sample_parameters=None,
                 )
         self.header.measurement_scheme = 'angle- and energy-dispersive'
