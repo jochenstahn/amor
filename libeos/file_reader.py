@@ -10,12 +10,13 @@ try:
 except ImportError:
     # for python versions < 3.9 try to use the backports version
     from backports import zoneinfo
-from typing import List
+from typing import List, Optional
 from abc import ABC, abstractmethod
 
 import yaml
 import h5py
 import numpy as np
+import numpy.typing as npt
 from orsopy import fileio
 from orsopy.fileio.model_language import SampleModel
 
@@ -47,6 +48,11 @@ class AmorGeometry:
     detectorDistance: float
     chopperDetectorDistance: float
 
+# Structured datatypes used for event streams
+EVENT_TYPE = np.dtype([('tof', np.float64),('pixelID', np.uint32), ('wallTime', np.int64)])
+PACKET_TYPE = np.dtype([('ID', np.uint32), ('Time', np.int64)])
+PULSE_TYPE = np.dtype([('time', np.int64), ('monitor', np.float32)])
+PC_TYPE = np.dtype([('current', np.float32), ('time', np.int64)])
 
 @dataclass
 class AmorTiming:
@@ -58,10 +64,10 @@ class AmorTiming:
 
 @dataclass
 class AmorEventStream:
-    tof_e: np.ndarray
-    pixelID_e: np.ndarray
-    dataPacket_p: np.ndarray
-    dataPacketTime_p: np.ndarray
+    events: np.recarray # EVENT_TYPE
+    packets: np.recarray # PACKET_TYPE
+    pulses: Optional[np.recarray] = None # PULSE_TYPE
+    proton_current: Optional[np.recarray] = None # PC_TYPE
 
 
 class AmorEventData:
@@ -75,7 +81,11 @@ class AmorEventData:
     instrument_settings: fileio.InstrumentSettings
     geometry: AmorGeometry
     timing: AmorTiming
-    events: AmorEventStream
+    data: AmorEventStream
+
+    startTime: np.int64
+    # attributes that will only be assigned by specific actions
+    monitorPerPulse:np.ndarray
 
     def __init__(self, fileName):
         self.fileName = fileName
@@ -89,6 +99,7 @@ class AmorEventData:
         self.correct_for_chopper_phases()
         self.read_chopper_trigger_stream()
         self.extract_walltime()
+        self.read_proton_current_stream()
 
         # close the input file to free memory
         del(self.hdf)
@@ -232,15 +243,16 @@ class AmorEventData:
         """
         Read the actual event data from file.
         """
-        tof_e = np.array(self.hdf['/entry1/Amor/detector/data/event_time_offset'][:])/1.e9
-        pixelID_e = np.array(self.hdf['/entry1/Amor/detector/data/event_id'][:], dtype=np.int64)
-        dataPacket_p = np.array(self.hdf['/entry1/Amor/detector/data/event_index'][:], dtype=np.uint64)
-        dataPacketTime_p = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][:], dtype=np.int64)
-        self.events = AmorEventStream(tof_e, pixelID_e, dataPacket_p, dataPacketTime_p)
+        events = np.recarray(self.hdf['/entry1/Amor/detector/data/event_time_offset'].shape, dtype=EVENT_TYPE)
+        events.tof = np.array(self.hdf['/entry1/Amor/detector/data/event_time_offset'][:])/1.e9
+        events.pixelID = self.hdf['/entry1/Amor/detector/data/event_id'][:]
+        packets = np.recarray(self.hdf['/entry1/Amor/detector/data/event_index'].shape, dtype=PACKET_TYPE)
+        packets.ID = self.hdf['/entry1/Amor/detector/data/event_index'][:]
+        packets.Time = self.hdf['/entry1/Amor/detector/data/event_time_zero'][:]
+        self.data = AmorEventStream(events, packets)
 
     def correct_for_chopper_phases(self):
-        #print(f'tof phase-offset: {self.ch1TriggerPhase - self.chopperPhase/2}')
-        self.events.tof_e += self.timing.tau * (self.timing.ch1TriggerPhase - self.timing.chopperPhase/2)/180
+        self.data.events.tof += self.timing.tau*(self.timing.ch1TriggerPhase-self.timing.chopperPhase/2)/180
 
     def read_chopper_trigger_stream(self):
         chopper1TriggerTime = np.array(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_zero'][:-2],
@@ -249,28 +261,41 @@ class AmorEventData:
         #                           + np.array(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_offset'][:], dtype=np.int64)
         if np.shape(chopper1TriggerTime)[0] > 2:
             startTime = chopper1TriggerTime[0]
-            stopTime = chopper1TriggerTime[-1]
-            self.pulseTimeS = chopper1TriggerTime
+            pulseTimeS = chopper1TriggerTime
         else:
             logging.warn('     no chopper trigger data available, using event steram instead')
             startTime = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][0], dtype=np.int64)
             stopTime = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][-2], dtype=np.int64)
-            self.pulseTimeS = np.arange(startTime, stopTime, self.timing.tau*1e9)
+            pulseTimeS = np.arange(startTime, stopTime, self.timing.tau*1e9, dtype=np.int64)
+        pulses = np.recarray(pulseTimeS.shape, dtype=PULSE_TYPE)
+        pulses.time = pulseTimeS
+        self.data.pulses = pulses
         self.eventStartTime = startTime
 
     def extract_walltime(self):
-        self.wallTime_e = extract_walltime(self.events.tof_e, self.events.dataPacket_p, self.events.dataPacketTime_p)
+        # TODO: fix numba type definition after refactor
+        self.data.events.wallTime = extract_walltime(self.data.events['tof'],
+                                                        self.data.packets['ID'].astype(np.uint64),
+                                                        self.data.packets['Time'])
 
     def read_proton_current_stream(self):
-        self.currentTime = np.array(self.hdf['entry1/Amor/detector/proton_current/time'][:], dtype=np.int64)
-        self.current = np.array(self.hdf['entry1/Amor/detector/proton_current/value'][:,0], dtype=float)
+        proton_current = np.recarray(self.hdf['entry1/Amor/detector/proton_current/time'].shape, dtype=PC_TYPE)
+        proton_current.tiem = self.hdf['entry1/Amor/detector/proton_current/time'][:]
+        proton_current.current = self.hdf['entry1/Amor/detector/proton_current/value'][:,0]
+        self.data.proton_current = proton_current
 
-    def __repr__(self):
-        output = f"AmorEventData({self.fileName!r}, "
+    def info(self):
+        output = ""
         for key in ['owner', 'experiment', 'sample', 'instrument_settings']:
             value = repr(getattr(self, key)).replace("\n","\n      ")
-            output += f'\n   {key}={value},'
-        output += '\n   )'
+            output += f'\n{key}={value},'
+        output += '\n'
+        return output
+
+    def __repr__(self):
+        output = (f"AmorEventData({self.fileName!r}) # {self.data.events.shape[0]} events, "
+                  f"{self.data.pulses.shape[0]} pulses")
+
         return output
 
 class EventDataAction(ABC):
@@ -291,10 +316,12 @@ class CorrectSeriesTime(EventDataAction):
         self.seriesStartTime = np.int64(seriesStartTime)
 
     def __call__(self, dataset: AmorEventData)->None:
-        dataset.pulseTimeS -= self.seriesStartTime
-        dataset.wallTime_e -= self.seriesStartTime
-        dataset.currentTime -= self.seriesStartTime
-        logging.debug(f'      wall time from {dataset.wallTime_e[0]/1e9:6.1f} s to {dataset.wallTime_e[-1]/1e9:6.1f} s')
+        dataset.data.pulses.time -= self.seriesStartTime
+        dataset.data.events.wallTime -= self.seriesStartTime
+        dataset.data.proton_current.time -= self.seriesStartTime
+        start, stop = dataset.data.proton_current.time[0], dataset.data.proton_current.time[-1]
+        logging.debug(f'      wall time from {start:6.1f} s to {stop/1e9:6.1f} s, '
+                      f'series time = {self.seriesStartTime/1e9:6.1f}')
 
 class AssociatePulseWithMonitor(EventDataAction):
     def __init__(self, monitorType:MonitorType, lowCurrentThreshold:float):
@@ -302,19 +329,20 @@ class AssociatePulseWithMonitor(EventDataAction):
         self.lowCurrentThreshold = lowCurrentThreshold
 
     def __call__(self, dataset: AmorEventData)->None:
+        logging.debug(f'      using monitor type {self.monitorType}')
         if self.monitorType in [MonitorType.proton_charge or MonitorType.debug]:
-            monitorPerPulse = self.get_current_per_pulse(dataset.pulseTimeS,
-                                                              dataset.currentTime,
-                                                              dataset.current)\
+            monitorPerPulse = self.get_current_per_pulse(dataset.data.pulses.time,
+                                                              dataset.data.proton_current.time,
+                                                              dataset.data.proton_current.current)\
                                                               * 2*dataset.timing.tau * 1e-3
             # filter low-current pulses
-            dataset.monitorPerPulse = np.where(
+            dataset.data.pulses.monitor = np.where(
                     monitorPerPulse > 2*dataset.timing.tau * self.lowCurrentThreshold * 1e-3,
                     monitorPerPulse, 0)
         elif self.monitorType==MonitorType.time:
-            dataset.monitorPerPulse = np.ones(np.shape(dataset.pulseTimeS)[0])*2*dataset.timing.tau
+            dataset.data.pulses.monitor  = 2*dataset.timing.tau
         else:  # pulses
-            dataset.monitorPerPulse = np.ones(np.shape(dataset.pulseTimeS)[0])
+            dataset.data.pulses.monitor  = 1
 
     @staticmethod
     def get_current_per_pulse(pulseTimeS, currentTimeS, currents):
@@ -331,12 +359,10 @@ class AssociatePulseWithMonitor(EventDataAction):
 
 class FilterStrangeTimes(EventDataAction):
     def __call__(self, dataset: AmorEventData)->None:
-        filter_e = (dataset.events.tof_e<=2*dataset.timing.tau)
-        dataset.events.tof_e = dataset.events.tof_e[filter_e]
-        dataset.events.pixelID_e = dataset.events.pixelID_e[filter_e]
-        dataset.events.wallTime_e = dataset.events.wallTime_e[filter_e]
-        if np.shape(filter_e)[0]-np.shape(dataset.events.tof_e)[0]>0.5:
-            logging.warning(f'        strange times: {np.shape(filter_e)[0]-np.shape(dataset.events.tof_e)[0]}')
+        filter_e = (dataset.data.events.tof<=2*dataset.timing.tau)
+        dataset.data.events = dataset.data.events[filter_e]
+        if filter_e.any():
+            logging.warning(f'        strange times: {filter_e.sum()}')
 
 
 class AmorData:
