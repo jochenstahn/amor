@@ -1,3 +1,7 @@
+"""
+Reading of Amor NeXus data files to extract metadata and event stream.
+"""
+
 import h5py
 import numpy as np
 import platform
@@ -5,8 +9,6 @@ import logging
 import subprocess
 
 from datetime import datetime
-from dataclasses import dataclass
-from typing import Optional
 
 from orsopy import fileio
 from orsopy.fileio.model_language import SampleModel
@@ -14,6 +16,7 @@ from orsopy.fileio.model_language import SampleModel
 from . import const
 from .header import Header
 from .helpers import extract_walltime
+from .event_data_types import AmorGeometry, AmorTiming, AmorEventStream, PACKET_TYPE, EVENT_TYPE, PULSE_TYPE, PC_TYPE
 
 try:
     import zoneinfo
@@ -31,45 +34,12 @@ if  platform.node().startswith('amor'):
 else:
     NICOS_CACHE_DIR = None
 
-@dataclass
-class AmorGeometry:
-    mu:float
-    nu:float
-    kap:float
-    kad:float
-    div:float
-
-    chopperSeparation: float
-    detectorDistance: float
-    chopperDetectorDistance: float
-
-    delta_z: Optional[float] = None
-
-@dataclass
-class AmorTiming:
-    ch1TriggerPhase: float
-    ch2TriggerPhase: float
-    chopperSpeed: float
-    chopperPhase: float
-    tau: float
-
-# Structured datatypes used for event streams
-EVENT_TYPE = np.dtype([('tof', np.float64),('pixelID', np.uint32), ('wallTime', np.int64)])
-PACKET_TYPE = np.dtype([('start_index', np.uint32), ('Time', np.int64)])
-PULSE_TYPE = np.dtype([('time', np.int64), ('monitor', np.float32)])
-PC_TYPE = np.dtype([('current', np.float32), ('time', np.int64)])
-
-@dataclass
-class AmorEventStream:
-    events: np.recarray # EVENT_TYPE
-    packets: np.recarray # PACKET_TYPE
-    pulses: Optional[np.recarray] = None # PULSE_TYPE
-    proton_current: Optional[np.recarray] = None # PC_TYPE
-
 
 class AmorEventData:
     """
     Read one amor NeXus datafile and extract relevant header information.
+
+    Implements EventDatasetProtocol
     """
     fileName: str
     first_index: int
@@ -85,8 +55,6 @@ class AmorEventData:
     data: AmorEventStream
 
     startTime: np.int64
-    # attributes that will only be assigned by specific actions
-    monitorPerPulse:np.ndarray
 
     def __init__(self, fileName, first_index=0, max_events=1_000_000):
         self.fileName = fileName

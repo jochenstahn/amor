@@ -1,5 +1,5 @@
 """
-Define a event dataformat that performs reduction actions like wavelength calculation on per-event basis.
+Define an event dataformat that performs reduction actions like wavelength calculation on per-event basis.
 """
 import numpy as np
 import logging
@@ -7,30 +7,18 @@ import logging
 from typing import Tuple
 
 from . import const
-from .file_reader import AmorEventData, EVENT_TYPE
-from .event_handling import EventDataAction
+from .event_data_types import EventDataAction, EventDatasetProtocol, EVENT_TYPE, ANA_EVENT_TYPE, FINAL_EVENT_TYPE
 from .helpers import filter_project_x
 from .instrument import Detector
 from .options import IncidentAngle
 from .header import Header
 
 
-# Structured datatypes used for event streams
-ANA_EVENT_TYPE = np.dtype([('tof', np.float64),('pixelID', np.uint32), ('wallTime', np.int64),
-                           ('detZ', np.float64), ('detXdist', np.float64), ('delta', np.float64),
-                           ('mask', bool)])
-
-FINAL_EVENT_TYPE = np.dtype([('tof', np.float64),('pixelID', np.uint32), ('wallTime', np.int64),
-                           ('detZ', np.float64), ('detXdist', np.float64), ('delta', np.float64),
-                           ('mask', bool),
-                           ('lamda', np.float64), ('qz', np.float64), ('qx', np.float64), ])
-
-
 class AnalyzedEventData(EventDataAction):
     def __init__(self, yRange: Tuple[int, int]):
         self.yRange = yRange
 
-    def perform_action(self, dataset: AmorEventData) ->None:
+    def perform_action(self, dataset: EventDatasetProtocol) ->None:
         d = dataset.data
         if d.events.dtype != EVENT_TYPE:
             raise ValueError("AnalyzeEventData only works on raw AmorEventData, this dataset has already been altered")
@@ -70,7 +58,7 @@ class TofTimeCorrection(EventDataAction):
     def __init__(self, correct_chopper_opening: bool = True):
         self.correct_chopper_opening = correct_chopper_opening
 
-    def perform_action(self, dataset: AmorEventData) ->None:
+    def perform_action(self, dataset: EventDatasetProtocol) ->None:
         d = dataset.data
         if d.events.dtype != ANA_EVENT_TYPE:
             raise ValueError("TofTimeCorrection requires dataset with analyzed events, perform AnalyzedEventData first")
@@ -85,7 +73,7 @@ class WavelengthAndQ(EventDataAction):
         self.lambdaRange = lambdaRange
         self.incidentAngle = incidentAngle
 
-    def perform_action(self, dataset: AmorEventData) ->None:
+    def perform_action(self, dataset: EventDatasetProtocol) ->None:
         d = dataset.data
         if d.events.dtype != ANA_EVENT_TYPE:
             raise ValueError("WavelengthAndQ requires dataset with analyzed events, perform AnalyzedEventData first")
@@ -129,7 +117,7 @@ class FilterQzRange(EventDataAction):
     def __init__(self, qzRange: Tuple[float, float]):
         self.qzRange = qzRange
 
-    def perform_action(self, dataset: AmorEventData) ->None:
+    def perform_action(self, dataset: EventDatasetProtocol) ->None:
         d = dataset.data
         if d.events.dtype != FINAL_EVENT_TYPE:
             raise ValueError("FilterQzRange requires dataset with fully analyzed events, perform WavelengthAndQ first")
@@ -138,7 +126,7 @@ class FilterQzRange(EventDataAction):
             d.events.mask &=  (self.qzRange[0]<=d.events.qz) & (d.events.qz<=self.qzRange[1])
 
 class ApplyMask(EventDataAction):
-    def perform_action(self, dataset: AmorEventData) ->None:
+    def perform_action(self, dataset: EventDatasetProtocol) ->None:
         d = dataset.data
         if not 'mask' in d.events.dtype.names:
             logging.debug("ApplyMask performed on dataset without mask")

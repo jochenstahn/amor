@@ -4,35 +4,16 @@ Calculations performed on AmorEventData.
 import logging
 import numpy as np
 
-from abc import ABC, abstractmethod
-
-from .header import Header
 from .options import MonitorType
-from .file_reader import AmorEventData
+from .event_data_types import EventDatasetProtocol, EventDataAction
 from .helpers import merge_frames
 
-class EventDataAction(ABC):
-    """
-    Abstract base class used for actions applied to an AmorEventData object.
-    Each action can optionally modify the header information.
-    """
-
-    def __call__(self, dataset: AmorEventData)->None:
-        logging.debug(f"        Enter action {self.__class__.__name__} on {dataset!r}")
-        self.perform_action(dataset)
-
-    @abstractmethod
-    def perform_action(self, dataset: AmorEventData)->None: ...
-
-    def update_header(self, header:Header)->None:
-        if hasattr(self, 'action_name'):
-            header.reduction.corrections.append(getattr(self, 'action_name'))
 
 class CorrectSeriesTime(EventDataAction):
     def __init__(self, seriesStartTime):
         self.seriesStartTime = np.int64(seriesStartTime)
 
-    def perform_action(self, dataset: AmorEventData)->None:
+    def perform_action(self, dataset: EventDatasetProtocol)->None:
         dataset.data.pulses.time -= self.seriesStartTime
         dataset.data.events.wallTime -= self.seriesStartTime
         dataset.data.proton_current.time -= self.seriesStartTime
@@ -45,7 +26,7 @@ class AssociatePulseWithMonitor(EventDataAction):
         self.monitorType = monitorType
         self.lowCurrentThreshold = lowCurrentThreshold
 
-    def perform_action(self, dataset: AmorEventData)->None:
+    def perform_action(self, dataset: EventDatasetProtocol)->None:
         logging.debug(f'      using monitor type {self.monitorType}')
         if self.monitorType in [MonitorType.proton_charge or MonitorType.debug]:
             monitorPerPulse = self.get_current_per_pulse(dataset.data.pulses.time,
@@ -93,7 +74,7 @@ class AssociatePulseWithMonitor(EventDataAction):
 
 
 class FilterStrangeTimes(EventDataAction):
-    def perform_action(self, dataset: AmorEventData)->None:
+    def perform_action(self, dataset: EventDatasetProtocol)->None:
         filter_e = (dataset.data.events.tof<=2*dataset.timing.tau)
         dataset.data.events = dataset.data.events[filter_e]
         if not filter_e.all():
@@ -103,7 +84,7 @@ class MergeFrames(EventDataAction):
     def __init__(self, tofCut:float):
         self.tofCut = tofCut
 
-    def perform_action(self, dataset: AmorEventData)->None:
+    def perform_action(self, dataset: EventDatasetProtocol)->None:
         total_offset = (self.tofCut +
                         dataset.timing.tau * (dataset.timing.ch1TriggerPhase + dataset.timing.chopperPhase/2)/180)
         dataset.data.events.tof = merge_frames(dataset.data.events.tof, self.tofCut, dataset.timing.tau, total_offset)
