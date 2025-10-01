@@ -95,7 +95,7 @@ class AmorReduction:
         lamda_e = self.file_reader.lamda_e
         detZ_e  = self.file_reader.detZ_e
         self.monitor = np.sum(self.file_reader.monitorPerPulse)
-        logging.warning(f'    monitor = {self.monitor:8.2f} {self.MONITOR_UNITS[self.experiment_config.monitorType]}')
+        logging.warning(f'    monitor = {self.monitor:8.2f} {MONITOR_UNITS[self.experiment_config.monitorType]}')
         qz_lz, qx_lz, ref_lz, err_lz, res_lz, lamda_lz, theta_lz, int_lz, self.mask_lz = self.project_on_lz(
                 self.file_reader, self.norm_lz, self.normAngle, lamda_e, detZ_e)
         #if self.monitor>1 :
@@ -211,7 +211,7 @@ class AmorReduction:
             detZ_e = self.file_reader.detZ_e[filter_e]
             filter_m = np.where((time<pulseTimeS) & (pulseTimeS<time+interval), True, False)
             self.monitor = np.sum(self.file_reader.monitorPerPulse[filter_m])
-            logging.info(f'      {ti:<4d}  {time:6.0f}  {self.monitor:7.2f} {self.MONITOR_UNITS[self.experiment_config.monitorType]}')
+            logging.info(f'      {ti:<4d}  {time:6.0f}  {self.monitor:7.2f} {MONITOR_UNITS[self.experiment_config.monitorType]}')
 
             qz_lz, qx_lz, ref_lz, err_lz, res_lz, lamda_lz, theta_lz, int_lz, mask_lz = self.project_on_lz(
                     self.file_reader, self.norm_lz, self.normAngle, lamda_e, detZ_e)

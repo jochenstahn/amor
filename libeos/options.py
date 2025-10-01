@@ -335,16 +335,14 @@ class ReductionConfig(ArgParsable):
                 'help': '(list of) scaling factors, if less elements than files use the last one',
                 },
             ) 
-    # TODO: This made no sense, it is used as single bool.
-    autoscale: bool = False
-    #autoscale: Tuple[float, float] = field(
-    #        default_factory=lambda: [None, None], 
-    #        metadata={
-    #            'short': 'S',
-    #            'group': 'data manicure',
-    #            'help': '',
-    #            },
-    #        )
+    autoscale: Tuple[float, float] = field(
+           default=None,
+           metadata={
+               'short': 'S',
+               'group': 'data manicure',
+               'help': '',
+               },
+           )
     subtract: Optional[str] = field(
             default=None, 
             metadata={
@@ -359,7 +357,7 @@ class ReductionConfig(ArgParsable):
                 'group': 'input data', 
                 'help': 'file number(s) of normalisation measurement'})
     timeSlize: Optional[List[float]] = field(
-            default_factory=lambda: [None],
+            default= None,
             metadata={
                 'short': 'ts',
                 'group': 'region of interest',
