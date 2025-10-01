@@ -1,23 +1,26 @@
 """
 Reading of Amor NeXus data files to extract metadata and event stream.
 """
-from typing import BinaryIO, Union
+from typing import BinaryIO, List, Union
 
 import h5py
 import numpy as np
 import platform
 import logging
 import subprocess
+import sys
+import os
 
 from datetime import datetime
 
 from orsopy import fileio
 from orsopy.fileio.model_language import SampleModel
 
-from . import const
+from . import const, event_handling as eh, event_analysis as ea
 from .header import Header
 from .helpers import extract_walltime
 from .event_data_types import AmorGeometry, AmorTiming, AmorEventStream, PACKET_TYPE, EVENT_TYPE, PULSE_TYPE, PC_TYPE
+from .options import ExperimentConfig, IncidentAngle, ReaderConfig
 
 try:
     import zoneinfo
@@ -35,6 +38,47 @@ if  platform.node().startswith('amor'):
 else:
     NICOS_CACHE_DIR = None
 
+class PathResolver:
+    def __init__(self, year, rawPath):
+        self.year = year
+        self.rawPath = rawPath
+
+    def resolve(self, short_notation):
+        return list(map(self.get_path, self.expand_file_list(short_notation)))
+
+    def expand_file_list(self, short_notation):
+        """Evaluate string entry for file number lists"""
+        file_list = []
+        for i in short_notation.split(','):
+            if '-' in i:
+                if ':' in i:
+                    step = i.split(':', 1)[1]
+                    file_list += range(int(i.split('-', 1)[0]),
+                                       int((i.rsplit('-', 1)[1]).split(':', 1)[0])+1,
+                                       int(step))
+                else:
+                    step = 1
+                    file_list += range(int(i.split('-', 1)[0]),
+                                       int(i.split('-', 1)[1])+1,
+                                       int(step))
+            else:
+                file_list += [int(i)]
+        return list(sorted(file_list))
+
+    def get_path(self, number):
+        fileName = f'amor{self.year}n{number:06d}.hdf'
+        path = ''
+        for rawd in self.rawPath:
+            if os.path.exists(os.path.join(rawd, fileName)):
+                path = rawd
+                break
+        if not path:
+            if os.path.exists(
+                    f'/afs/psi.ch/project/sinqdata/{self.year}/amor/{int(number/1000)}/{fileName}'):
+                path = f'/afs/psi.ch/project/sinqdata/{self.year}/amor/{int(number/1000)}'
+            else:
+                sys.exit(f'# ERROR: the file {fileName} can not be found in {self.rawPath}')
+        return os.path.join(path, fileName)
 
 class AmorEventData:
     """
@@ -55,7 +99,7 @@ class AmorEventData:
     timing: AmorTiming
     data: AmorEventStream
 
-    startTime: np.int64
+    eventStartTime: np.int64
 
     def __init__(self, fileName:Union[str, h5py.File, BinaryIO], first_index:int=0, max_events:int=1_000_000):
         if type(fileName) is str:
@@ -301,8 +345,119 @@ class AmorEventData:
         output += '\n'
         return output
 
+    def append(self, other):
+        """
+        Append event streams from another file to this one. Adjusts the event indices in the
+        packets to stay valid.
+        """
+        new_events = np.concatenate([self.data.events, other.data.events]).view(np.recarray)
+        new_pulses = np.concatenate([self.data.pulses, other.data.pulses]).view(np.recarray)
+        new_proton_current = np.concatenate([self.data.proton_current, other.data.proton_current]).view(np.recarray)
+        new_packets = np.concatenate([self.data.packets, other.data.packets]).view(np.recarray)
+        new_packets.start_index[self.data.packets.shape[0]:] += self.data.events.shape[0]
+        self.data = AmorEventStream(new_events, new_packets, new_pulses, new_proton_current)
+        # Indicate that this is amodified dataset, basically counts number of appends as negative indices
+        self.last_index = min(self.last_index-1, -1)
+
+
     def __repr__(self):
         output = (f"AmorEventData({self.fileName!r}) # {self.data.events.shape[0]} events, "
                   f"{self.data.pulses.shape[0]} pulses")
 
         return output
+
+class AmorData:
+    """re-implement old AmorData class functionality until refactoring is complete"""
+    chopperDetectorDistance: float
+    chopperDistance: float
+    chopperPhase: float
+    chopperSpeed: float
+    chopper1TriggerPhase: float
+    chopper2TriggerPhase: float
+    div: float
+    data_file_numbers: List[int]
+    delta_z: np.ndarray
+    detZ_e: np.ndarray
+    lamda_e: np.ndarray
+    wallTime_e: np.ndarray
+    kad: float
+    kap: float
+    lambdaMax: float
+    lambda_e: np.ndarray
+    # monitor: float
+    mu: float
+    nu: float
+    tau: float
+    tofCut: float
+    start_date: str
+    monitorType: str
+
+    seriesStartTime = None
+
+    # -------------------------------------------------------------------------------------------------
+    def __init__(self, header: Header, reader_config: ReaderConfig, config: ExperimentConfig,
+                 short_notation: str, norm=False):
+        # self.startTime = reader_config.startTime
+        self.header = header
+        self.config = config
+        self.reader_config = reader_config
+        resolver = PathResolver(reader_config.year, reader_config.rawPath)
+        self.file_list = resolver.resolve(short_notation)
+        self.norm = norm
+        self.prepare_actions()
+        self.process()
+        self.assign()
+
+    def prepare_actions(self):
+        # setup all actions performed in origin AmorData, time correction requires first dataset start time
+        self.event_actions = eh.AssociatePulseWithMonitor(self.config.monitorType, self.config.lowCurrentThreshold)
+        self.event_actions |= eh.FilterStrangeTimes()
+        self.event_actions |= eh.MergeFrames()
+        self.event_actions |= ea.AnalyzePixelIDs(self.config.yRange)
+        self.event_actions |= ea.TofTimeCorrection(self.config.incidentAngle==IncidentAngle.alphaF)
+        self.event_actions |= ea.WavelengthAndQ(self.config.lambdaRange, self.config.incidentAngle)
+        self.event_actions |= ea.FilterQzRange(self.config.qzRange)
+        self.event_actions |= ea.ApplyMask()
+
+    def process(self):
+        self.dataset = AmorEventData(self.file_list[0])
+        time_correction = eh.CorrectSeriesTime(self.dataset.eventStartTime)
+        time_correction(self.dataset)
+        self.event_actions(self.dataset)
+        if not self.norm:
+            self.dataset.update_header(self.header)
+            time_correction.update_header(self.header)
+            self.event_actions.update_header(self.header)
+        for fi in self.file_list[1:]:
+            di = AmorEventData(fi)
+            time_correction(di)
+            self.event_actions(di)
+            self.dataset.append(di)
+
+        for fileName in self.file_list:
+            if self.norm:
+                self.header.measurement_additional_files.append(fileio.File(
+                        file=fileName.split('/')[-1],
+                        timestamp=self.dataset.fileDate))
+            else:
+                self.header.measurement_data_files.append(fileio.File(
+                        file=fileName.split('/')[-1],
+                        timestamp=self.dataset.fileDate))
+
+    def assign(self):
+        # assigne old class parameters from dataset object.
+        ds = self.dataset
+        ev = ds.data.events
+        self.detZ_e = ev.detZ
+        self.lamda_e = ev.lamda
+        self.wallTime_e = ev.wallTime
+        self.qz_e = ev.qz
+        self.qx_e = ev.qx
+        self.pulseTimeS = ds.data.pulses.time
+        self.monitorPerPulse = ds.data.pulses.monitor
+
+        for key, value in ds.geometry.__dict__.items():
+            setattr(self, key, value)
+        for key, value in ds.timing.__dict__.items():
+            setattr(self, key, value)
+        self.startTime = ds.eventStartTime

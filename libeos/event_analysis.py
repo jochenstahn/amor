@@ -14,7 +14,7 @@ from .options import IncidentAngle
 from .header import Header
 
 
-class AnalyzedEventData(EventDataAction):
+class AnalyzePixelIDs(EventDataAction):
     def __init__(self, yRange: Tuple[int, int]):
         self.yRange = yRange
 

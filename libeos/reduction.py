@@ -5,7 +5,7 @@ import sys
 import numpy as np
 from orsopy import fileio
 
-from .file_reader_old import AmorData
+from .file_reader import AmorData
 from .header import Header
 from .options import EOSConfig, IncidentAngle, MonitorType, NormalisationMethod
 from .instrument import Grid

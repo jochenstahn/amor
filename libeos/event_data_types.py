@@ -1,7 +1,7 @@
 """
 Specify the data type and protocol used for event datasets.
 """
-from typing import Optional, Protocol
+from typing import List, Optional, Protocol
 from dataclasses import dataclass
 from .header import Header
 from abc import ABC, abstractmethod
@@ -60,10 +60,19 @@ class EventDatasetProtocol(Protocol):
     timing: AmorTiming
     data: AmorEventStream
 
+    def append(self, other):
+        # Should define a way to add events from other to own
+        ...
+
+    def update_header(self, header:Header):
+        # update a header with the information read from file
+        ...
+
 class EventDataAction(ABC):
     """
     Abstract base class used for actions applied to an EventDatasetProtocol based objects.
     Each action can optionally modify the header information.
+    Actions can be combined using the pipe operator | (OR).
     """
 
     def __call__(self, dataset: EventDatasetProtocol)->None:
@@ -77,3 +86,36 @@ class EventDataAction(ABC):
         if hasattr(self, 'action_name'):
             header.reduction.corrections.append(getattr(self, 'action_name'))
 
+    def __or__(self, other:'EventDataAction')->'CombinedAction':
+        return CombinedAction([self, other])
+
+    def __repr__(self):
+        output = self.__class__.__name__+'('
+        for key,value in self.__dict__.items():
+            output += f'{key}={value}, '
+        return output.rstrip(', ')+')'
+
+class CombinedAction(EventDataAction):
+    """
+    Used to perform multiple actions in one call. Stores a sequence of actions
+    that are then performed individually one after the other.
+    """
+    def __init__(self, actions: List[EventDataAction]) -> None:
+        self._actions = actions
+
+    def perform_action(self, dataset: EventDatasetProtocol)->None:
+        for action in self._actions:
+            action(dataset)
+
+    def update_header(self, header:Header)->None:
+        for action in self._actions:
+            action.update_header(header)
+
+    def __or__(self, other:'EventDataAction')->'CombinedAction':
+        return CombinedAction(self._actions+[other])
+
+    def __repr__(self):
+        output = repr(self._actions[0])
+        for ai in self._actions[1:]:
+            output += ' | '+repr(ai)
+        return output

@@ -4,6 +4,7 @@ Calculations performed on AmorEventData.
 import logging
 import numpy as np
 
+from . import const
 from .options import MonitorType
 from .event_data_types import EventDatasetProtocol, EventDataAction
 from .helpers import merge_frames
@@ -47,17 +48,21 @@ class AssociatePulseWithMonitor(EventDataAction):
             np.savetxt('tme.hst', np.vstack((dataset.data.pulses.time[:-1], cpp, dataset.data.pulses.monitor[:-1])).T)
 
         if self.monitorType in [MonitorType.proton_charge or MonitorType.debug]:
-            goodTimeS = dataset.data.pulses.time[dataset.data.pulses.monitor!=0]
-            filter_e = np.isin(dataset.data.events.wallTime, goodTimeS)
-            dataset.data.events = dataset.data.events[filter_e]
-            logging.info(f'      low-beam (<{self.lowCurrentThreshold} mC) rejected pulses: '
-                         f'{dataset.data.pulses.monitor.shape[0]-goodTimeS.shape[0]} '
-                         f'out of {dataset.data.pulses.monitor.shape[0]}')
-            logging.info(f'          with {filter_e.shape[0]-dataset.data.events.shape[0]} events')
-            if goodTimeS.shape[0]:
-                logging.info(f'      average counts per pulse =  {dataset.data.events.shape[0] / goodTimeS.shape[0]:7.1f}')
-            else:
-                logging.info(f'      average counts per pulse = undefined')
+            self.monitor_threshold(dataset)
+
+    def monitor_threshold(self, dataset):
+        # TODO: evaluate if this should actually do masking instead
+        goodTimeS = dataset.data.pulses.time[dataset.data.pulses.monitor!=0]
+        filter_e = np.isin(dataset.data.events.wallTime, goodTimeS)
+        dataset.data.events = dataset.data.events[filter_e]
+        logging.info(f'      low-beam (<{self.lowCurrentThreshold} mC) rejected pulses: '
+                     f'{dataset.data.pulses.monitor.shape[0]-goodTimeS.shape[0]} '
+                     f'out of {dataset.data.pulses.monitor.shape[0]}')
+        logging.info(f'          with {filter_e.shape[0]-dataset.data.events.shape[0]} events')
+        if goodTimeS.shape[0]:
+            logging.info(f'      average counts per pulse =  {dataset.data.events.shape[0]/goodTimeS.shape[0]:7.1f}')
+        else:
+            logging.info(f'      average counts per pulse = undefined')
 
     @staticmethod
     def get_current_per_pulse(pulseTimeS, currentTimeS, currents):
@@ -81,10 +86,8 @@ class FilterStrangeTimes(EventDataAction):
             logging.warning(f'        strange times: {np.logical_not(filter_e).sum()}')
 
 class MergeFrames(EventDataAction):
-    def __init__(self, tofCut:float):
-        self.tofCut = tofCut
-
     def perform_action(self, dataset: EventDatasetProtocol)->None:
-        total_offset = (self.tofCut +
+        tofCut = const.lamdaCut+dataset.geometry.chopperDetectorDistance/const.hdm*1e-13
+        total_offset = (tofCut +
                         dataset.timing.tau * (dataset.timing.ch1TriggerPhase + dataset.timing.chopperPhase/2)/180)
         dataset.data.events.tof = merge_frames(dataset.data.events.tof, self.tofCut, dataset.timing.tau, total_offset)

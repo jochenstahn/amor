@@ -197,8 +197,8 @@ class ExperimentConfig(ArgParsable):
                 'help': 'rotation speed of the chopper disks in rpm',
                 },
             )
-    yRange: Tuple[float, float] = field(
-            default_factory=lambda: [18, 48],
+    yRange: Tuple[int, int] = field(
+            default=(18, 48),
             metadata={
                 'short': 'y',
                 'group': 'region of interest',
