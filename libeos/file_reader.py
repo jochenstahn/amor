@@ -1,6 +1,7 @@
 """
 Reading of Amor NeXus data files to extract metadata and event stream.
 """
+from typing import BinaryIO, Union
 
 import h5py
 import numpy as np
@@ -56,11 +57,18 @@ class AmorEventData:
 
     startTime: np.int64
 
-    def __init__(self, fileName, first_index=0, max_events=1_000_000):
-        self.fileName = fileName
+    def __init__(self, fileName:Union[str, h5py.File, BinaryIO], first_index:int=0, max_events:int=1_000_000):
+        if type(fileName) is str:
+            self.fileName = fileName
+            self.hdf = h5py.File(fileName, 'r', swmr=True)
+        elif type(fileName) is h5py.File:
+            self.fileName = fileName.filename
+            self.hdf = fileName
+        else:
+            self.fileName = repr(fileName)
+            self.hdf = h5py.File(fileName, 'r')
         self.first_index = first_index
         self.max_events = max_events
-        self.hdf = h5py.File(fileName, 'r', swmr=True)
 
         self.read_header_info()
         self.read_instrument_configuration()
@@ -72,12 +80,14 @@ class AmorEventData:
         self.extract_walltime()
         self.read_proton_current_stream()
 
-        # close the input file to free memory
+        if type(fileName) is str:
+            # close the input file to free memory, only if the file was opened in this object
+            self.hdf.close()
         del(self.hdf)
 
     def _replace_if_missing(self, key, nicos_key, dtype=float):
         try:
-            return dtype(np.take(self.hdf[f'/entry1/Amor/{key}'], 0))
+            return dtype(self.hdf[f'/entry1/Amor/{key}'][0])
         except(KeyError, IndexError):
             if NICOS_CACHE_DIR:
                 try:

@@ -20,7 +20,7 @@ class FullAmorTest(TestCase):
     def setUp(self):
         self.pr.enable()
         self.reader_config = options.ReaderConfig(
-                year=2023,
+                year=2025,
                 rawPath=(os.path.join('..', "test_data"),),
                 )
 
