@@ -284,10 +284,10 @@ class AmorData:
         if self.config.monitorType == MonitorType.auto:
             if self.current.sum() > 1:
                 self.monitorType = MonitorType.proton_charge
-                logging.warn('      monitor type set to "proton current"')
+                logging.debug('      monitor type set to "proton current"')
             else:
                 self.monitorType = MonitorType.time
-                logging.warn('      monitor type set to "time"')
+                logging.debug('      monitor type set to "time"')
 
     def associate_pulse_with_monitor(self):
         if self.config.monitorType == MonitorType.proton_charge or MonitorType.debug:
@@ -540,7 +540,7 @@ class AmorData:
             model
         except NameError:
             _model = self.hdf['entry1/sample/model'][0].decode('utf-8')
-            if type(_model) == dict:
+            if 'stack' in _model:
                 model = yaml.safe_load(_model)
             else:
                 model = dict(stack = _model)
