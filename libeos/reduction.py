@@ -5,12 +5,13 @@ import sys
 import numpy as np
 from orsopy import fileio
 
-from .file_reader import AmorData
+from .file_reader import AmorData, AmorEventData
 from .header import Header
 from .path_handling import PathResolver
 from .options import EOSConfig, IncidentAngle, MonitorType, NormalisationMethod
 from .instrument import Grid
-from .normalisation import Normalisation
+from .normalisation import LZNormalisation
+from . import event_handling as eh, event_analysis as ea
 
 MONITOR_UNITS = {
     MonitorType.neutron_monitor: 'cnts',
@@ -42,6 +43,38 @@ class AmorReduction:
 
         self.path_resolver = PathResolver(self.reader_config.year, self.reader_config.rawPath)
 
+        # setup all actions performed on event datasets before projection on the grid
+        # The order of these corrections matter as some rely on parameters modified before
+        if self.reduction_config.normalisationFileIdentifier:
+            # explicit steps performed on AmorEventDataset for normalization files
+            self.normevent_actions = eh.ApplyPhaseOffset(self.experiment_config.chopperPhaseOffset)
+            self.normevent_actions |= eh.CorrectChopperPhase()
+            self.normevent_actions |= eh.AssociatePulseWithMonitor(self.experiment_config.monitorType,
+                                                                   self.experiment_config.lowCurrentThreshold)
+            self.normevent_actions |= eh.FilterStrangeTimes()
+            self.normevent_actions |= eh.MergeFrames()
+            self.normevent_actions |= ea.AnalyzePixelIDs(self.experiment_config.yRange)
+            self.normevent_actions |= ea.TofTimeCorrection(self.experiment_config.incidentAngle==IncidentAngle.alphaF)
+            self.normevent_actions |= ea.CalculateWavelength(self.experiment_config.lambdaRange)
+            self.normevent_actions |= ea.ApplyMask()
+        # Actions on datasets not used for normalization
+        self.dataevent_actions = eh.ApplyPhaseOffset(self.experiment_config.chopperPhaseOffset)
+        self.dataevent_actions |= eh.ApplyParameterOverwrites(self.experiment_config) # some actions use instrument parameters, change before that
+        self.dataevent_actions |= eh.CorrectChopperPhase()
+        self.dataevent_actions |= eh.ExtractWalltime()
+        self.dataevent_time_correction = eh.CorrectSeriesTime(0) # will be set from first dataset
+        self.dataevent_actions |= self.dataevent_time_correction
+        self.dataevent_actions |= eh.AssociatePulseWithMonitor(self.experiment_config.monitorType,
+                                                               self.experiment_config.lowCurrentThreshold)
+        self.dataevent_actions |= eh.FilterStrangeTimes()
+        self.dataevent_actions |= eh.MergeFrames()
+        self.dataevent_actions |= ea.AnalyzePixelIDs(self.experiment_config.yRange)
+        self.dataevent_actions |= ea.TofTimeCorrection(self.experiment_config.incidentAngle==IncidentAngle.alphaF)
+        self.dataevent_actions |= ea.CalculateWavelength(self.experiment_config.lambdaRange)
+        self.dataevent_actions |= ea.CalculateQ(self.experiment_config.incidentAngle)
+        self.dataevent_actions |= ea.FilterQzRange(self.experiment_config.qzRange)
+        self.dataevent_actions |= ea.ApplyMask()
+
         self.grid = Grid(self.reduction_config.qResolution, self.reduction_config.qzRange)
 
     def reduce(self):
@@ -53,7 +86,7 @@ class AmorReduction:
         if self.reduction_config.normalisationFileIdentifier:
             self.create_normalisation_map(self.reduction_config.normalisationFileIdentifier[0])
         else:
-            self.norm = Normalisation.unity(self.grid)
+            self.norm = LZNormalisation.unity(self.grid)
 
         # load R(q_z) curve to be subtracted:
         if self.reduction_config.subtract:
@@ -97,7 +130,7 @@ class AmorReduction:
         self.monitor = np.sum(self.file_reader.monitorPerPulse)
         logging.warning(f'    monitor = {self.monitor:8.2f} {MONITOR_UNITS[self.experiment_config.monitorType]}')
         qz_lz, qx_lz, ref_lz, err_lz, res_lz, lamda_lz, theta_lz, int_lz, self.mask_lz = self.project_on_lz(
-                self.file_reader, self.norm.norm_lz, self.norm.normAngle, lamda_e, detZ_e)
+                self.file_reader, self.norm.norm, self.norm.angle, lamda_e, detZ_e)
         #if self.monitor>1 :
         #    ref_lz /= self.monitor
         #    err_lz /= self.monitor
@@ -117,7 +150,7 @@ class AmorReduction:
 
             # projection on qz-grid
             q_q, R_q, dR_q, dq_q = self.project_on_qz(qz_lz, ref_lz, err_lz, res_lz,
-                                                      self.norm.norm_lz, self.mask_lz)
+                                                      self.norm.norm, self.mask_lz)
 
             # The filtering is now done by restricting the qz-grid
             #filter_q = np.where((self.experiment_config.qzRange[0]>q_q) & (q_q>self.experiment_config.qzRange[1]),
@@ -178,7 +211,7 @@ class AmorReduction:
                     lindex_lz.T,
                     tindex_lz.T,
                     int_lz.T,
-                    self.norm.norm_lz.T,
+                    self.norm.norm.T,
                     np.where(self.mask_lz, 1, 0).T,
                     qx_lz.T,
                     ):
@@ -215,14 +248,14 @@ class AmorReduction:
             logging.info(f'      {ti:<4d}  {time:6.0f}  {self.monitor:7.2f} {MONITOR_UNITS[self.experiment_config.monitorType]}')
 
             qz_lz, qx_lz, ref_lz, err_lz, res_lz, lamda_lz, theta_lz, int_lz, mask_lz = self.project_on_lz(
-                    self.file_reader, self.norm.norm_lz, self.norm.normAngle, lamda_e, detZ_e)
+                    self.file_reader, self.norm.norm, self.norm.angle, lamda_e, detZ_e)
             try:
                 ref_lz *= self.reduction_config.scale[i]
                 err_lz *= self.reduction_config.scale[i]
             except IndexError:
                 ref_lz *= self.reduction_config.scale[-1]
                 err_lz *= self.reduction_config.scale[-1]
-            q_q, R_q, dR_q, dq_q = self.project_on_qz(qz_lz, ref_lz, err_lz, res_lz, self.norm.norm_lz, mask_lz)
+            q_q, R_q, dR_q, dq_q = self.project_on_qz(qz_lz, ref_lz, err_lz, res_lz, self.norm.norm, mask_lz)
 
             filter_q = np.where((self.experiment_config.qzRange[0]<q_q) & (q_q<self.experiment_config.qzRange[1]),
                                 True, False)
@@ -344,22 +377,21 @@ class AmorReduction:
     def create_normalisation_map(self, short_notation):
         outputPath = self.output_config.outputPath
         normalisation_list = self.path_resolver.expand_file_list(short_notation)
-        name = str(normalisation_list[0])
-        for norm_i in normalisation_list[1:]:
-            name += f'_{norm_i}'
+        name = '_'.join(map(str, normalisation_list))
         n_path = os.path.join(outputPath, f'{name}_{str(self.experiment_config.monitorType)}.norm')
 
         if os.path.exists(n_path):
             logging.warning(f'normalisation matrix: found and using {n_path}')
-            self.norm = Normalisation.from_file(n_path)
-            self.header.measurement_additional_files = self.norm.normFileList
+            self.norm = LZNormalisation.from_file(n_path)
+            self.header.measurement_additional_files = self.norm.file_list
         else:
             logging.warning(f'normalisation matrix: using the files {normalisation_list}')
-            reference = AmorData(header=self.header,
-                               reader_config=self.reader_config,
-                               config=self.experiment_config,
-                               short_notation=short_notation, norm=True).dataset
-            self.norm = Normalisation(reference, self.reduction_config.normalisationMethod, self.grid)
+            normalization_files = list(map(self.path_resolver.get_path, normalisation_list))
+            reference = AmorEventData(normalization_files[0])
+            for nfi in normalization_files[1:]:
+                reference.append(AmorEventData(nfi))
+            self.normevent_actions(reference)
+            self.norm = LZNormalisation(reference, self.reduction_config.normalisationMethod, self.grid)
             if reference.data.events.shape[0] > 1e6:
                 self.norm.safe(n_path)
 
@@ -444,7 +476,7 @@ class AmorReduction:
             logging.error('unknown normalisation method! Use [u]nder, [o]ver or [d]irect illumination')
             ref_lz    = (int_lz / norm_lz)
         if self.monitor > 1e-6 :
-            ref_lz   *= self.norm.normMonitor / self.monitor
+            ref_lz   *= self.norm.monitor/self.monitor
         else:
             logging.info('                               low monitor -> nan output')
             ref_lz   *= np.nan
