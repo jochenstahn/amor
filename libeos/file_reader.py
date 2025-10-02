@@ -18,9 +18,8 @@ from orsopy.fileio.model_language import SampleModel
 
 from . import const, event_handling as eh, event_analysis as ea
 from .header import Header
-from .helpers import extract_walltime
 from .event_data_types import AmorGeometry, AmorTiming, AmorEventStream, PACKET_TYPE, EVENT_TYPE, PULSE_TYPE, PC_TYPE
-from .options import ExperimentConfig, IncidentAngle, ReaderConfig
+from .options import ExperimentConfig, IncidentAngle, ReaderConfig, MonitorType
 
 try:
     import zoneinfo
@@ -101,7 +100,7 @@ class AmorEventData:
 
     eventStartTime: np.int64
 
-    def __init__(self, fileName:Union[str, h5py.File, BinaryIO], first_index:int=0, max_events:int=1_000_000):
+    def __init__(self, fileName:Union[str, h5py.File, BinaryIO], first_index:int=0, max_events:int=100_000_000):
         if type(fileName) is str:
             self.fileName = fileName
             self.hdf = h5py.File(fileName, 'r', swmr=True)
@@ -119,9 +118,7 @@ class AmorEventData:
         self.read_event_stream()
 
         # actions applied to any dataset
-        self.correct_for_chopper_phases()
         self.read_chopper_trigger_stream()
-        self.extract_walltime()
         self.read_proton_current_stream()
 
         if type(fileName) is str:
@@ -220,7 +217,7 @@ class AmorEventData:
                                      chopperSeparation, detectorDistance, chopperDetectorDistance)
         self.timing = AmorTiming(ch1TriggerPhase, ch2TriggerPhase, chopperSpeed, chopperPhase, tau)
 
-        polarizationConfigLabel = self._replace_if_missing('polarization/configuration/value', 'polarizer_config_label', int)
+        polarizationConfigLabel = self._replace_if_missing('polarization/configuration/average_value', 'polarizer_config_label', int)
         polarizationConfig = fileio.Polarization(polarizationConfigs[polarizationConfigLabel])
         logging.debug(f'      polarization configuration: {polarizationConfig} (index {polarizationConfigLabel})')
 
@@ -260,6 +257,7 @@ class AmorEventData:
         """
         Add dataset information into an existing header.
         """
+        logging.info(f'    meta data from: {self.fileName}')
         header.owner = self.owner
         header.experiment = self.experiment
         header.sample = self.sample
@@ -298,12 +296,8 @@ class AmorEventData:
         events.pixelID = self.hdf['/entry1/Amor/detector/data/event_id'][self.first_index:self.last_index+1]
         self.data = AmorEventStream(events, packets)
 
-    def correct_for_chopper_phases(self):
-        self.data.events.tof += self.timing.tau*(self.timing.ch1TriggerPhase-self.timing.chopperPhase/2)/180
-
     def read_chopper_trigger_stream(self):
-        chopper1TriggerTime = np.array(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_zero'][:-2],
-                                            dtype=np.int64)
+        chopper1TriggerTime = np.array(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_zero'][:-2], dtype=np.int64)
         #self.chopper2TriggerTime = self.chopper1TriggerTime + np.array(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time'][:-2], dtype=np.int64)
         #                           + np.array(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_offset'][:], dtype=np.int64)
         if np.shape(chopper1TriggerTime)[0] > 2:
@@ -321,12 +315,6 @@ class AmorEventData:
             pulses = pulses[(pulses.time>=self.data.packets.Time[0])&(pulses.time<=self.data.packets.Time[-1])]
         self.data.pulses = pulses
         self.eventStartTime = startTime
-
-    def extract_walltime(self):
-        # TODO: fix numba type definition after refactor
-        self.data.events.wallTime = extract_walltime(self.data.events.tof,
-                                                        self.data.packets.start_index.astype(np.uint64),
-                                                        self.data.packets.Time)
 
     def read_proton_current_stream(self):
         proton_current = np.recarray(self.hdf['entry1/Amor/detector/proton_current/time'].shape, dtype=PC_TYPE)
@@ -410,7 +398,12 @@ class AmorData:
 
     def prepare_actions(self):
         # setup all actions performed in origin AmorData, time correction requires first dataset start time
-        self.event_actions = eh.AssociatePulseWithMonitor(self.config.monitorType, self.config.lowCurrentThreshold)
+        self.time_correction = eh.CorrectSeriesTime(0)
+        self.event_actions = eh.ApplyParameterOverwrites(self.config) # some actions use instrument parameters, change before that
+        self.event_actions |= eh.CorrectChopperPhase()
+        self.event_actions |= eh.ExtractWalltime()
+        self.event_actions |= self.time_correction
+        self.event_actions |= eh.AssociatePulseWithMonitor(self.config.monitorType, self.config.lowCurrentThreshold)
         self.event_actions |= eh.FilterStrangeTimes()
         self.event_actions |= eh.MergeFrames()
         self.event_actions |= ea.AnalyzePixelIDs(self.config.yRange)
@@ -421,16 +414,23 @@ class AmorData:
 
     def process(self):
         self.dataset = AmorEventData(self.file_list[0])
-        time_correction = eh.CorrectSeriesTime(self.dataset.eventStartTime)
-        time_correction(self.dataset)
+        if self.config.monitorType==MonitorType.auto:
+            if self.dataset.data.proton_current.current.sum()>1:
+                self.monitorType = MonitorType.proton_charge
+                logging.warning('      monitor type set to "proton current"')
+            else:
+                self.monitorType = MonitorType.time
+                logging.warning('      monitor type set to "time"')
+            # update actions to sue selected monitor
+            self.prepare_actions()
+
+        self.time_correction.seriesStartTime = self.dataset.eventStartTime
         self.event_actions(self.dataset)
         if not self.norm:
             self.dataset.update_header(self.header)
-            time_correction.update_header(self.header)
             self.event_actions.update_header(self.header)
         for fi in self.file_list[1:]:
             di = AmorEventData(fi)
-            time_correction(di)
             self.event_actions(di)
             self.dataset.append(di)
 

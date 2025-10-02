@@ -2,12 +2,65 @@
 Calculations performed on AmorEventData.
 """
 import logging
+import os
 import numpy as np
 
 from . import const
-from .options import MonitorType
+from .header import Header
+from .options import ExperimentConfig, MonitorType
 from .event_data_types import EventDatasetProtocol, EventDataAction
-from .helpers import merge_frames
+from .helpers import merge_frames, extract_walltime
+
+class ApplyParameterOverwrites(EventDataAction):
+    def __init__(self, config: ExperimentConfig):
+        self.config=config
+
+    def perform_action(self, dataset: EventDatasetProtocol) ->None:
+        if self.config.muOffset:
+            logging.debug(f'        set muOffset = {self.config.muOffset}')
+            dataset.geometry.mu += self.config.muOffset
+        if self.config.mu:
+            logging.debug(f'        replaced mu = {dataset.geometry.mu} with {self.config.mu}')
+            dataset.geometry.mu = self.config.mu
+        if self.config.nu:
+            logging.debug(f'        replaced nu = {dataset.geometry.nu} with {self.config.nu}')
+            dataset.geometry.nu = self.config.nu
+        if self.config.chopperPhaseOffset:
+            logging.debug(
+                f'        replaced ch1TriggerPhase = {dataset.timing.ch1TriggerPhase} '
+                f'with {self.config.chopperPhaseOffset}')
+            dataset.timing.ch1TriggerPhase = self.config.chopperPhaseOffset
+        logging.info(f'      mu = {dataset.geometry.mu:6.3f}, '
+                     f'nu = {dataset.geometry.nu:6.3f}, '
+                     f'kap = {dataset.geometry.kap:6.3f}, '
+                     f'kad = {dataset.geometry.kad:6.3f}')
+
+    def update_header(self, header:Header) ->None:
+        if self.config.sampleModel:
+            if 'yml' in self.config.sampleModel or 'yaml' in self.config.sampleModel:
+                import yaml
+                if os.path.isfile(self.config.sampleModel):
+                    with open(self.config.sampleModel, 'r') as model_yml:
+                        model = yaml.safe_load(model_yml)
+                else:
+                    logging.warning(f'  ! the file {self.config.sampleModel}.yml does not exist. Ignored!')
+            else:
+                model = dict(stack=self.config.sampleModel)
+            logging.debug(f'        set sample.model = {self.config.sampleModel}')
+            header.sample.model = model
+
+
+class CorrectChopperPhase(EventDataAction):
+    def perform_action(self, dataset: EventDatasetProtocol) ->None:
+        dataset.data.events.tof += dataset.timing.tau*(dataset.timing.ch1TriggerPhase-dataset.timing.chopperPhase/2)/180
+
+
+class ExtractWalltime(EventDataAction):
+    def perform_action(self, dataset: EventDatasetProtocol) ->None:
+        # TODO: fix numba type definition after refactor
+        dataset.data.events.wallTime = extract_walltime(dataset.data.events.tof,
+                                                        dataset.data.packets.start_index.astype(np.uint64),
+                                                        dataset.data.packets.Time)
 
 
 class CorrectSeriesTime(EventDataAction):
@@ -18,9 +71,10 @@ class CorrectSeriesTime(EventDataAction):
         dataset.data.pulses.time -= self.seriesStartTime
         dataset.data.events.wallTime -= self.seriesStartTime
         dataset.data.proton_current.time -= self.seriesStartTime
-        start, stop = dataset.data.proton_current.time[0], dataset.data.proton_current.time[-1]
-        logging.debug(f'      wall time from {start:6.1f} s to {stop/1e9:6.1f} s, '
+        start, stop = dataset.data.events.wallTime[0], dataset.data.events.wallTime[-1]
+        logging.debug(f'      wall time from {start/1e9:6.1f} s to {stop/1e9:6.1f} s, '
                       f'series time = {self.seriesStartTime/1e9:6.1f}')
+
 
 class AssociatePulseWithMonitor(EventDataAction):
     def __init__(self, monitorType:MonitorType, lowCurrentThreshold:float):
@@ -78,6 +132,7 @@ class AssociatePulseWithMonitor(EventDataAction):
         return pulseCurrentS
 
 
+
 class FilterStrangeTimes(EventDataAction):
     def perform_action(self, dataset: EventDatasetProtocol)->None:
         filter_e = (dataset.data.events.tof<=2*dataset.timing.tau)
@@ -85,9 +140,10 @@ class FilterStrangeTimes(EventDataAction):
         if not filter_e.all():
             logging.warning(f'        strange times: {np.logical_not(filter_e).sum()}')
 
+
 class MergeFrames(EventDataAction):
     def perform_action(self, dataset: EventDatasetProtocol)->None:
-        tofCut = const.lamdaCut+dataset.geometry.chopperDetectorDistance/const.hdm*1e-13
+        tofCut = const.lamdaCut*dataset.geometry.chopperDetectorDistance/const.hdm*1e-13
         total_offset = (tofCut +
                         dataset.timing.tau * (dataset.timing.ch1TriggerPhase + dataset.timing.chopperPhase/2)/180)
         dataset.data.events.tof = merge_frames(dataset.data.events.tof, tofCut, dataset.timing.tau, total_offset)
