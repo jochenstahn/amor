@@ -7,8 +7,10 @@ from orsopy import fileio
 
 from .file_reader import AmorData
 from .header import Header
+from .path_handling import PathResolver
 from .options import EOSConfig, IncidentAngle, MonitorType, NormalisationMethod
 from .instrument import Grid
+from .normalisation import Normalisation
 
 MONITOR_UNITS = {
     MonitorType.neutron_monitor: 'cnts',
@@ -38,6 +40,8 @@ class AmorReduction:
         # TODO: bad work-around, should make better destriction of parameters usage
         self.experiment_config.qzRange = self.reduction_config.qzRange
 
+        self.path_resolver = PathResolver(self.reader_config.year, self.reader_config.rawPath)
+
         self.grid = Grid(self.reduction_config.qResolution, self.reduction_config.qzRange)
 
     def reduce(self):
@@ -49,11 +53,7 @@ class AmorReduction:
         if self.reduction_config.normalisationFileIdentifier:
             self.create_normalisation_map(self.reduction_config.normalisationFileIdentifier[0])
         else:
-            self.norm_lz = self.grid.lz()
-            self.normAngle = 1.
-            self.normMonitor = 1.
-
-            logging.warning('normalisation matrix: none requested')
+            self.norm = Normalisation.unity(self.grid)
 
         # load R(q_z) curve to be subtracted:
         if self.reduction_config.subtract:
@@ -97,7 +97,7 @@ class AmorReduction:
         self.monitor = np.sum(self.file_reader.monitorPerPulse)
         logging.warning(f'    monitor = {self.monitor:8.2f} {MONITOR_UNITS[self.experiment_config.monitorType]}')
         qz_lz, qx_lz, ref_lz, err_lz, res_lz, lamda_lz, theta_lz, int_lz, self.mask_lz = self.project_on_lz(
-                self.file_reader, self.norm_lz, self.normAngle, lamda_e, detZ_e)
+                self.file_reader, self.norm.norm_lz, self.norm.normAngle, lamda_e, detZ_e)
         #if self.monitor>1 :
         #    ref_lz /= self.monitor
         #    err_lz /= self.monitor
@@ -116,7 +116,8 @@ class AmorReduction:
                 qz_lz *= -1
 
             # projection on qz-grid
-            q_q, R_q, dR_q, dq_q = self.project_on_qz(qz_lz, ref_lz, err_lz, res_lz, self.norm_lz, self.mask_lz)
+            q_q, R_q, dR_q, dq_q = self.project_on_qz(qz_lz, ref_lz, err_lz, res_lz,
+                                                      self.norm.norm_lz, self.mask_lz)
 
             # The filtering is now done by restricting the qz-grid
             #filter_q = np.where((self.experiment_config.qzRange[0]>q_q) & (q_q>self.experiment_config.qzRange[1]),
@@ -177,7 +178,7 @@ class AmorReduction:
                     lindex_lz.T,
                     tindex_lz.T,
                     int_lz.T,
-                    self.norm_lz.T,
+                    self.norm.norm_lz.T,
                     np.where(self.mask_lz, 1, 0).T,
                     qx_lz.T,
                     ):
@@ -214,14 +215,14 @@ class AmorReduction:
             logging.info(f'      {ti:<4d}  {time:6.0f}  {self.monitor:7.2f} {MONITOR_UNITS[self.experiment_config.monitorType]}')
 
             qz_lz, qx_lz, ref_lz, err_lz, res_lz, lamda_lz, theta_lz, int_lz, mask_lz = self.project_on_lz(
-                    self.file_reader, self.norm_lz, self.normAngle, lamda_e, detZ_e)
+                    self.file_reader, self.norm.norm_lz, self.norm.normAngle, lamda_e, detZ_e)
             try:
                 ref_lz *= self.reduction_config.scale[i]
                 err_lz *= self.reduction_config.scale[i]
             except IndexError:
                 ref_lz *= self.reduction_config.scale[-1]
                 err_lz *= self.reduction_config.scale[-1]
-            q_q, R_q, dR_q, dq_q = self.project_on_qz(qz_lz, ref_lz, err_lz, res_lz, self.norm_lz, mask_lz)
+            q_q, R_q, dR_q, dq_q = self.project_on_qz(qz_lz, ref_lz, err_lz, res_lz, self.norm.norm_lz, mask_lz)
 
             filter_q = np.where((self.experiment_config.qzRange[0]<q_q) & (q_q<self.experiment_config.qzRange[1]),
                                 True, False)
@@ -340,75 +341,28 @@ class AmorReduction:
 
         return q_q, Sq_q, dS_q, fileName
 
-    def expand_file_list(self, short_notation):
-        """Evaluate string entry for file number lists"""
-        #log().debug('Executing get_flist')
-        file_list=[]
-        for i in short_notation.split(','):
-            if '-' in i:
-                if ':' in i:
-                    step = i.split(':', 1)[1]
-                    file_list += range(int(i.split('-', 1)[0]), int((i.rsplit('-', 1)[1]).split(':', 1)[0])+1, int(step))
-                else:
-                    step = 1
-                    file_list += range(int(i.split('-', 1)[0]), int(i.split('-', 1)[1])+1, int(step))
-            else:
-                file_list += [int(i)]
-    
-        return sorted(file_list)
-
-
     def create_normalisation_map(self, short_notation):
         outputPath = self.output_config.outputPath
-        normalisation_list = self.expand_file_list(short_notation)
+        normalisation_list = self.path_resolver.expand_file_list(short_notation)
         name = str(normalisation_list[0])
-        for i in range(1, len(normalisation_list), 1):
-            name = f'{name}_{normalisation_list[i]}'
-        n_path = os.path.join(outputPath, f'{name}.norm')
+        for norm_i in normalisation_list[1:]:
+            name += f'_{norm_i}'
+        n_path = os.path.join(outputPath, f'{name}_{str(self.experiment_config.monitorType)}.norm')
+
         if os.path.exists(n_path):
             logging.warning(f'normalisation matrix: found and using {n_path}')
-            with open(n_path, 'rb') as fh:
-                self.normFileList = np.load(fh, allow_pickle=True)
-                self.normAngle    = np.load(fh, allow_pickle=True)
-                self.norm_lz      = np.load(fh, allow_pickle=True)
-                self.normMonitor  = np.load(fh, allow_pickle=True)
-            for i, entry in enumerate(self.normFileList):
-                 self.normFileList[i] = entry.split('/')[-1]
-            self.header.measurement_additional_files = self.normFileList
+            self.norm = Normalisation.from_file(n_path)
+            self.header.measurement_additional_files = self.norm.normFileList
         else:
             logging.warning(f'normalisation matrix: using the files {normalisation_list}')
-            fromHDF = AmorData(header=self.header,
+            reference = AmorData(header=self.header,
                                reader_config=self.reader_config,
                                config=self.experiment_config,
-                               short_notation=short_notation, norm=True)
-            self.normAngle     = fromHDF.nu - fromHDF.mu
-            lamda_e          = fromHDF.lamda_e
-            detZ_e           = fromHDF.detZ_e
-            self.normMonitor = np.sum(fromHDF.monitorPerPulse)
-            norm_lz, bins_l, bins_z = np.histogram2d(lamda_e, detZ_e, bins = (self.grid.lamda(), self.grid.z()))
-            norm_lz = np.where(norm_lz>2, norm_lz, np.nan)
-            if self.reduction_config.normalisationMethod == NormalisationMethod.direct_beam:
-                self.norm_lz = np.flip(norm_lz, 1)
-            else:
-                # correct for reference sm reflectivity
-                lamda_l  = self.grid.lamda()
-                theta_z  = self.normAngle + fromHDF.delta_z
-                lamda_lz = (self.grid.lz().T*lamda_l[:-1]).T
-                theta_lz = self.grid.lz()*theta_z
-                qz_lz    = 4.0*np.pi * np.sin(np.deg2rad(theta_lz)) / lamda_lz
-                # TODO: introduce variable for `m` and propably for the slope
-                Rsm_lz   = np.ones(np.shape(qz_lz))
-                Rsm_lz   = np.where(qz_lz>0.0217, 1-(qz_lz-0.0217)*(0.0625/0.0217), Rsm_lz)
-                Rsm_lz   = np.where(qz_lz>0.0217*5, np.nan, Rsm_lz)
-                self.norm_lz  = norm_lz / Rsm_lz
+                               short_notation=short_notation, norm=True).dataset
+            self.norm = Normalisation(reference, self.reduction_config.normalisationMethod, self.grid)
+            if reference.data.events.shape[0] > 1e6:
+                self.norm.safe(n_path)
 
-            if len(lamda_e) > 1e6:
-                with open(n_path, 'wb') as fh:
-                    np.save(fh, np.array(fromHDF.file_list), allow_pickle=False)
-                    np.save(fh, np.array(self.normAngle), allow_pickle=False)
-                    np.save(fh, self.norm_lz, allow_pickle=False)
-                    np.save(fh, self.normMonitor, allow_pickle=False)
-            self.normFileList = fromHDF.file_list
         self.header.reduction.corrections.append('normalisation with \'additional files\'')
 
     def project_on_lz(self, fromHDF, norm_lz, normAngle, lamda_e, detZ_e):
@@ -490,7 +444,7 @@ class AmorReduction:
             logging.error('unknown normalisation method! Use [u]nder, [o]ver or [d]irect illumination')
             ref_lz    = (int_lz / norm_lz)
         if self.monitor > 1e-6 :
-            ref_lz   *= self.normMonitor / self.monitor
+            ref_lz   *= self.norm.normMonitor / self.monitor
         else:
             logging.info('                               low monitor -> nan output')
             ref_lz   *= np.nan

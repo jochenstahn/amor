@@ -18,6 +18,7 @@ from orsopy.fileio.model_language import SampleModel
 
 from . import const, event_handling as eh, event_analysis as ea
 from .header import Header
+from .path_handling import PathResolver
 from .event_data_types import AmorGeometry, AmorTiming, AmorEventStream, PACKET_TYPE, EVENT_TYPE, PULSE_TYPE, PC_TYPE
 from .options import ExperimentConfig, IncidentAngle, ReaderConfig, MonitorType
 
@@ -37,55 +38,13 @@ if  platform.node().startswith('amor'):
 else:
     NICOS_CACHE_DIR = None
 
-class PathResolver:
-    def __init__(self, year, rawPath):
-        self.year = year
-        self.rawPath = rawPath
-
-    def resolve(self, short_notation):
-        return list(map(self.get_path, self.expand_file_list(short_notation)))
-
-    def expand_file_list(self, short_notation):
-        """Evaluate string entry for file number lists"""
-        file_list = []
-        for i in short_notation.split(','):
-            if '-' in i:
-                if ':' in i:
-                    step = i.split(':', 1)[1]
-                    file_list += range(int(i.split('-', 1)[0]),
-                                       int((i.rsplit('-', 1)[1]).split(':', 1)[0])+1,
-                                       int(step))
-                else:
-                    step = 1
-                    file_list += range(int(i.split('-', 1)[0]),
-                                       int(i.split('-', 1)[1])+1,
-                                       int(step))
-            else:
-                file_list += [int(i)]
-        return list(sorted(file_list))
-
-    def get_path(self, number):
-        fileName = f'amor{self.year}n{number:06d}.hdf'
-        path = ''
-        for rawd in self.rawPath:
-            if os.path.exists(os.path.join(rawd, fileName)):
-                path = rawd
-                break
-        if not path:
-            if os.path.exists(
-                    f'/afs/psi.ch/project/sinqdata/{self.year}/amor/{int(number/1000)}/{fileName}'):
-                path = f'/afs/psi.ch/project/sinqdata/{self.year}/amor/{int(number/1000)}'
-            else:
-                sys.exit(f'# ERROR: the file {fileName} can not be found in {self.rawPath}')
-        return os.path.join(path, fileName)
-
 class AmorEventData:
     """
     Read one amor NeXus datafile and extract relevant header information.
 
     Implements EventDatasetProtocol
     """
-    fileName: str
+    file_list: List[str]
     first_index: int
     last_index: int = -1
     EOF: bool = False
@@ -102,13 +61,13 @@ class AmorEventData:
 
     def __init__(self, fileName:Union[str, h5py.File, BinaryIO], first_index:int=0, max_events:int=100_000_000):
         if type(fileName) is str:
-            self.fileName = fileName
+            self.file_list = [fileName]
             self.hdf = h5py.File(fileName, 'r', swmr=True)
         elif type(fileName) is h5py.File:
-            self.fileName = fileName.filename
+            self.file_list = [fileName.filename]
             self.hdf = fileName
         else:
-            self.fileName = repr(fileName)
+            self.file_list = [repr(fileName)]
             self.hdf = h5py.File(fileName, 'r')
         self.first_index = first_index
         self.max_events = max_events
@@ -257,7 +216,7 @@ class AmorEventData:
         """
         Add dataset information into an existing header.
         """
-        logging.info(f'    meta data from: {self.fileName}')
+        logging.info(f'    meta data from: {self.file_list[0]}')
         header.owner = self.owner
         header.experiment = self.experiment
         header.sample = self.sample
@@ -299,6 +258,10 @@ class AmorEventData:
         pulses = self.read_chopper_trigger_stream()
         current = self.read_proton_current_stream()
         self.data = AmorEventStream(events, packets, pulses, current)
+
+        if self.first_index>0 and not self.EOF:
+            # label the file name if not all events were used
+            self.file_list[0] += f'[{self.first_index}:{self.last_index}]'
 
     def read_chopper_trigger_stream(self):
         chopper1TriggerTime = np.array(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_zero'][:-2], dtype=np.int64)
@@ -351,10 +314,10 @@ class AmorEventData:
         self.data = AmorEventStream(new_events, new_packets, new_pulses, new_proton_current)
         # Indicate that this is amodified dataset, basically counts number of appends as negative indices
         self.last_index = min(self.last_index-1, -1)
-
+        self.file_list += other.file_list
 
     def __repr__(self):
-        output = (f"AmorEventData({self.fileName!r}) # {self.data.events.shape[0]} events, "
+        output = (f"AmorEventData({self.file_list!r}) # {self.data.events.shape[0]} events, "
                   f"{self.data.pulses.shape[0]} pulses")
 
         return output
@@ -405,7 +368,8 @@ class AmorData:
         # setup all actions performed in origin AmorData, time correction requires first dataset start time
         # The order of these corrections matter as some rely on parameters modified before
         self.time_correction = eh.CorrectSeriesTime(0)
-        self.event_actions = eh.ApplyParameterOverwrites(self.config) # some actions use instrument parameters, change before that
+        self.event_actions = eh.ApplyPhaseOffset(self.config.chopperPhaseOffset)
+        self.event_actions |= eh.ApplyParameterOverwrites(self.config) # some actions use instrument parameters, change before that
         self.event_actions |= eh.CorrectChopperPhase()
         self.event_actions |= eh.ExtractWalltime()
         self.event_actions |= self.time_correction

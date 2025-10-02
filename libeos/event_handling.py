@@ -12,6 +12,16 @@ from .options import ExperimentConfig, MonitorType
 from .event_data_types import EventDatasetProtocol, EventDataAction, append_fields, EVENT_BITMASKS
 from .helpers import merge_frames, extract_walltime
 
+class ApplyPhaseOffset(EventDataAction):
+    def __init__(self, chopperPhaseOffset: float):
+        self.chopperPhaseOffset=chopperPhaseOffset
+
+    def perform_action(self, dataset: EventDatasetProtocol) ->None:
+        logging.debug(
+            f'        replaced ch1TriggerPhase = {dataset.timing.ch1TriggerPhase} '
+            f'with {self.chopperPhaseOffset}')
+        dataset.timing.ch1TriggerPhase = self.chopperPhaseOffset
+
 class ApplyParameterOverwrites(EventDataAction):
     def __init__(self, config: ExperimentConfig):
         self.config=config
@@ -26,11 +36,6 @@ class ApplyParameterOverwrites(EventDataAction):
         if self.config.nu:
             logging.debug(f'        replaced nu = {dataset.geometry.nu} with {self.config.nu}')
             dataset.geometry.nu = self.config.nu
-        if self.config.chopperPhaseOffset:
-            logging.debug(
-                f'        replaced ch1TriggerPhase = {dataset.timing.ch1TriggerPhase} '
-                f'with {self.config.chopperPhaseOffset}')
-            dataset.timing.ch1TriggerPhase = self.config.chopperPhaseOffset
         logging.info(f'      mu = {dataset.geometry.mu:6.3f}, '
                      f'nu = {dataset.geometry.nu:6.3f}, '
                      f'kap = {dataset.geometry.kap:6.3f}, '
