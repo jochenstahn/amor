@@ -4,11 +4,12 @@ Calculations performed on AmorEventData.
 import logging
 import os
 import numpy as np
+# from numpy.lib.recfunctions import rec_append_fields, append_fields
 
 from . import const
 from .header import Header
 from .options import ExperimentConfig, MonitorType
-from .event_data_types import EventDatasetProtocol, EventDataAction
+from .event_data_types import EventDatasetProtocol, EventDataAction, append_fields, EVENT_BITMASKS
 from .helpers import merge_frames, extract_walltime
 
 class ApplyParameterOverwrites(EventDataAction):
@@ -58,16 +59,21 @@ class CorrectChopperPhase(EventDataAction):
 class ExtractWalltime(EventDataAction):
     def perform_action(self, dataset: EventDatasetProtocol) ->None:
         # TODO: fix numba type definition after refactor
-        dataset.data.events.wallTime = extract_walltime(dataset.data.events.tof,
-                                                        dataset.data.packets.start_index.astype(np.uint64),
-                                                        dataset.data.packets.Time)
-
+        wallTime = extract_walltime(dataset.data.events.tof,
+                                    dataset.data.packets.start_index.astype(np.uint64),
+                                    dataset.data.packets.Time)
+        logging.debug(f'        expending event stream by wallTime')
+        new_events = append_fields(dataset.data.events, [('wallTime', wallTime.dtype)])
+        new_events.wallTime = wallTime
+        dataset.data.events = new_events
 
 class CorrectSeriesTime(EventDataAction):
     def __init__(self, seriesStartTime):
         self.seriesStartTime = np.int64(seriesStartTime)
 
     def perform_action(self, dataset: EventDatasetProtocol)->None:
+        if not 'wallTime' in dataset.data.events.dtype.names:
+            raise ValueError("CorrectTimeSeries requires walltTime to be extracted, please run ExtractWalltime first")
         dataset.data.pulses.time -= self.seriesStartTime
         dataset.data.events.wallTime -= self.seriesStartTime
         dataset.data.proton_current.time -= self.seriesStartTime
@@ -84,6 +90,9 @@ class AssociatePulseWithMonitor(EventDataAction):
     def perform_action(self, dataset: EventDatasetProtocol)->None:
         logging.debug(f'      using monitor type {self.monitorType}')
         if self.monitorType in [MonitorType.proton_charge or MonitorType.debug]:
+            if not 'wallTime' in dataset.data.events.dtype.names:
+                raise ValueError(
+                    "AssociatePulseWithMonitor requires walltTime to be extracted, please run ExtractWalltime first")
             monitorPerPulse = self.get_current_per_pulse(dataset.data.pulses.time,
                                                               dataset.data.proton_current.time,
                                                               dataset.data.proton_current.current)\
@@ -107,12 +116,12 @@ class AssociatePulseWithMonitor(EventDataAction):
     def monitor_threshold(self, dataset):
         # TODO: evaluate if this should actually do masking instead
         goodTimeS = dataset.data.pulses.time[dataset.data.pulses.monitor!=0]
-        filter_e = np.isin(dataset.data.events.wallTime, goodTimeS)
-        dataset.data.events = dataset.data.events[filter_e]
+        filter_e = np.logical_not(np.isin(dataset.data.events.wallTime, goodTimeS))
+        dataset.data.events.mask += EVENT_BITMASKS['MonitorThreshold']*filter_e
         logging.info(f'      low-beam (<{self.lowCurrentThreshold} mC) rejected pulses: '
                      f'{dataset.data.pulses.monitor.shape[0]-goodTimeS.shape[0]} '
                      f'out of {dataset.data.pulses.monitor.shape[0]}')
-        logging.info(f'          with {filter_e.shape[0]-dataset.data.events.shape[0]} events')
+        logging.info(f'          with {filter_e.sum()} events')
         if goodTimeS.shape[0]:
             logging.info(f'      average counts per pulse =  {dataset.data.events.shape[0]/goodTimeS.shape[0]:7.1f}')
         else:
@@ -135,10 +144,10 @@ class AssociatePulseWithMonitor(EventDataAction):
 
 class FilterStrangeTimes(EventDataAction):
     def perform_action(self, dataset: EventDatasetProtocol)->None:
-        filter_e = (dataset.data.events.tof<=2*dataset.timing.tau)
-        dataset.data.events = dataset.data.events[filter_e]
-        if not filter_e.all():
-            logging.warning(f'        strange times: {np.logical_not(filter_e).sum()}')
+        filter_e = np.logical_not(dataset.data.events.tof<=2*dataset.timing.tau)
+        dataset.data.events.mask += EVENT_BITMASKS['StrangeTimes']*filter_e
+        if filter_e.any():
+            logging.warning(f'        strange times: {filter_e.sum()}')
 
 
 class MergeFrames(EventDataAction):

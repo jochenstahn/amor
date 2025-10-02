@@ -1,7 +1,7 @@
 """
 Specify the data type and protocol used for event datasets.
 """
-from typing import List, Optional, Protocol
+from typing import List, Optional, Protocol, Tuple
 from dataclasses import dataclass
 from .header import Header
 from abc import ABC, abstractmethod
@@ -31,26 +31,36 @@ class AmorTiming:
     tau: float
 
 # Structured datatypes used for event streams
-EVENT_TYPE = np.dtype([('tof', np.float64),('pixelID', np.uint32), ('wallTime', np.int64)])
+EVENT_TYPE = np.dtype([('tof', np.float64), ('pixelID', np.uint32), ('mask', np.int32)])
 PACKET_TYPE = np.dtype([('start_index', np.uint32), ('Time', np.int64)])
 PULSE_TYPE = np.dtype([('time', np.int64), ('monitor', np.float32)])
 PC_TYPE = np.dtype([('current', np.float32), ('time', np.int64)])
-# analyzed event sreams with extra attributes
-ANA_EVENT_TYPE = np.dtype([('tof', np.float64),('pixelID', np.uint32), ('wallTime', np.int64),
-                           ('detZ', np.float64), ('detXdist', np.float64), ('delta', np.float64),
-                           ('mask', bool)])
 
-FINAL_EVENT_TYPE = np.dtype([('tof', np.float64),('pixelID', np.uint32), ('wallTime', np.int64),
-                           ('detZ', np.float64), ('detXdist', np.float64), ('delta', np.float64),
-                           ('mask', bool),
-                           ('lamda', np.float64), ('qz', np.float64), ('qx', np.float64), ])
+# define the bitmask for individual event filters
+EVENT_BITMASKS = {
+    'MonitorThreshold': 1,
+    'StrangeTimes': 2,
+    'yRange': 4,
+    'LamdaRange': 8,
+    'qRange': 16,
+    }
+
+def append_fields(input: np.recarray, new_fields: List[Tuple[str, np.dtype]]):
+    # add one ore more fields to a recarray, numpy functions seems to fail
+    flds = [(name, dtypei[0]) for name, dtypei in input.dtype.fields.items()]
+    flds += new_fields
+    output = np.recarray(len(input), dtype=flds)
+
+    for field in input.dtype.fields.keys():
+        output[field] = input[field]
+    return output
 
 @dataclass
 class AmorEventStream:
     events: np.recarray # EVENT_TYPE
     packets: np.recarray # PACKET_TYPE
-    pulses: Optional[np.recarray] = None # PULSE_TYPE
-    proton_current: Optional[np.recarray] = None # PC_TYPE
+    pulses: np.recarray  # PULSE_TYPE
+    proton_current: np.recarray # PC_TYPE
 
 class EventDatasetProtocol(Protocol):
     """

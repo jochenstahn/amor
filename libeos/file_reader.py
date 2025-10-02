@@ -294,7 +294,11 @@ class AmorEventData:
         events = np.recarray(nevts, dtype=EVENT_TYPE)
         events.tof = np.array(self.hdf['/entry1/Amor/detector/data/event_time_offset'][self.first_index:self.last_index+1])/1.e9
         events.pixelID = self.hdf['/entry1/Amor/detector/data/event_id'][self.first_index:self.last_index+1]
-        self.data = AmorEventStream(events, packets)
+        events.mask = 0
+
+        pulses = self.read_chopper_trigger_stream()
+        current = self.read_proton_current_stream()
+        self.data = AmorEventStream(events, packets, pulses, current)
 
     def read_chopper_trigger_stream(self):
         chopper1TriggerTime = np.array(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_zero'][:-2], dtype=np.int64)
@@ -310,11 +314,12 @@ class AmorEventData:
             pulseTimeS = np.arange(startTime, stopTime, self.timing.tau*1e9, dtype=np.int64)
         pulses = np.recarray(pulseTimeS.shape, dtype=PULSE_TYPE)
         pulses.time = pulseTimeS
+        pulses.monitor = 1. # default is monitor pulses as it requires no calculation
         # apply filter in case the events were filtered
         if self.first_index>0 or not self.EOF:
             pulses = pulses[(pulses.time>=self.data.packets.Time[0])&(pulses.time<=self.data.packets.Time[-1])]
-        self.data.pulses = pulses
         self.eventStartTime = startTime
+        return pulses
 
     def read_proton_current_stream(self):
         proton_current = np.recarray(self.hdf['entry1/Amor/detector/proton_current/time'].shape, dtype=PC_TYPE)
@@ -323,7 +328,7 @@ class AmorEventData:
         if self.first_index>0 or not self.EOF:
             proton_current = proton_current[(proton_current.time>=self.data.packets.Time[0])&
                                             (proton_current.time<=self.data.packets.Time[-1])]
-        self.data.proton_current = proton_current
+        return proton_current
 
     def info(self):
         output = ""
@@ -398,6 +403,7 @@ class AmorData:
 
     def prepare_actions(self):
         # setup all actions performed in origin AmorData, time correction requires first dataset start time
+        # The order of these corrections matter as some rely on parameters modified before
         self.time_correction = eh.CorrectSeriesTime(0)
         self.event_actions = eh.ApplyParameterOverwrites(self.config) # some actions use instrument parameters, change before that
         self.event_actions |= eh.CorrectChopperPhase()
@@ -408,7 +414,8 @@ class AmorData:
         self.event_actions |= eh.MergeFrames()
         self.event_actions |= ea.AnalyzePixelIDs(self.config.yRange)
         self.event_actions |= ea.TofTimeCorrection(self.config.incidentAngle==IncidentAngle.alphaF)
-        self.event_actions |= ea.WavelengthAndQ(self.config.lambdaRange, self.config.incidentAngle)
+        self.event_actions |= ea.CalculateWavelength(self.config.lambdaRange)
+        self.event_actions |= ea.CalculateQ(self.config.incidentAngle)
         self.event_actions |= ea.FilterQzRange(self.config.qzRange)
         self.event_actions |= ea.ApplyMask()
 
@@ -452,7 +459,10 @@ class AmorData:
         self.lamda_e = ev.lamda
         self.wallTime_e = ev.wallTime
         self.qz_e = ev.qz
-        self.qx_e = ev.qx
+        try:
+            self.qx_e = ev.qx
+        except AttributeError:
+            self.qx_e = 0.*self.qz_e
         self.pulseTimeS = ds.data.pulses.time
         self.monitorPerPulse = ds.data.pulses.monitor
 

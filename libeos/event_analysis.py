@@ -5,9 +5,10 @@ import numpy as np
 import logging
 
 from typing import Tuple
+from numpy.lib.recfunctions import rec_append_fields
 
 from . import const
-from .event_data_types import EventDataAction, EventDatasetProtocol, EVENT_TYPE, ANA_EVENT_TYPE, FINAL_EVENT_TYPE
+from .event_data_types import EventDataAction, EventDatasetProtocol, append_fields, EVENT_BITMASKS
 from .helpers import filter_project_x
 from .instrument import Detector
 from .options import IncidentAngle
@@ -20,22 +21,18 @@ class AnalyzePixelIDs(EventDataAction):
 
     def perform_action(self, dataset: EventDatasetProtocol) ->None:
         d = dataset.data
-        if d.events.dtype != EVENT_TYPE:
-            raise ValueError("AnalyzeEventData only works on raw AmorEventData, this dataset has already been altered")
         pixelLookUp = self.resolve_pixels()
         # TODO: change numba implementation to use native pixelID type
         (detZ, detXdist, delta, mask) = filter_project_x(
                 pixelLookUp, d.events.pixelID.astype(np.int64), self.yRange[0], self.yRange[1]
                 )
-        ana_events = np.recarray(d.events.shape, dtype=ANA_EVENT_TYPE)
-        # copy old data
-        for field in d.events.dtype.fields.keys():
-            ana_events[field] = d.events[field]
+        ana_events = append_fields(d.events, [
+            ('detZ', detZ.dtype), ('detXdist', detXdist.dtype), ('delta', delta.dtype)])
         # add analysis per event
         ana_events.detZ = detZ
         ana_events.detXdist = detXdist
         ana_events.delta = delta
-        ana_events.mask = mask
+        ana_events.mask += np.logical_not(mask)*EVENT_BITMASKS['yRange']
         d.events = ana_events
         dataset.geometry.delta_z = self.delta_z
 
@@ -60,36 +57,44 @@ class TofTimeCorrection(EventDataAction):
 
     def perform_action(self, dataset: EventDatasetProtocol) ->None:
         d = dataset.data
-        if d.events.dtype != ANA_EVENT_TYPE:
-            raise ValueError("TofTimeCorrection requires dataset with analyzed events, perform AnalyzedEventData first")
-
         if self.correct_chopper_opening:
             d.events.tof -= ( d.events.delta / 180. ) * dataset.timing.tau
         else:
             d.events.tof -= ( dataset.geometry.kad / 180. ) * dataset.timing.tau
 
-class WavelengthAndQ(EventDataAction):
-    def __init__(self, lambdaRange: Tuple[float, float], incidentAngle: IncidentAngle):
+class CalculateWavelength(EventDataAction):
+    def __init__(self, lambdaRange: Tuple[float, float]):
         self.lambdaRange = lambdaRange
-        self.incidentAngle = incidentAngle
 
     def perform_action(self, dataset: EventDatasetProtocol) ->None:
         d = dataset.data
-        if d.events.dtype != ANA_EVENT_TYPE:
-            raise ValueError("WavelengthAndQ requires dataset with analyzed events, perform AnalyzedEventData first")
+        if not 'detXdist' in dataset.data.events.dtype.names:
+            raise ValueError("CalculateWavelength requires dataset with analyzed pixels, perform AnalyzePixelIDs first")
 
         self.lamdaMax = const.lamdaCut+1.e13*dataset.timing.tau*const.hdm/(dataset.geometry.chopperDetectorDistance+124.)
 
         # lambda
         lamda = (1.e13*const.hdm)*d.events.tof/(dataset.geometry.chopperDetectorDistance+d.events.detXdist)
 
-        final_events = np.recarray(d.events.shape, dtype=FINAL_EVENT_TYPE)
-        # copy old data
-        for field in d.events.dtype.fields.keys():
-            final_events[field] = d.events[field]
+        final_events = append_fields(d.events, [('lamda', np.float64)])
         # add analysis per event
         final_events.lamda = lamda
-        final_events.mask &= (self.lambdaRange[0]<=lamda) & (lamda<=self.lambdaRange[1])
+        final_events.mask += EVENT_BITMASKS["LamdaRange"]*(
+                (self.lambdaRange[0]>lamda) | (lamda>self.lambdaRange[1]))
+        d.events = final_events
+
+class CalculateQ(EventDataAction):
+    def __init__(self, incidentAngle: IncidentAngle):
+        self.incidentAngle = incidentAngle
+
+    def perform_action(self, dataset: EventDatasetProtocol) ->None:
+        d = dataset.data
+        if not 'lamda' in dataset.data.events.dtype.names:
+            raise ValueError("CalculateQ requires dataset with analyzed wavelength, perform CalculateWavelength first")
+
+        lamda = d.events.lamda
+
+        final_events = append_fields(d.events, [('qz', np.float64)])
 
         # alpha_f
         # q_z
@@ -103,6 +108,7 @@ class WavelengthAndQ(EventDataAction):
             alphaF_e  = dataset.geometry.nu - dataset.geometry.mu + d.events.delta
             alphaI    = dataset.geometry.kap + dataset.geometry.kad + dataset.geometry.mu
             final_events.qz = 2*np.pi * ((np.sin(np.deg2rad(alphaF_e)) + np.sin(np.deg2rad(alphaI)))/lamda)
+            final_events = append_fields(final_events, [('qx', np.float64)])
             final_events.qx = 2*np.pi * ((np.cos(np.deg2rad(alphaF_e)) - np.cos(np.deg2rad(alphaI)))/lamda)
 
         dataset.data.events = final_events
@@ -119,19 +125,30 @@ class FilterQzRange(EventDataAction):
 
     def perform_action(self, dataset: EventDatasetProtocol) ->None:
         d = dataset.data
-        if d.events.dtype != FINAL_EVENT_TYPE:
-            raise ValueError("FilterQzRange requires dataset with fully analyzed events, perform WavelengthAndQ first")
+        if not 'qz' in dataset.data.events.dtype.names:
+            raise ValueError("FilterQzRange requires dataset with qz values per events, perform WavelengthAndQ first")
 
         if self.qzRange[1]<0.5:
-            d.events.mask &=  (self.qzRange[0]<=d.events.qz) & (d.events.qz<=self.qzRange[1])
+            d.events.mask += EVENT_BITMASKS["qRange"]*((self.qzRange[0]>d.events.qz) | (d.events.qz>self.qzRange[1]))
 
 class ApplyMask(EventDataAction):
+    def __init__(self, bitmask_filter=None):
+        self.bitmask_filter = bitmask_filter
+
     def perform_action(self, dataset: EventDatasetProtocol) ->None:
         d = dataset.data
-        if not 'mask' in d.events.dtype.names:
-            logging.debug("ApplyMask performed on dataset without mask")
-            return
-
         logging.info(f'      number of events: total = {d.events.shape[0]:7d}, '
-                     f'filtered = {np.logical_not(d.events.mask).sum():7d}')
-        d.events = d.events[d.events.mask]
+                     f'filtered = {(d.events.mask!=0).sum():7d}')
+        if logging.getLogger().level == logging.DEBUG:
+            # only run this calculation if debug level is actually active
+            filtered_by_mask = {}
+            for key, value in EVENT_BITMASKS.items():
+                filtered_by_mask[key] = ((d.events.mask & value)!=0).sum()
+            logging.debug(f"        Removed by filters: {filtered_by_mask}")
+        if self.bitmask_filter is None:
+            d.events = d.events[d.events.mask==0]
+        else:
+            # remove the provided bitmask_filter bits from the events
+            # this means that all bits that are set in bitmask_filter will NOT be used to filter events
+            fltr = (d.events.mask & (~self.bitmask_filter)) == 0
+            d.events = d.events[fltr]
