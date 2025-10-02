@@ -90,4 +90,4 @@ class MergeFrames(EventDataAction):
         tofCut = const.lamdaCut+dataset.geometry.chopperDetectorDistance/const.hdm*1e-13
         total_offset = (tofCut +
                         dataset.timing.tau * (dataset.timing.ch1TriggerPhase + dataset.timing.chopperPhase/2)/180)
-        dataset.data.events.tof = merge_frames(dataset.data.events.tof, self.tofCut, dataset.timing.tau, total_offset)
+        dataset.data.events.tof = merge_frames(dataset.data.events.tof, tofCut, dataset.timing.tau, total_offset)
