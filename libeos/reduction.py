@@ -378,23 +378,32 @@ class AmorReduction:
         outputPath = self.output_config.outputPath
         normalisation_list = self.path_resolver.expand_file_list(short_notation)
         name = '_'.join(map(str, normalisation_list))
-        n_path = os.path.join(outputPath, f'{name}_{str(self.experiment_config.monitorType)}.norm')
+        n_path = os.path.join(outputPath, f'{name}.norm')
 
+        self.norm = None
         if os.path.exists(n_path):
-            logging.warning(f'normalisation matrix: found and using {n_path}')
-            self.norm = LZNormalisation.from_file(n_path)
-            self.header.measurement_additional_files = self.norm.file_list
-        else:
+            logging.debug(f'trying to load matrix from file {n_path}')
+            try:
+                self.norm = LZNormalisation.from_file(n_path, self.normevent_actions.action_hash())
+            except (ValueError, EOFError):
+                self.norm =None
+            else:
+                logging.warning(f'normalisation matrix: found and using {n_path}')
+        if self.norm is None:
+            # in case file does not exist or the action hash doesn't match, create new normalization
             logging.warning(f'normalisation matrix: using the files {normalisation_list}')
             normalization_files = list(map(self.path_resolver.get_path, normalisation_list))
             reference = AmorEventData(normalization_files[0])
-            for nfi in normalization_files[1:]:
-                reference.append(AmorEventData(nfi))
             self.normevent_actions(reference)
+            for nfi in normalization_files[1:]:
+                toadd = AmorEventData(nfi)
+                self.normevent_actions(toadd)
+                reference.append(toadd)
             self.norm = LZNormalisation(reference, self.reduction_config.normalisationMethod, self.grid)
             if reference.data.events.shape[0] > 1e6:
-                self.norm.safe(n_path)
+                self.norm.safe(n_path, self.normevent_actions.action_hash())
 
+        self.header.measurement_additional_files = self.norm.file_list
         self.header.reduction.corrections.append('normalisation with \'additional files\'')
 
     def project_on_lz(self, fromHDF, norm_lz, normAngle, lamda_e, detZ_e):

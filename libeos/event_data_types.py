@@ -5,6 +5,7 @@ from typing import List, Optional, Protocol, Tuple
 from dataclasses import dataclass
 from .header import Header
 from abc import ABC, abstractmethod
+from hashlib import sha256
 import  numpy as np
 import logging
 
@@ -105,6 +106,14 @@ class EventDataAction(ABC):
             output += f'{key}={value}, '
         return output.rstrip(', ')+')'
 
+    def action_hash(self)->bytes:
+        # generate a unique hash that encodes this action with its configuration parameters
+        mh = sha256()
+        mh.update(self.__class__.__name__.encode())
+        for key,value in sorted(self.__dict__.items()):
+            mh.update(repr(value).encode())
+        return mh.hexdigest()
+
 class CombinedAction(EventDataAction):
     """
     Used to perform multiple actions in one call. Stores a sequence of actions
@@ -129,3 +138,9 @@ class CombinedAction(EventDataAction):
         for ai in self._actions[1:]:
             output += ' | '+repr(ai)
         return output
+
+    def action_hash(self)->bytes:
+        mh = sha256()
+        for action in self._actions:
+            mh.update(action.action_hash().encode())
+        return mh.hexdigest()

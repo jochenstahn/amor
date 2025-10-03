@@ -21,7 +21,7 @@ class AnalyzePixelIDs(EventDataAction):
 
     def perform_action(self, dataset: EventDatasetProtocol) ->None:
         d = dataset.data
-        pixelLookUp = self.resolve_pixels()
+        delta_z, pixelLookUp = self.resolve_pixels()
         # TODO: change numba implementation to use native pixelID type
         (detZ, detXdist, delta, mask) = filter_project_x(
                 pixelLookUp, d.events.pixelID.astype(np.int64), self.yRange[0], self.yRange[1]
@@ -34,7 +34,7 @@ class AnalyzePixelIDs(EventDataAction):
         ana_events.delta = delta
         ana_events.mask += np.logical_not(mask)*EVENT_BITMASKS['yRange']
         d.events = ana_events
-        dataset.geometry.delta_z = self.delta_z
+        dataset.geometry.delta_z = delta_z
 
     def resolve_pixels(self):
         """determine spatial coordinats and angles from pixel number"""
@@ -48,8 +48,9 @@ class AnalyzePixelIDs(EventDataAction):
         bladeAngle        = np.rad2deg( 2. * np.arcsin(0.5*Detector.bladeZ / Detector.distance) )
         delta             = (Detector.nBlades/2. - bladeNr) * bladeAngle \
                             - np.rad2deg( np.arctan(bZi*Detector.dZ / ( Detector.distance + bZi * Detector.dX) ) )
-        self.delta_z      = delta[detYi==1]
-        return np.vstack((detYi.T, detZi.T, detX.T, delta.T)).T
+        delta_z      = delta[detYi==1]
+        pixel_lookup=np.vstack((detYi.T, detZi.T, detX.T, delta.T)).T
+        return delta_z, pixel_lookup
 
 class TofTimeCorrection(EventDataAction):
     def __init__(self, correct_chopper_opening: bool = True):
@@ -71,7 +72,7 @@ class CalculateWavelength(EventDataAction):
         if not 'detXdist' in dataset.data.events.dtype.names:
             raise ValueError("CalculateWavelength requires dataset with analyzed pixels, perform AnalyzePixelIDs first")
 
-        self.lamdaMax = const.lamdaCut+1.e13*dataset.timing.tau*const.hdm/(dataset.geometry.chopperDetectorDistance+124.)
+        #lamdaMax = const.lamdaCut+1.e13*dataset.timing.tau*const.hdm/(dataset.geometry.chopperDetectorDistance+124.)
 
         # lambda
         lamda = (1.e13*const.hdm)*d.events.tof/(dataset.geometry.chopperDetectorDistance+d.events.detXdist)

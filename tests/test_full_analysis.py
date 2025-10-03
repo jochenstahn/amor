@@ -37,7 +37,7 @@ class FullAmorTest(TestCase):
 
     def tearDown(self):
         self.pr.disable()
-        for fi in ['../test_results/test.Rqz.ort', '../test_results/5952_a.norm']:
+        for fi in ['../test_results/test.Rqz.ort', '../test_results/5952.norm']:
             try:
                 os.unlink(os.path.join(self.reader_config.rawPath[0], fi))
             except FileNotFoundError:

@@ -4,8 +4,7 @@ Defines how to normalize a focusing reflectometry dataset by a reference measure
 import logging
 import os
 import numpy as np
-from typing import List
-
+from typing import List, Optional
 
 from .event_data_types import EventDatasetProtocol
 from .header import Header
@@ -43,14 +42,17 @@ class LZNormalisation:
         self.file_list = [os.path.basename(entry) for entry in reference.file_list]
 
     @classmethod
-    def from_file(cls, filename) -> 'LZNormalisation':
-        logging.warning(f'normalisation matrix: found and using {filename}')
+    def from_file(cls, filename, check_hash=None) -> Optional['LZNormalisation']:
         self = super().__new__(cls)
         with open(filename, 'rb') as fh:
+            hash = str(np.load(fh, allow_pickle=True))
             self.file_list = np.load(fh, allow_pickle=True)
             self.angle = np.load(fh, allow_pickle=True)
             self.norm = np.load(fh, allow_pickle=True)
             self.monitor = np.load(fh, allow_pickle=True)
+        if check_hash is not None and hash != check_hash:
+            logging.info('    file hash does not match this reduction configuration')
+            raise ValueError('file hash does not match this reduction configuration')
         return self
 
     @classmethod
@@ -63,8 +65,9 @@ class LZNormalisation:
         self.monitor = 1.
         return self
 
-    def safe(self, filename):
+    def safe(self, filename, hash):
         with open(filename, 'wb') as fh:
+            np.save(fh, hash, allow_pickle=False)
             np.save(fh, np.array(self.file_list), allow_pickle=False)
             np.save(fh, np.array(self.angle), allow_pickle=False)
             np.save(fh, self.norm, allow_pickle=False)
