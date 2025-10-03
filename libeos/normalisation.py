@@ -9,7 +9,7 @@ from typing import List, Optional
 from .event_data_types import EventDatasetProtocol
 from .header import Header
 from .options import NormalisationMethod
-from .instrument import Grid
+from .instrument import Detector, LZGrid
 
 
 class LZNormalisation:
@@ -18,7 +18,7 @@ class LZNormalisation:
     monitor: float
     norm: np.ndarray
 
-    def __init__(self, reference:EventDatasetProtocol, normalisationMethod: NormalisationMethod, grid: Grid):
+    def __init__(self, reference:EventDatasetProtocol, normalisationMethod: NormalisationMethod, grid: LZGrid):
         self.angle = reference.geometry.nu-reference.geometry.mu
         lamda_e = reference.data.events.lamda
         detZ_e = reference.data.events.detZ
@@ -30,7 +30,7 @@ class LZNormalisation:
         else:
             # correct for reference sm reflectivity
             lamda_l = grid.lamda()
-            theta_z = self.angle+reference.geometry.delta_z
+            theta_z = self.angle+Detector.delta_z
             lamda_lz = (grid.lz().T*lamda_l[:-1]).T
             theta_lz = grid.lz()*theta_z
             qz_lz = 4.0*np.pi*np.sin(np.deg2rad(theta_lz))/lamda_lz
@@ -56,7 +56,7 @@ class LZNormalisation:
         return self
 
     @classmethod
-    def unity(cls, grid:Grid) -> 'LZNormalisation':
+    def unity(cls, grid:LZGrid) -> 'LZNormalisation':
         logging.warning(f'normalisation is unity')
         self = super().__new__(cls)
         self.norm = grid.lz()

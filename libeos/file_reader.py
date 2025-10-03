@@ -322,6 +322,25 @@ class AmorEventData:
 
         return output
 
+    def get_timeslice(self, start, end)->'AmorEventData':
+        # return a new dataset with just events that occured in given time slice
+        if not 'wallTime' in self.data.events.dtype.names:
+            raise ValueError("This dataset is missing a wallTime that is required for time slicing")
+        event_filter = self.data.events.wallTime>=start
+        event_filter &= self.data.events.wallTime<end
+        pulse_filter = self.data.pulses.time>=start
+        pulse_filter &= self.data.pulses.time<end
+        output = super().__new__(AmorEventData)
+        for key, value in self.__dict__.items():
+            if key == 'data':
+                continue
+            else:
+                setattr(output, key, value)
+        # TODO: this is not strictly correct, as the packet/event relationship is lost
+        output.data = AmorEventStream(self.data.events[event_filter], self.data.packets,
+                                      self.data.pulses[pulse_filter], self.data.proton_current)
+        return output
+
 class AmorData:
     """re-implement old AmorData class functionality until refactoring is complete"""
     chopperDetectorDistance: float

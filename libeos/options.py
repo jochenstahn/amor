@@ -106,6 +106,24 @@ class ArgParsable:
         return output
 
     @classmethod
+    def get_default(cls, key):
+        """
+        Return the default argument for an attribute, None if it doesn't exist.
+        """
+        for field in fields(cls):
+            if field.name != key:
+                continue
+            if field.default is not MISSING:
+                return field.default
+            elif field.default_factory is not MISSING:
+                return field.default_factory()
+        return None
+
+    def is_default(self, key):
+        value = getattr(self, key)
+        return value == self.get_default(key)
+
+    @classmethod
     def from_args(cls, args: argparse.Namespace):
         """
         Create the child class from the command line argument Namespace object.

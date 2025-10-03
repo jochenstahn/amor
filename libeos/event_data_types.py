@@ -21,8 +21,6 @@ class AmorGeometry:
     detectorDistance: float
     chopperDetectorDistance: float
 
-    delta_z: Optional[float] = None
-
 @dataclass
 class AmorTiming:
     ch1TriggerPhase: float

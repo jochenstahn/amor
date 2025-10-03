@@ -21,10 +21,9 @@ class AnalyzePixelIDs(EventDataAction):
 
     def perform_action(self, dataset: EventDatasetProtocol) ->None:
         d = dataset.data
-        delta_z, pixelLookUp = self.resolve_pixels()
         # TODO: change numba implementation to use native pixelID type
         (detZ, detXdist, delta, mask) = filter_project_x(
-                pixelLookUp, d.events.pixelID.astype(np.int64), self.yRange[0], self.yRange[1]
+                Detector.pixelLookUp, d.events.pixelID.astype(np.int64), self.yRange[0], self.yRange[1]
                 )
         ana_events = append_fields(d.events, [
             ('detZ', detZ.dtype), ('detXdist', detXdist.dtype), ('delta', delta.dtype)])
@@ -34,23 +33,6 @@ class AnalyzePixelIDs(EventDataAction):
         ana_events.delta = delta
         ana_events.mask += np.logical_not(mask)*EVENT_BITMASKS['yRange']
         d.events = ana_events
-        dataset.geometry.delta_z = delta_z
-
-    def resolve_pixels(self):
-        """determine spatial coordinats and angles from pixel number"""
-        nPixel = Detector.nWires * Detector.nStripes * Detector.nBlades
-        pixelID = np.arange(nPixel)
-        (bladeNr, bPixel) = np.divmod(pixelID, Detector.nWires * Detector.nStripes)
-        (bZi, detYi)      = np.divmod(bPixel, Detector.nStripes)                     # z index on blade, y index on detector
-        detZi             = bladeNr * Detector.nWires + bZi                          # z index on detector
-        detX              = bZi * Detector.dX                                        # x position in detector
-        # detZ              = Detector.zero - bladeNr * Detector.bladeZ - bZi * Detector.dZ      # z position on detector
-        bladeAngle        = np.rad2deg( 2. * np.arcsin(0.5*Detector.bladeZ / Detector.distance) )
-        delta             = (Detector.nBlades/2. - bladeNr) * bladeAngle \
-                            - np.rad2deg( np.arctan(bZi*Detector.dZ / ( Detector.distance + bZi * Detector.dX) ) )
-        delta_z      = delta[detYi==1]
-        pixel_lookup=np.vstack((detYi.T, detZi.T, detX.T, delta.T)).T
-        return delta_z, pixel_lookup
 
 class TofTimeCorrection(EventDataAction):
     def __init__(self, correct_chopper_opening: bool = True):

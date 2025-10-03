@@ -119,7 +119,6 @@ class AssociatePulseWithMonitor(EventDataAction):
             self.monitor_threshold(dataset)
 
     def monitor_threshold(self, dataset):
-        # TODO: evaluate if this should actually do masking instead
         goodTimeS = dataset.data.pulses.time[dataset.data.pulses.monitor!=0]
         filter_e = np.logical_not(np.isin(dataset.data.events.wallTime, goodTimeS))
         dataset.data.events.mask += EVENT_BITMASKS['MonitorThreshold']*filter_e
