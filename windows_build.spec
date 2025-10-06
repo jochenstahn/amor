@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['eos.py'],
+    ['eos/__main__.py'],
     pathex=[],
     binaries=[],
     datas=[],

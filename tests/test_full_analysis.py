@@ -1,16 +1,27 @@
 import os
 import cProfile
 from unittest import TestCase
-from libeos import options, reduction, logconfig
+from dataclasses import fields, MISSING
+from eos import options, reduction, logconfig
 
 logconfig.setup_logging()
-logconfig.update_loglevel(True, False)
+logconfig.update_loglevel(1)
 
 # TODO: add test for new features like proton charge normalization
 
 class FullAmorTest(TestCase):
     @classmethod
     def setUpClass(cls):
+        # generate map for option defaults
+        cls._field_defaults = {}
+        for opt in [options.ExperimentConfig, options.ReductionConfig, options.OutputConfig]:
+            defaults = {}
+            for field in fields(opt):
+                if field.default not in [None, MISSING]:
+                    defaults[field.name] = field.default
+                elif field.default_factory not in [None, MISSING]:
+                    defaults[field.name] = field.default_factory()
+            cls._field_defaults[opt.__name__] = defaults
         cls.pr = cProfile.Profile()
 
     @classmethod
@@ -20,49 +31,47 @@ class FullAmorTest(TestCase):
     def setUp(self):
         self.pr.enable()
         self.reader_config = options.ReaderConfig(
-                year=2023,
-                rawPath=(os.path.join('..', "test_data"),),
+                year=2025,
+                rawPath=["test_data"],
                 )
 
     def tearDown(self):
         self.pr.disable()
-        for fi in ['test.Rqz.ort', '614.norm']:
+        for fi in ['test_results/test.Rqz.ort', 'test_results/5952.norm']:
             try:
-                os.unlink(os.path.join(self.reader_config.rawPath[0], fi))
+                os.unlink(fi)
             except FileNotFoundError:
                 pass
 
-
     def test_time_slicing(self):
         experiment_config = options.ExperimentConfig(
+                chopperSpeed=self._field_defaults['ExperimentConfig']['chopperSpeed'],
                 chopperPhase=-13.5,
                 chopperPhaseOffset=-5,
-                monitorType=options.Defaults.monitorType,
-                lowCurrentThreshold=options.Defaults.lowCurrentThreshold,
-                yRange=(11., 41.),
-                lambdaRange=(2., 15.),
-                qzRange=(0.005, 0.30),
-                incidentAngle=options.Defaults.incidentAngle,
+                monitorType=self._field_defaults['ExperimentConfig']['monitorType'],
+                lowCurrentThreshold=self._field_defaults['ExperimentConfig']['lowCurrentThreshold'],
+                yRange=(18, 48),
+                lambdaRange=(3., 11.5),
+                incidentAngle=self._field_defaults['ExperimentConfig']['incidentAngle'],
                 mu=0,
                 nu=0,
                 muOffset=0.0,
                 sampleModel='air | 10 H2O | D2O'
                 )
         reduction_config = options.ReductionConfig(
-                normalisationMethod=options.Defaults.normalisationMethod,
+                normalisationMethod=self._field_defaults['ReductionConfig']['normalisationMethod'],
                 qResolution=0.01,
-                qzRange=options.Defaults.qzRange,
-                thetaRange=(-12., 12.),
-                thetaRangeR=(-12., 12.),
-                fileIdentifier=["610"],
+                qzRange=self._field_defaults['ReductionConfig']['qzRange'],
+                thetaRange=(-0.75, 0.75),
+                fileIdentifier=["6003-6005"],
                 scale=[1],
                 normalisationFileIdentifier=[],
                 timeSlize=[300.0]
                 )
         output_config = options.OutputConfig(
-                outputFormats=["Rqz.ort"],
+                outputFormats=[options.OutputFomatOption.Rqz_ort],
                 outputName='test',
-                outputPath=os.path.join('..', 'test_results'),
+                outputPath='test_results',
                 )
         config=options.EOSConfig(self.reader_config, experiment_config, reduction_config, output_config)
         # run three times to get similar timing to noslicing runs
@@ -75,33 +84,32 @@ class FullAmorTest(TestCase):
 
     def test_noslicing(self):
         experiment_config = options.ExperimentConfig(
+                chopperSpeed=self._field_defaults['ExperimentConfig']['chopperSpeed'],
                 chopperPhase=-13.5,
                 chopperPhaseOffset=-5,
-                monitorType=options.Defaults.monitorType,
-                lowCurrentThreshold=options.Defaults.lowCurrentThreshold,
-                yRange=(11., 41.),
-                lambdaRange=(2., 15.),
-                qzRange=(0.005, 0.30),
-                incidentAngle=options.Defaults.incidentAngle,
+                monitorType=self._field_defaults['ExperimentConfig']['monitorType'],
+                lowCurrentThreshold=self._field_defaults['ExperimentConfig']['lowCurrentThreshold'],
+                yRange=(18, 48),
+                lambdaRange=(3., 11.5),
+                incidentAngle=self._field_defaults['ExperimentConfig']['incidentAngle'],
                 mu=0,
                 nu=0,
-                muOffset=0.0
+                muOffset=0.0,
                 )
         reduction_config = options.ReductionConfig(
+                normalisationMethod=self._field_defaults['ReductionConfig']['normalisationMethod'],
                 qResolution=0.01,
-                qzRange=options.Defaults.qzRange,
-                normalisationMethod=options.Defaults.normalisationMethod,
-                thetaRange=(-12., 12.),
-                thetaRangeR=(-12., 12.),
-                fileIdentifier=["610", "611", "608,612-613", "609"],
+                qzRange=self._field_defaults['ReductionConfig']['qzRange'],
+                thetaRange=(-0.75, 0.75),
+                fileIdentifier=["6003", "6004", "6005"],
                 scale=[1],
-                normalisationFileIdentifier=["608"],
-                autoscale=(True, True)
+                normalisationFileIdentifier=["5952"],
+                autoscale=(0.0, 0.05),
                 )
         output_config = options.OutputConfig(
-                outputFormats=["Rqz.ort"],
+                outputFormats=[options.OutputFomatOption.Rqz_ort],
                 outputName='test',
-                outputPath=os.path.join('..', 'test_results'),
+                outputPath='test_results',
                 )
         config=options.EOSConfig(self.reader_config, experiment_config, reduction_config, output_config)
         reducer = reduction.AmorReduction(config)

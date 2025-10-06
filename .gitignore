@@ -8,3 +8,5 @@ raw
 test_results
 build
 dist
+profile_test.prof
+amor_eos.log
