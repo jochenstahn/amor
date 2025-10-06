@@ -112,6 +112,11 @@ class AmorEventData:
         user_orcid = None
         sampleName = self.hdf['entry1/sample/name'][0].decode('utf-8')
         model = self.hdf['entry1/sample/model'][0].decode('utf-8')
+        if 'stack:' in model:
+            import yaml
+            model = yaml.safe_load(model)
+        else:
+            model = dict(stack=model)
         instrumentName = 'Amor'
         source = self.hdf['entry1/Amor/source/name'][0].decode('utf-8')
         sourceProbe = 'neutron'
@@ -138,7 +143,7 @@ class AmorEventData:
                 )
         self.sample = fileio.Sample(
                 name=sampleName,
-                model=SampleModel(stack=model),
+                model=SampleModel.from_dict(model),
                 sample_parameters=None,
                 )
 
@@ -407,10 +412,10 @@ class AmorData:
         if self.config.monitorType==MonitorType.auto:
             if self.dataset.data.proton_current.current.sum()>1:
                 self.monitorType = MonitorType.proton_charge
-                logging.warning('      monitor type set to "proton current"')
+                logging.debug('      monitor type set to "proton current"')
             else:
                 self.monitorType = MonitorType.time
-                logging.warning('      monitor type set to "time"')
+                logging.debug('      monitor type set to "time"')
             # update actions to sue selected monitor
             self.prepare_actions()
 
