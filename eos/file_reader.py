@@ -327,6 +327,8 @@ class AmorEventData:
         # return a new dataset with just events that occured in given time slice
         if not 'wallTime' in self.data.events.dtype.names:
             raise ValueError("This dataset is missing a wallTime that is required for time slicing")
+        # convert from seconds to epoch integer values
+        start , end = start*1e9, end*1e9
         event_filter = self.data.events.wallTime>=start
         event_filter &= self.data.events.wallTime<end
         pulse_filter = self.data.pulses.time>=start

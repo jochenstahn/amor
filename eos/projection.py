@@ -40,8 +40,10 @@ class ProjectedReflectivity:
             scale = (self.R[filter_q]/self.dR[filter_q]).sum()/(self.R[filter_q]**2/self.dR[filter_q]).sum()
             self.scale(scale)
             logging.info(f'      scaling factor = {scale}')
+            return scale
         else:
             logging.warning('      automatic scaling not possible')
+            return 1.0
 
     def stitch(self, other: 'ProjectedReflectivity'):
         # find scaling factor between two reflectivities at points both are not zero
@@ -56,8 +58,10 @@ class ProjectedReflectivity:
             scale = (R1**2*R2**2/(dR1**2*dR2**2)).sum() / (R1**3*R2/(dR1**2*dR2**2)).sum()
             self.scale(scale)
             logging.info(f'      scaling factor = {scale}')
+            return scale
         else:
             logging.warning('      automatic scaling not possible')
+            return 1.0
 
     def subtract(self, R, dR):
         # subtract another dataset with same q-points

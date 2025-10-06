@@ -148,11 +148,13 @@ class AmorReduction:
 
 
         if self.reduction_config.timeSlize:
-            self.read_timeslices(i)
+            if i>0:
+                logging.warning("    time slizing should only be used for on set of datafiles, check parameters")
+            self.analyze_timeslices(i)
         else:
-            self.read_unsliced(i)
+            self.analyze_unsliced(i)
 
-    def read_unsliced(self, i):
+    def analyze_unsliced(self, i):
         self.monitor = np.sum(self.dataset.data.pulses.monitor)
         logging.warning(f'    monitor = {self.monitor:8.2f} {MONITOR_UNITS[self.experiment_config.monitorType]}')
 
@@ -228,8 +230,7 @@ class AmorReduction:
                 self.datasetsRlt.append(orso_data)
                 j += 1
 
-    def read_timeslices(self, i):
-        # TODO: warn when using multiple short_codes
+    def analyze_timeslices(self, i):
         wallTime_e = np.float64(self.dataset.data.events.wallTime)/1e9
         pulseTimeS = np.float64(self.dataset.data.pulses.time)/1e9
         interval = self.reduction_config.timeSlize[0]
@@ -261,10 +262,14 @@ class AmorReduction:
             result = proj.project_on_qz()
 
             if self.reduction_config.autoscale:
-                if i==0:
-                    result.autoscale(self.reduction_config.autoscale)
+                # scale every slice the same
+                if ti==0:
+                    if i==0:
+                        atscale = result.autoscale(self.reduction_config.autoscale)
+                    else:
+                        atscale = result.stitch(self.last_result)
                 else:
-                    result.stitch(self.last_result)
+                    result.scale(atscale)
 
             if self.subtract:
                 if len(result.Q)==len(self.sq_q):
