@@ -9,7 +9,7 @@ Software repository for the neutron reflectometer Amor at the Paul Scherrer Inst
 
 Reduction of the raw files (.hdf) to reflectivity files in one of the representations of the **ORSO reflectivity file format**:
 
-  eos.py --help
+  eos --help
 
 visualisation of the content of a raw file (.hdf):
 
@@ -23,5 +23,5 @@ Create a virtual python environment (>3.8) and install the PyPI package:
 
   pip install amor-eos
 
-On Windows you can also use the binary eos.exe that you find in the 
+On Windows you can also use the binary eos.exe that you find in the
 [GitHub Releases]([https://github.com/jochenstahn/amor/releases/latest) section
