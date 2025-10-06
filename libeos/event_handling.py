@@ -44,7 +44,7 @@ class ApplyParameterOverwrites(EventDataAction):
     def update_header(self, header:Header) ->None:
         if self.config.sampleModel:
             import yaml
-            from orsopy.fileio import Sample
+            from orsopy.fileio.model_language import SampleModel
             if 'yml' in self.config.sampleModel or 'yaml' in self.config.sampleModel:
                 if os.path.isfile(self.config.sampleModel):
                     with open(self.config.sampleModel, 'r') as model_yml:
@@ -54,7 +54,7 @@ class ApplyParameterOverwrites(EventDataAction):
             else:
                 model = dict(stack=self.config.sampleModel)
             logging.debug(f'        set sample.model = {self.config.sampleModel}')
-            header.sample.model = Sample.from_dict(model)
+            header.sample.model = SampleModel.from_dict(model)
 
 
 class CorrectChopperPhase(EventDataAction):
