@@ -48,32 +48,32 @@ class AmorReduction:
             self.normevent_actions = eh.ApplyPhaseOffset(self.experiment_config.chopperPhaseOffset)
             self.normevent_actions |= eh.CorrectChopperPhase()
             if self.experiment_config.monitorType in [MonitorType.proton_charge, MonitorType.debug]:
-                self.normevent_actions |= eh.ExtractWalltime()
+                self.normevent_actions |= ea.ExtractWalltime()
             self.normevent_actions |= eh.AssociatePulseWithMonitor(self.experiment_config.monitorType,
                                                                    self.experiment_config.lowCurrentThreshold)
             self.normevent_actions |= eh.FilterStrangeTimes()
-            self.normevent_actions |= eh.MergeFrames()
+            self.normevent_actions |= ea.MergeFrames()
             self.normevent_actions |= ea.AnalyzePixelIDs(self.experiment_config.yRange)
-            self.normevent_actions |= ea.TofTimeCorrection(self.experiment_config.incidentAngle==IncidentAngle.alphaF)
+            self.normevent_actions |= eh.TofTimeCorrection(self.experiment_config.incidentAngle==IncidentAngle.alphaF)
             self.normevent_actions |= ea.CalculateWavelength(self.experiment_config.lambdaRange)
-            self.normevent_actions |= ea.ApplyMask()
+            self.normevent_actions |= eh.ApplyMask()
         # Actions on datasets not used for normalization
         self.dataevent_actions = eh.ApplyPhaseOffset(self.experiment_config.chopperPhaseOffset)
         self.dataevent_actions |= eh.ApplyParameterOverwrites(self.experiment_config) # some actions use instrument parameters, change before that
         self.dataevent_actions |= eh.CorrectChopperPhase()
-        self.dataevent_actions |= eh.ExtractWalltime()
+        self.dataevent_actions |= ea.ExtractWalltime()
         self.dataevent_time_correction = eh.CorrectSeriesTime(0) # will be set from first dataset
         self.dataevent_actions |= self.dataevent_time_correction
         self.dataevent_actions |= eh.AssociatePulseWithMonitor(self.experiment_config.monitorType,
                                                                self.experiment_config.lowCurrentThreshold)
         self.dataevent_actions |= eh.FilterStrangeTimes()
-        self.dataevent_actions |= eh.MergeFrames()
+        self.dataevent_actions |= ea.MergeFrames()
         self.dataevent_actions |= ea.AnalyzePixelIDs(self.experiment_config.yRange)
-        self.dataevent_actions |= ea.TofTimeCorrection(self.experiment_config.incidentAngle==IncidentAngle.alphaF)
+        self.dataevent_actions |= eh.TofTimeCorrection(self.experiment_config.incidentAngle==IncidentAngle.alphaF)
         self.dataevent_actions |= ea.CalculateWavelength(self.experiment_config.lambdaRange)
         self.dataevent_actions |= ea.CalculateQ(self.experiment_config.incidentAngle)
         self.dataevent_actions |= ea.FilterQzRange(self.reduction_config.qzRange)
-        self.dataevent_actions |= ea.ApplyMask()
+        self.dataevent_actions |= eh.ApplyMask()
 
         self.grid = LZGrid(self.reduction_config.qResolution, self.reduction_config.qzRange)
 

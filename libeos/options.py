@@ -240,7 +240,7 @@ class ExperimentConfig(ArgParsable):
                 },
             )
 
-    incidentAngle: str = field(
+    incidentAngle: IncidentAngle = field(
             default=IncidentAngle.alphaF,
             metadata={
                 'short': 'ai',

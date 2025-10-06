@@ -1,18 +1,36 @@
 """
 Define an event dataformat that performs reduction actions like wavelength calculation on per-event basis.
+With large number of events these actions can be time consuming so they use numba based functions.
 """
 import numpy as np
 import logging
 
 from typing import Tuple
-from numpy.lib.recfunctions import rec_append_fields
 
 from . import const
 from .event_data_types import EventDataAction, EventDatasetProtocol, append_fields, EVENT_BITMASKS
-from .helpers import filter_project_x
+from .helpers import filter_project_x, merge_frames, extract_walltime
 from .instrument import Detector
 from .options import IncidentAngle
 from .header import Header
+
+class ExtractWalltime(EventDataAction):
+    def perform_action(self, dataset: EventDatasetProtocol) ->None:
+        # TODO: fix numba type definition after refactor
+        wallTime = extract_walltime(dataset.data.events.tof,
+                                    dataset.data.packets.start_index.astype(np.uint64),
+                                    dataset.data.packets.Time)
+        logging.debug(f'        expending event stream by wallTime')
+        new_events = append_fields(dataset.data.events, [('wallTime', wallTime.dtype)])
+        new_events.wallTime = wallTime
+        dataset.data.events = new_events
+
+class MergeFrames(EventDataAction):
+    def perform_action(self, dataset: EventDatasetProtocol)->None:
+        tofCut = const.lamdaCut*dataset.geometry.chopperDetectorDistance/const.hdm*1e-13
+        total_offset = (tofCut +
+                        dataset.timing.tau * (dataset.timing.ch1TriggerPhase + dataset.timing.chopperPhase/2)/180)
+        dataset.data.events.tof = merge_frames(dataset.data.events.tof, tofCut, dataset.timing.tau, total_offset)
 
 
 class AnalyzePixelIDs(EventDataAction):
@@ -33,17 +51,6 @@ class AnalyzePixelIDs(EventDataAction):
         ana_events.delta = delta
         ana_events.mask += np.logical_not(mask)*EVENT_BITMASKS['yRange']
         d.events = ana_events
-
-class TofTimeCorrection(EventDataAction):
-    def __init__(self, correct_chopper_opening: bool = True):
-        self.correct_chopper_opening = correct_chopper_opening
-
-    def perform_action(self, dataset: EventDatasetProtocol) ->None:
-        d = dataset.data
-        if self.correct_chopper_opening:
-            d.events.tof -= ( d.events.delta / 180. ) * dataset.timing.tau
-        else:
-            d.events.tof -= ( dataset.geometry.kad / 180. ) * dataset.timing.tau
 
 class CalculateWavelength(EventDataAction):
     def __init__(self, lambdaRange: Tuple[float, float]):
@@ -113,25 +120,3 @@ class FilterQzRange(EventDataAction):
 
         if self.qzRange[1]<0.5:
             d.events.mask += EVENT_BITMASKS["qRange"]*((self.qzRange[0]>d.events.qz) | (d.events.qz>self.qzRange[1]))
-
-class ApplyMask(EventDataAction):
-    def __init__(self, bitmask_filter=None):
-        self.bitmask_filter = bitmask_filter
-
-    def perform_action(self, dataset: EventDatasetProtocol) ->None:
-        d = dataset.data
-        logging.info(f'      number of events: total = {d.events.shape[0]:7d}, '
-                     f'filtered = {(d.events.mask!=0).sum():7d}')
-        if logging.getLogger().level == logging.DEBUG:
-            # only run this calculation if debug level is actually active
-            filtered_by_mask = {}
-            for key, value in EVENT_BITMASKS.items():
-                filtered_by_mask[key] = ((d.events.mask & value)!=0).sum()
-            logging.debug(f"        Removed by filters: {filtered_by_mask}")
-        if self.bitmask_filter is None:
-            d.events = d.events[d.events.mask==0]
-        else:
-            # remove the provided bitmask_filter bits from the events
-            # this means that all bits that are set in bitmask_filter will NOT be used to filter events
-            fltr = (d.events.mask & (~self.bitmask_filter)) == 0
-            d.events = d.events[fltr]

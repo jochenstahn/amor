@@ -1,16 +1,14 @@
 """
 Calculations performed on AmorEventData.
+This module contains actions that do not need the numba base helper functions. Other actions are in event_analysis
 """
 import logging
 import os
 import numpy as np
-# from numpy.lib.recfunctions import rec_append_fields, append_fields
 
-from . import const
 from .header import Header
 from .options import ExperimentConfig, MonitorType
-from .event_data_types import EventDatasetProtocol, EventDataAction, append_fields, EVENT_BITMASKS
-from .helpers import merge_frames, extract_walltime
+from .event_data_types import EventDatasetProtocol, EventDataAction, EVENT_BITMASKS
 
 class ApplyPhaseOffset(EventDataAction):
     def __init__(self, chopperPhaseOffset: float):
@@ -61,17 +59,6 @@ class CorrectChopperPhase(EventDataAction):
     def perform_action(self, dataset: EventDatasetProtocol) ->None:
         dataset.data.events.tof += dataset.timing.tau*(dataset.timing.ch1TriggerPhase-dataset.timing.chopperPhase/2)/180
 
-
-class ExtractWalltime(EventDataAction):
-    def perform_action(self, dataset: EventDatasetProtocol) ->None:
-        # TODO: fix numba type definition after refactor
-        wallTime = extract_walltime(dataset.data.events.tof,
-                                    dataset.data.packets.start_index.astype(np.uint64),
-                                    dataset.data.packets.Time)
-        logging.debug(f'        expending event stream by wallTime')
-        new_events = append_fields(dataset.data.events, [('wallTime', wallTime.dtype)])
-        new_events.wallTime = wallTime
-        dataset.data.events = new_events
 
 class CorrectSeriesTime(EventDataAction):
     def __init__(self, seriesStartTime):
@@ -146,7 +133,6 @@ class AssociatePulseWithMonitor(EventDataAction):
         return pulseCurrentS
 
 
-
 class FilterStrangeTimes(EventDataAction):
     def perform_action(self, dataset: EventDatasetProtocol)->None:
         filter_e = np.logical_not(dataset.data.events.tof<=2*dataset.timing.tau)
@@ -155,9 +141,35 @@ class FilterStrangeTimes(EventDataAction):
             logging.warning(f'        strange times: {filter_e.sum()}')
 
 
-class MergeFrames(EventDataAction):
-    def perform_action(self, dataset: EventDatasetProtocol)->None:
-        tofCut = const.lamdaCut*dataset.geometry.chopperDetectorDistance/const.hdm*1e-13
-        total_offset = (tofCut +
-                        dataset.timing.tau * (dataset.timing.ch1TriggerPhase + dataset.timing.chopperPhase/2)/180)
-        dataset.data.events.tof = merge_frames(dataset.data.events.tof, tofCut, dataset.timing.tau, total_offset)
+class TofTimeCorrection(EventDataAction):
+    def __init__(self, correct_chopper_opening: bool = True):
+        self.correct_chopper_opening = correct_chopper_opening
+
+    def perform_action(self, dataset: EventDatasetProtocol) ->None:
+        d = dataset.data
+        if self.correct_chopper_opening:
+            d.events.tof -= ( d.events.delta / 180. ) * dataset.timing.tau
+        else:
+            d.events.tof -= ( dataset.geometry.kad / 180. ) * dataset.timing.tau
+
+class ApplyMask(EventDataAction):
+    def __init__(self, bitmask_filter=None):
+        self.bitmask_filter = bitmask_filter
+
+    def perform_action(self, dataset: EventDatasetProtocol) ->None:
+        d = dataset.data
+        logging.info(f'      number of events: total = {d.events.shape[0]:7d}, '
+                     f'filtered = {(d.events.mask!=0).sum():7d}')
+        if logging.getLogger().level == logging.DEBUG:
+            # only run this calculation if debug level is actually active
+            filtered_by_mask = {}
+            for key, value in EVENT_BITMASKS.items():
+                filtered_by_mask[key] = ((d.events.mask & value)!=0).sum()
+            logging.debug(f"        Removed by filters: {filtered_by_mask}")
+        if self.bitmask_filter is None:
+            d.events = d.events[d.events.mask==0]
+        else:
+            # remove the provided bitmask_filter bits from the events
+            # this means that all bits that are set in bitmask_filter will NOT be used to filter events
+            fltr = (d.events.mask & (~self.bitmask_filter)) == 0
+            d.events = d.events[fltr]
