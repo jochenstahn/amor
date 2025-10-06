@@ -26,7 +26,6 @@ class LZNormalisation:
         norm_lz, _, _ = np.histogram2d(lamda_e, detZ_e, bins=(grid.lamda(), grid.z()))
         norm_lz = np.where(norm_lz>2, norm_lz, np.nan)
         if normalisationMethod==NormalisationMethod.direct_beam:
-            # TODO: move flipping to projection
             self.norm = np.flip(norm_lz, 1)
         else:
             # correct for reference sm reflectivity

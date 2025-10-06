@@ -10,7 +10,7 @@ from .header import Header
 from .path_handling import PathResolver
 from .options import EOSConfig, IncidentAngle, MonitorType, NormalisationMethod
 from .instrument import Detector, LZGrid
-from .normalisation import LZNormalisation
+from .normalization import LZNormalisation
 from . import event_handling as eh, event_analysis as ea
 from .projection import LZProjection
 
@@ -113,6 +113,13 @@ class AmorReduction:
         if 'Rlt.ort' in self.output_config.outputFormats:
             self.save_Rtl()
 
+        if self.output_config.plot:
+            import matplotlib.pyplot as plt
+            if 'Rqz.ort' in self.output_config.outputFormats:
+                plt.figure(num=99)
+                plt.legend()
+            plt.show()
+
     def read_file_block(self, i, short_notation):
         logging.warning('reading input:')
         file_list = self.path_resolver.resolve(short_notation)
@@ -149,7 +156,7 @@ class AmorReduction:
 
         if self.reduction_config.timeSlize:
             if i>0:
-                logging.warning("    time slizing should only be used for on set of datafiles, check parameters")
+                logging.warning("    time slizing should only be used for one set of datafiles, check parameters")
             self.analyze_timeslices(i)
         else:
             self.analyze_unsliced(i)
@@ -188,6 +195,12 @@ class AmorReduction:
             orso_data = fileio.OrsoDataset(headerRqz, result.data)
             self.last_result = result
             self.datasetsRqz.append(orso_data)
+
+            if self.output_config.plot:
+                import matplotlib.pyplot as plt
+                # plot all reflectivity results in same graph
+                plt.figure(num=99)
+                result.plot(label=f'{self.reduction_config.fileIdentifier[i]}')
         if 'Rlt.ort' in self.output_config.outputFormats:
             columns = [
                 fileio.Column('Qz', '1/angstrom', 'normal momentum transfer'),
@@ -229,6 +242,12 @@ class AmorReduction:
                 orso_data = fileio.OrsoDataset(headerRlt, data)
                 self.datasetsRlt.append(orso_data)
                 j += 1
+
+            if self.output_config.plot:
+                import matplotlib.pyplot as plt
+                plt.figure()
+                proj.plot(colorbar=True, cmap=str(self.output_config.plot_colormap))
+                plt.title(f'{self.reduction_config.fileIdentifier[i]}')
 
     def analyze_timeslices(self, i):
         wallTime_e = np.float64(self.dataset.data.events.wallTime)/1e9
@@ -283,6 +302,13 @@ class AmorReduction:
             headerRqz.data_set = f'{i}_{ti}: time = {time:8.1f} s  to {time+interval:8.1f} s'
             orso_data = fileio.OrsoDataset(headerRqz, result.data_for_time(time))
             self.datasetsRqz.append(orso_data)
+
+            if self.output_config.plot:
+                import matplotlib.pyplot as plt
+                # plot all reflectivity results in same graph
+                plt.figure(num=99)
+                result.plot(label=f'{self.reduction_config.fileIdentifier[i]} @ {time:.1f}s')
+
         self.last_result = result
         # reset normal logging behavior
         #logging.StreamHandler.terminator = "\n"

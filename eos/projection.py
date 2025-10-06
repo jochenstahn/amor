@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 from .event_data_types import EventDatasetProtocol
 from .instrument import Detector, LZGrid
-from .normalisation import LZNormalisation
+from .normalization import LZNormalisation
 
 @dataclass
 class ProjectedReflectivity:
@@ -67,6 +67,13 @@ class ProjectedReflectivity:
         # subtract another dataset with same q-points
         self.R -= R
         self.dR = np.sqrt(self.dR**2+dR**2)
+
+    def plot(self, **kwargs):
+        from matplotlib import pyplot as plt
+        plt.errorbar(self.Q, self.R, xerr=self.dQ, yerr=self.dR, **kwargs)
+        plt.yscale('log')
+        plt.xlabel('Q / $\\AA^{-1}$')
+        plt.ylabel('R')
 
 class LZProjection:
     grid: LZGrid
@@ -283,3 +290,28 @@ class LZProjection:
         right_list = cls.devide_bin(lambda_e[right_region], position_e[right_region],
                                               lamda_edges[split_idx:], dimension)
         return left_list+right_list
+
+    def plot(self, **kwargs):
+        from matplotlib import pyplot as plt
+        from matplotlib.colors import LogNorm
+
+        if 'colorbar' in kwargs:
+            cmap=True
+            del(kwargs['colorbar'])
+        else:
+            cmap=False
+
+        if self.is_normalized:
+            if not 'norm' in kwargs:
+                kwargs['norm'] = LogNorm(2e-3, 2.0)
+            plt.pcolormesh(self.lamda, self.alphaF, self.data.ref, **kwargs)
+            if cmap:
+                plt.colorbar(label='R')
+        else:
+            if not 'norm' in kwargs:
+                kwargs['norm'] = LogNorm()
+            plt.pcolormesh(self.lamda, self.alphaF, self.data.I, **kwargs)
+            if cmap:
+                plt.colorbar(label='I / cpm')
+        plt.xlabel('$\\lambda$ / $\\AA$')
+        plt.ylabel('$\\Theta$ / °')

@@ -7,7 +7,7 @@ from eos import options, reduction, logconfig
 logconfig.setup_logging()
 logconfig.update_loglevel(1)
 
-# TODO: add test for new features like proton charge normalization
+# TODO: add unit tests for individual parts of reduction
 
 class FullAmorTest(TestCase):
     @classmethod

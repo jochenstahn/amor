@@ -434,6 +434,13 @@ class OutputFomatOption(StrEnum):
     Rlt = "Rlt"
 
 
+class PlotColormaps(StrEnum):
+    gist_ncar = "gist_ncar"
+    viridis = "viridis"
+    inferno = "inferno"
+    gist_rainbow = "gist_rainbow"
+    nipy_spectral = "nipy_spectral"
+
 @dataclass
 class OutputConfig(ArgParsable):
     outputFormats: List[OutputFomatOption] = field(
@@ -458,6 +465,22 @@ class OutputConfig(ArgParsable):
                 'short': 'op',
                 'group': 'output',
                 'help': '?',
+                },
+            )
+    plot: bool = field(
+            default=False,
+            metadata={
+                'group': 'output',
+                'help': 'show matplotlib graphs of results',
+                },
+            )
+
+    plot_colormap: PlotColormaps = field(
+            default=PlotColormaps.gist_ncar,
+            metadata={
+                'short': 'pcmap',
+                'group': 'output',
+                'help': 'matplotlib colormap used in lambda-theta graphs when plotting',
                 },
             )
 
@@ -531,7 +554,7 @@ class EOSConfig:
             otpt += f' -of {" ".join(self.output.outputFormats)}'
             
         mask = ''
-        # TODO: Check if you want these parameters for the case of default call
+
         mask += f' -y {" ".join(str(ii) for ii in self.experiment.yRange)}'
         mask += f' -l {" ".join(str(ff) for ff in self.experiment.lambdaRange)}'
         mask += f' -t {" ".join(str(ff) for ff in self.reduction.thetaRange)}'
