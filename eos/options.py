@@ -47,7 +47,10 @@ class ArgParsable:
                 optional = False
 
             value = getattr(cls, key, None)
-            cls.__doc__ += f"    {key} ({typ.__name__})"
+            try:
+                cls.__doc__ += f"    {key} ({typ.__name__})"
+            except AttributeError:
+                cls.__doc__ += f"    {key}"
             if isinstance(value, Field):
                 if value.default is not MISSING:
                     cls.__doc__ += f" = {value.default}"
