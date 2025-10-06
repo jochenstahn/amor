@@ -1,10 +1,10 @@
 import argparse
 
-from .logconfig import update_loglevel
-from .options import ReaderConfig, EOSConfig, ExperimentConfig, OutputConfig, ReductionConfig
+from typing import List
+from .options import ArgParsable
 
 
-def commandLineArgs():
+def commandLineArgs(config_items: List[ArgParsable], program_name=None):
     """
     Process command line argument.
     The type of the default values is used for conversion and validation.
@@ -12,14 +12,15 @@ def commandLineArgs():
     msg = "eos reads data from (one or several) raw file(s) of the .hdf format, \
            performs various corrections, conversations and projections and exports\
            the resulting reflectivity in an orso-compatible format."
-    clas = argparse.ArgumentParser(description = msg, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    clas = argparse.ArgumentParser(prog=program_name,
+                                   description = msg, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     clas.add_argument('-v', '--verbose', action='count', default=0)
 
     clas_groups = {}
 
     all_arguments = []
-    for cls in [ReaderConfig, ExperimentConfig, OutputConfig, ReductionConfig]:
+    for cls in config_items:
         all_arguments += cls.get_commandline_parameters()
 
     all_arguments.sort() # parameters are sorted alphabetically, unless they have higher priority
@@ -36,16 +37,3 @@ def commandLineArgs():
                     )
 
     return clas.parse_args()
-
-
-
-def command_line_options():
-    clas   = commandLineArgs()
-    update_loglevel(clas.verbose)
-
-    reader_config = ReaderConfig.from_args(clas)
-    experiment_config = ExperimentConfig.from_args(clas)
-    reduction_config = ReductionConfig.from_args(clas)
-    output_config = OutputConfig.from_args(clas)
-
-    return EOSConfig(reader_config, experiment_config, reduction_config, output_config)

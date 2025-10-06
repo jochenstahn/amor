@@ -297,6 +297,15 @@ class NormalisationMethod(StrEnum):
 
 @dataclass
 class ReductionConfig(ArgParsable):
+    fileIdentifier: List[str] = field(
+            metadata={
+                'short':    'f',
+                'priority': 100,
+                'group':    'input data',
+                'help':     'file number(s) or offset (if < 1)',
+                },
+            )
+
     qResolution: float = field(
             default=0.01,
             metadata={
@@ -327,15 +336,6 @@ class ReductionConfig(ArgParsable):
                 'short': 'T',
                 'group': 'region of interest',
                 'help': 'theta region of interest w.r.t. beam center',
-                },
-            )
-    fileIdentifier: List[str] = field(
-            default_factory=lambda: ['0'],
-            metadata={
-                'short': 'f', 
-                'priority': 100,
-                'group': 'input data', 
-                'help': 'file number(s) or offset (if < 1)',
                 },
             )
     normalisationMethod: NormalisationMethod = field(
@@ -492,7 +492,7 @@ class EOSConfig:
     #        return self.calculate_call_string()
     
     def call_string(self):
-        base = 'python eos.py'
+        base = 'eos'
         
         inpt = ''
         if self.reader.year:

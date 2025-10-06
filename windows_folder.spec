@@ -9,7 +9,7 @@ datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 
 a = Analysis(
-    ['eos.py'],
+    ['eos/__main__.py'],
     pathex=[],
     binaries=[],
     datas=[],

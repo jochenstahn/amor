@@ -2,7 +2,7 @@ import os
 import cProfile
 from unittest import TestCase
 from dataclasses import fields, MISSING
-from libeos import options, reduction, logconfig
+from eos import options, reduction, logconfig
 
 logconfig.setup_logging()
 logconfig.update_loglevel(1)
