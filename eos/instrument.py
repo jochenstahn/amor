@@ -3,11 +3,16 @@ Classes describing the AMOR instrument configuration used during reduction.
 """
 
 import logging
-from functools import cache
-
 import numpy as np
 
 from . import const
+
+try:
+    from functools import cache
+except ImportError:
+    # python <3.9
+    def cache(func): return func
+
 
 class Detector:
     nBlades  = 14  # number of active blades in the detector
