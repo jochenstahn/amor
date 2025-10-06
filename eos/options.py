@@ -13,7 +13,12 @@ import logging
 try:
     from enum import StrEnum
 except ImportError:
-    from backports.strenum import StrEnum
+    try:
+        # python <3.11 try to use backports
+        from backports.strenum import StrEnum
+    except ImportError:
+        # python <3.10 use Enum instead
+        from enum import Enum as StrEnum
 
 @dataclass
 class CommandlineParameterConfig:
