@@ -16,9 +16,8 @@ from .header import Header
 
 class ExtractWalltime(EventDataAction):
     def perform_action(self, dataset: EventDatasetProtocol) ->None:
-        # TODO: fix numba type definition after refactor
         wallTime = extract_walltime(dataset.data.events.tof,
-                                    dataset.data.packets.start_index.astype(np.uint64),
+                                    dataset.data.packets.start_index,
                                     dataset.data.packets.Time)
         logging.debug(f'        expending event stream by wallTime')
         new_events = append_fields(dataset.data.events, [('wallTime', wallTime.dtype)])
@@ -39,9 +38,8 @@ class AnalyzePixelIDs(EventDataAction):
 
     def perform_action(self, dataset: EventDatasetProtocol) ->None:
         d = dataset.data
-        # TODO: change numba implementation to use native pixelID type
         (detZ, detXdist, delta, mask) = filter_project_x(
-                Detector.pixelLookUp, d.events.pixelID.astype(np.int64), self.yRange[0], self.yRange[1]
+                Detector.pixelLookUp, d.events.pixelID, self.yRange[0], self.yRange[1]
                 )
         ana_events = append_fields(d.events, [
             ('detZ', detZ.dtype), ('detXdist', detXdist.dtype), ('delta', delta.dtype)])

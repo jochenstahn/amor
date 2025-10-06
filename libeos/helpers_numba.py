@@ -11,7 +11,7 @@ def merge_frames(tof_e, tofCut, tau, total_offset):
         tof_e_out[ti] = ((tof_e[ti]-dt)%tau)+total_offset  # tof shifted to 1 frame
     return tof_e_out
 
-@nb.jit(nb.int64[:](nb.float64[:], nb.uint64[:], nb.int64[:]),
+@nb.jit(nb.int64[:](nb.float64[:], nb.uint32[:], nb.int64[:]),
         nopython=True, parallel=True, cache=True)
 def extract_walltime(tof_e, dataPacket_p, dataPacketTime_p):
     # assigning every event the wall time of the event packet (absolute time of pulse ?start?)
@@ -25,7 +25,7 @@ def extract_walltime(tof_e, dataPacket_p, dataPacketTime_p):
     return wallTime_e
 
 @nb.jit(nb.types.Tuple((nb.int64[:], nb.float64[:], nb.float64[:], nb.boolean[:]))
-                (nb.float64[:, :], nb.int64[:], nb.int64, nb.int64),
+                (nb.float64[:, :], nb.uint32[:], nb.int64, nb.int64),
         nopython=True, parallel=True, cache=True)
 def filter_project_x(pixelLookUp, pixelID_e, ymin, ymax):
     # project events on z-axis and create filter for events outside of y-range
