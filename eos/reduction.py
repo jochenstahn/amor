@@ -84,6 +84,7 @@ class AmorReduction:
 
         # load or create normalisation matrix
         if self.reduction_config.normalisationFileIdentifier:
+            # TODO: change option definition to single normalization short_code
             self.create_normalisation_map(self.reduction_config.normalisationFileIdentifier[0])
         else:
             self.norm = LZNormalisation.unity(self.grid)
@@ -128,6 +129,9 @@ class AmorReduction:
                 logging.debug('      monitor type set to "time"')
             # update actions to sue selected monitor
             self.prepare_actions()
+            # reload normalization to make sure the monitor matches
+            if self.reduction_config.normalisationFileIdentifier:
+                self.create_normalisation_map(self.reduction_config.normalisationFileIdentifier[0])
 
         self.dataevent_time_correction.seriesStartTime = self.dataset.eventStartTime
         self.dataevent_actions(self.dataset)
@@ -225,6 +229,7 @@ class AmorReduction:
                 j += 1
 
     def read_timeslices(self, i):
+        # TODO: warn when using multiple short_codes
         wallTime_e = np.float64(self.dataset.data.events.wallTime)/1e9
         pulseTimeS = np.float64(self.dataset.data.pulses.time)/1e9
         interval = self.reduction_config.timeSlize[0]
@@ -341,24 +346,21 @@ class AmorReduction:
         proj = LZProjection.from_dataset(dataset, self.grid,
                                          has_offspecular=(self.experiment_config.incidentAngle==IncidentAngle.alphaF))
 
-        if self.reduction_config.is_default('thetaRangeR'):
+        if not self.reduction_config.is_default('thetaRangeR'):
             t0 = dataset.geometry.nu - dataset.geometry.mu
             # adjust range based on detector center
             thetaRange = [ti+t0 for ti in self.reduction_config.thetaRangeR]
             proj.apply_theta_mask(thetaRange)
-        elif self.reduction_config.is_default('thetaRange'):
+        elif not self.reduction_config.is_default('thetaRange'):
             proj.apply_theta_mask(self.reduction_config.thetaRange)
         else:
-            # TODO: review what this is for an check if this should be removed or updated in case of thetaRangeR
-            self.reduction_config.thetaRange = [dataset.geometry.nu - dataset.geometry.mu - dataset.geometry.div/2,
+            thetaRange = [dataset.geometry.nu - dataset.geometry.mu - dataset.geometry.div/2,
                                               dataset.geometry.nu - dataset.geometry.mu + dataset.geometry.div/2]
-            proj.apply_theta_mask(self.reduction_config.thetaRange)
+            proj.apply_theta_mask(thetaRange)
 
-        if self.experiment_config.is_default('lambdaRange'):
-            proj.apply_lamda_mask(self.experiment_config.lambdaRange)
+        proj.apply_lamda_mask(self.experiment_config.lambdaRange)
 
         proj.apply_norm_mask(self.norm)
-        proj.calculate_q()
 
         proj.project(dataset, self.monitor)
 

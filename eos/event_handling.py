@@ -43,12 +43,13 @@ class ApplyParameterOverwrites(EventDataAction):
         if self.config.sampleModel:
             import yaml
             from orsopy.fileio.model_language import SampleModel
-            if 'yml' in self.config.sampleModel or 'yaml' in self.config.sampleModel:
+            if self.config.sampleModel.endswith('.yml') or self.config.sampleModel.endswith('.yaml'):
                 if os.path.isfile(self.config.sampleModel):
                     with open(self.config.sampleModel, 'r') as model_yml:
                         model = yaml.safe_load(model_yml)
                 else:
                     logging.warning(f'  ! the file {self.config.sampleModel}.yml does not exist. Ignored!')
+                    return
             else:
                 model = dict(stack=self.config.sampleModel)
             logging.debug(f'        set sample.model = {self.config.sampleModel}')
@@ -127,6 +128,7 @@ class AssociatePulseWithMonitor(EventDataAction):
         pulseCurrentS = np.zeros(pulseTimeS.shape[0], dtype=float)
         j = 0
         for i, ti in enumerate(pulseTimeS):
+            # find the last current item that was before this pulse
             while ti >= currentTimeS[j+1]:
                 j += 1
             pulseCurrentS[i] = currents[j]
@@ -174,4 +176,4 @@ class ApplyMask(EventDataAction):
             fltr = (d.events.mask & (~self.bitmask_filter)) == 0
             d.events = d.events[fltr]
         post_filter = d.events.shape[0]
-        logging.info(f'      number of events: total = {pre_filter:7d}, filtered = {pre_filter-post_filter:7d}')
+        logging.info(f'      number of events: total = {pre_filter:7d}, filtered = {post_filter:7d}')

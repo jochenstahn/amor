@@ -94,7 +94,7 @@ class FullAmorTest(TestCase):
                 incidentAngle=self._field_defaults['ExperimentConfig']['incidentAngle'],
                 mu=0,
                 nu=0,
-                muOffset=0.0
+                muOffset=0.0,
                 )
         reduction_config = options.ReductionConfig(
                 normalisationMethod=self._field_defaults['ReductionConfig']['normalisationMethod'],

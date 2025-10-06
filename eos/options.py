@@ -282,7 +282,7 @@ class ExperimentConfig(ArgParsable):
                 },                               
             )                          
     monitorType: MonitorType = field(
-            default=MonitorType.auto,
+            default=MonitorType.proton_charge,
             metadata={
                 'short': 'mt',
                 'group': 'instrument settings',

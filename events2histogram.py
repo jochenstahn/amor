@@ -1,11 +1,10 @@
-__version__ = '2024-03-15'
+__version__ = '2025-06-07'
 
-# essential changes with regard to 2022 version 
-# - imprved orso header
-# - nexus compatible
-# - new theta grid
-# - new content in data_e (angleas rather than distances)
-# - bug fixes: tof correction within detector
+# essential changes with regard to 2024 version 
+# - accepts new hdf structure
+# TODO:
+# - output path
+# - solve the confusion for negative file numbers and the connecting '-'
 
 import os
 import sys
@@ -88,7 +87,7 @@ def analyse_ev(event_e, tof_e, yMin, yMax, thetaMin, thetaMax):
     
     # correct tof for beam size effect at chopper 
     # t_cor = (delta / 180 deg) * tau 
-    data_e[:,0] -= ( data_e[:,5] / 180. ) * tau
+    data_e[:,0] -= ( data_e[:,5] / 180. ) * tau 
       
     # effective flight path length
     #data_e[:,6] = chopperDetectorDistance + data_e[:,6] 
@@ -145,22 +144,23 @@ class Meta:
 
         ka0 = 0.245 # given inclination of the beam after the Selene guide
 
-        year_date = str(datetime.today()).split(' ')[0].replace("-", "/", 1)
 
         # deside from where to take the control paralemters
-        try: 
-            self.mu   = float(np.take(fh['/entry1/Amor/master_parameters/mu/value'], 0))
-            self.nu   = float(np.take(fh['/entry1/Amor/master_parameters/nu/value'], 0))
-            self.kap  = float(np.take(fh['/entry1/Amor/master_parameters/kap/value'], 0))
-            self.kad  = float(np.take(fh['/entry1/Amor/master_parameters/kad/value'], 0))
-            self.div  = float(np.take(fh['/entry1/Amor/master_parameters/div/value'], 0))
-            chSp      = float(np.take(fh['/entry1/Amor/chopper/rotation_speed/value'], 0))
-            self.chPh = float(np.take(fh['/entry1/Amor/chopper/phase/value'], 0))
+        try:
+            self.mu   = float(np.take(fh['/entry1/Amor/instrument_control_parameters/mu'], 0))
+            self.nu   = float(np.take(fh['/entry1/Amor/instrument_control_parameters/nu'], 0))
+            self.kap  = float(np.take(fh['/entry1/Amor/instrument_control_parameters/kappa'], 0))
+            self.kad  = float(np.take(fh['/entry1/Amor/instrument_control_parameters/kappa_offset'], 0))
+            self.div  = float(np.take(fh['/entry1/Amor/instrument_control_parameters/div'], 0))
+            chopperSpeed      = float(np.take(fh['/entry1/Amor/chopper/rotation_speed'], 0))
+            chopperPhase      = float(np.take(fh['/entry1/Amor/chopper/phase'], 0))
+            ch1TriggerPhase   = float(np.take(fh['/entry1/Amor/chopper/ch1_trigger_phase'], 0))
+            polarizationConfigLabel = int(np.take(fh['/entry1/Amor/polarization/configuration/value'], 0))
+            #polarizationConfigLabel = 1
         except (KeyError, IndexError):
             logging.warning(f"     using parameters from nicos cache")
-            #cachePath = '/home/amor/nicosdata/amor/cache/'
-            #cachePath = '/home/nicos/amorcache/'
-            cachePath = '/home/amor/cache/'
+            cachePath = '/home/amor/nicosdata/amor/cache/'
+            year_date = str(datetime.today()).split(' ')[0].replace("-", "/", 1)
             value = str(subprocess.getoutput('/usr/bin/grep "value" '+cachePath+'nicos-mu/'+year_date)).split('\t')[-1]
             self.mu = float(value)
             value = str(subprocess.getoutput('/usr/bin/grep "value" '+cachePath+'nicos-nu/'+year_date)).split('\t')[-1]
@@ -172,31 +172,23 @@ class Meta:
             value = str(subprocess.getoutput('/usr/bin/grep "value" '+cachePath+'nicos-div/'+year_date)).split('\t')[-1]
             self.div = float(value)
             value = str(subprocess.getoutput('/usr/bin/grep "value" '+cachePath+'nicos-ch1_speed/'+year_date)).split('\t')[-1]
-            chSp = float(value)
-            self.chPh = np.nan
+            chopperSpeed = float(value)
+            #value = str(subprocess.getoutput('/usr/bin/grep "value" '+cachePath+'nicos-chopper_speed'+year_date)).split('\t')[-1]
+            value = str(subprocess.getoutput('/usr/bin/grep "value" '+cachePath+'nicos-chopper_phase/'+year_date)).split('\t')[-1]
+            chopperPhase = float(value)
+            value = str(subprocess.getoutput('/usr/bin/grep "value" '+cachePath+'nicos-ch1_trigger_phase/'+year_date)).split('\t')[-1]
+            ch1TriggerPhase = float(value)
+            value = str(subprocess.getoutput('/usr/bin/grep "value" '+cachePath+'nicos-polarization_config_label/'+year_date)).split('\t')[-1]
+            polarizationConfigLabel = int(value)
 
-        if chSp:
-            self.tau = 30. / chSp
-        else:
-            self.tau = 0
+        self.tau = 30. / chopperSpeed
  
-        try: # not yet correctly implemented in nexus template
-            spin = str(fh['/entry1/polarizer/spin_flipper/spin'][0].decode('utf-8'))
-            if spin == "b'p'":
-                self.spin = 'p'
-            elif spin == "b'm'":
-                self.spin = 'm'
-            elif spin == "b'up'":
-                self.spin = 'p'
-            elif spin == "b'down'":
-                self.spin = 'm'
-            elif spin == '?':
-                self.spin = '?'
-            else:
-                self.spin = 'n'  
-        except (KeyError, IndexError):
-            self.spin = '?'
+        self.chopperTriggerPhase = ch1TriggerPhase + chopperPhase/2
+        print(f'#       chopper trigger phase = {ch1TriggerPhase}')
 
+        polarizationConfigs = ['undefined', 'oo', 'po', 'mo', 'op', 'pp', 'mp', 'om', 'pm', 'mm']
+        self.polarizationConfig = polarizationConfigs[int(polarizationConfigLabel)]
+        #self.polarizationConfig = 'po'
 
         # for .ort header
 
@@ -391,19 +383,13 @@ class PlotSelection:
 
     # header / meta data
     
-    def header(self, filename, mu, nu, totalCounts, countingTime, spin):
+    def header(self, filename, mu, nu, totalCounts, countingTime, polarizationConfig):
         number = filename.split('n')[1].split('.')[0].lstrip('0')
-        if spin == 'p':
-            spin = '   <+|'
-        elif spin == 'm':
-            spin = '   <-|'
-        else:
-            spin = ''
-        header = "#{}   \u03bc={:>1.2f} \u03bd={:>1.2f} {} {:>10} cts   {:>8.1f} s".format(number, mu+5e-3, nu+5e-3, spin, totalCounts, countingTime)
+        header = "#{}   \u03bc={:>1.2f} \u03bd={:>1.2f} {} {:>10} cts   {:>8.1f} s".format(number, mu+5e-3, nu+5e-3, polarizationConfig, totalCounts, countingTime)
         return header
 
-    def headline(self, numberString, totalCounts):
-        headLine = "#{}   \u03bc={:>1.2f} \u03bd={:>1.2f} {:>12,} cts   {:>8.1f} s".format(numberString, mu+5e-3, nu+5e-3, totalCounts, countingTime)
+    def headline(self, numberString, totalCounts, polarizationConfig):
+        headLine = "#{}   \u03bc={:>1.2f} \u03bd={:>1.2f}  p={}  {:>12,} cts   {:>8.1f} s".format(numberString, mu+5e-3, nu+5e-3, polarizationConfig, totalCounts, countingTime)
         return headLine
 
     # grids
@@ -446,7 +432,7 @@ class PlotSelection:
 
     # create PNG with several plots
 
-    def all(self, numberString, arg, data_e):
+    def all(self, numberString, arg, data_e, polarizationConfig):
         #cmap='gist_earth'
         cmap = mpl.cm.gnuplot(np.arange(256))
         cmap[:1, :] = np.array([256/256, 255/256, 236/256, 1])
@@ -501,7 +487,7 @@ class PlotSelection:
             lw = I_q[ ((q_lim[0] < bins_q[:-1]) & (bins_q[:-1] < q_lim[1])) ].min() 
             plt.ylim(max(-0.1, np.log(lw+.1)/np.log(10)-0.1), )
         #
-        headline = self.headline(numberString, np.shape(data_e)[0])
+        headline = self.headline(numberString, np.shape(data_e)[0], polarizationConfig)
         plt.title(headline, loc='left', y=2.8, c='r')
         fig.colorbar(cb, ax=mlt)
         plt.subplots_adjust(hspace=0.6, wspace=0.1)
@@ -510,7 +496,7 @@ class PlotSelection:
 
     # create PNG with one plot
 
-    def Iyz(self, numberString, arg, data_e):
+    def Iyz(self, numberString, arg, data_e, polarizationConfig):
         det = Detector()
         cmap = mpl.cm.gnuplot(np.arange(256))
         cmap[:1, :] = np.array([256/256, 255/256, 236/256, 1])
@@ -533,13 +519,13 @@ class PlotSelection:
             plt.pcolormesh(bins_y[:],bins_z[:],I_yz.T, cmap=cmap)
         plt.xlabel('$y ~/~ \\mathrm{bins}$')
         plt.ylabel('$z ~/~ \\mathrm{bins}$')
-        headline = self.headline(numberString, np.shape(data_e)[0])
+        headline = self.headline(numberString, np.shape(data_e)[0], polarizationConfig)
         plt.title(headline, loc='left', y=1.0, c='r')
         plt.colorbar()
         plt.savefig(output, format='png', dpi=150)
         #plt.close()
 
-    def Ilt(self, numberString, arg, data_e) :
+    def Ilt(self, numberString, arg, data_e, polarizationConfig) :
         cmap = mpl.cm.gnuplot(np.arange(256))
         cmap[:1, :] = np.array([256/256, 255/256, 236/256, 1])
         cmap = mpl.colors.ListedColormap(cmap, name='myColorMap', N=cmap.shape[0])
@@ -568,13 +554,13 @@ class PlotSelection:
             plt.ylim(top=np.max(bins_t))
         plt.xlabel('$\\lambda ~/~ \\mathrm{\\AA}$')
         plt.ylabel('$\\theta ~/~ \\mathrm{deg}$')
-        headline = self.headline(numberString, np.shape(data_e)[0])
+        headline = self.headline(numberString, np.shape(data_e)[0], polarizationConfig)
         plt.title(headline, loc='left', y=1.0, c='r')
         plt.colorbar()
         plt.savefig(output, format='png', dpi=150)
         #plt.close()
     
-    def Itz(self, numberString, arg, data_e):
+    def Itz(self, numberString, arg, data_e, polarizationConfig):
         det = Detector()
         cmap = mpl.cm.gnuplot(np.arange(256))
         cmap[:1, :] = np.array([256/256, 255/256, 236/256, 1])
@@ -604,13 +590,13 @@ class PlotSelection:
             plt.ylim(0,)
         plt.xlabel('$t ~/~ \\mathrm{s}$')
         plt.ylabel('$z$ pixel row')
-        headline = self.headline(numberString, np.shape(data_e)[0])
+        headline = self.headline(numberString, np.shape(data_e)[0], polarizationConfig)
         plt.title(headline, loc='left', y=1.0, c='r')
         plt.colorbar()
         plt.savefig(output, format='png', dpi=150)
         #plt.close()
     
-    def Iq(self, numberString, arg, data_e):
+    def Iq(self, numberString, arg, data_e, polarizationConfig):
         I_q, bins_q = np.histogram(data_e[:,9], bins = self.q_grid())
         err_q = np.sqrt(I_q+1)
         #q_lim = 4*np.pi*np.array([ max( np.sin(self.theta_grid()[0]*np.pi/180.)/self.lamda_grid()[-1] , 1e-4 ),
@@ -634,12 +620,12 @@ class PlotSelection:
         plt.ylabel('$\\log_{10}(\\mathrm{cnts})$')
         plt.xlabel('$q_z ~/~ \\mathrm{\\AA}^{-1}$')
         plt.xlim(q_lim)
-        headline = self.headline(numberString, np.shape(data_e)[0])
+        headline = self.headline(numberString, np.shape(data_e)[0], polarizationConfig)
         plt.title(headline, loc='left', y=1.0, c='r')
         plt.savefig(output, format='png', dpi=150)
         #plt.close()
 
-    def Il(self, numberString, arg, data_e):
+    def Il(self, numberString, arg, data_e, polarizationConfig):
         I_l, bins_l = np.histogram(data_e[:,7], bins = self.lamda_grid())
         if arg == 'file':
             header = '# lambda counts'
@@ -653,12 +639,12 @@ class PlotSelection:
             plt.plot(bins_l[:-1], np.log(I_l+5.e-1)/np.log(10.))
             plt.ylabel('$\\log_{10} I ~/~ \\mathrm{cnts}$')
         plt.xlabel('$\\lambda ~/~ \\mathrm{\\AA}$')
-        headline = self.headline(numberString, np.shape(data_e)[0])
+        headline = self.headline(numberString, np.shape(data_e)[0], polarizationConfig)
         plt.title(headline, loc='left', y=1.0, c='r')
         plt.savefig(output, format='png', dpi=150)
         #plt.close()
     
-    def It(self, numberString, arg, data_e):
+    def It(self, numberString, arg, data_e, polarizationConfig):
         I_t, bins_t = np.histogram(data_e[:,8], bins = self.theta_grid())
         if arg == 'file':
             header = '# 2theta counts'
@@ -669,12 +655,12 @@ class PlotSelection:
             plt.plot( I_t, bins_t[:-1])
         plt.xlabel('$\\mathrm{cnts}$')
         plt.ylabel('$\\theta ~/~ \\mathrm{deg}$')
-        headline = self.headline(numberString, np.shape(data_e)[0])
+        headline = self.headline(numberString, np.shape(data_e)[0], polarizationConfig)
         plt.title(headline, loc='left', y=1.0, c='r')
         plt.savefig(output, format='png', dpi=150)
         #plt.close()
 
-    def tof(self, numberString, arg, data_e):
+    def tof(self, numberString, arg, data_e, polarizationConfig):
         if foldback:
             time_grid = np.arange(0, 1.3*tau, 0.0005)
         else:
@@ -696,7 +682,7 @@ class PlotSelection:
             plt.plot(bins_t[:-1]+2*tau, lI_t)
         plt.ylabel('log(counts)')
         plt.xlabel('time / s')
-        headline = self.headline(numberString, np.shape(data_e)[0])
+        headline = self.headline(numberString, np.shape(data_e)[0], polarizationConfig)
         plt.title(headline, loc='left', y=1.0, c='r')
         plt.savefig(output, format='png')
 
@@ -774,7 +760,7 @@ def process(dataPath, ident, clas):
         timeMin = 0
         timeMax = 0
 
-    chopperPhase = clas.chopperPhase
+    chopperTriggerPhase = clas.chopperTriggerPhase
     tofOffset    = clas.TOFOffset
     thetaMin     = clas.thetaRange[0]
     thetaMax     = clas.thetaRange[1]
@@ -840,29 +826,27 @@ def process(dataPath, ident, clas):
             tau = meta.tau
 
         try:
-            chPh
+            chopperTriggerPhase
         except NameError:
-            chPh = meta.chPh
-        spin = meta.spin
+            chopperTriggerPhase = meta.chopperTriggerPhase
 
-        global countingTime, detectorDistance, chopperDetectorDistance
+
+        global countingTime, detectorDistance, chopperDetectorDistance, polarizationConfig
+        polarizationConfig = meta.polarizationConfig
         detectorDistance = meta.detectorDistance
         chopperDetectorDistance = meta.chopperDetectorDistance
         countingTime = meta.countingTime
 
         if verbous:
             logging.info("   mu = {:>4.2f} deg,  nu = {:>4.2f} deg".format(mu, nu))
-            if spin == 'u':
-                logging.info('   spin <+|')
-            elif spin == 'd':
-                logging.info('   spin <-|')
+            logging.info(f'   polarization config: {polarizationConfig}')
 
         try: lamdaMax
         except NameError: lamdaMax = lamdaMin + tau * hdm/chopperDetectorDistance * 1e13
     
-        tofOffset = -tau * chopperPhase / 180.                       # mismatch of chopper pulse and time-zero
         tofCut = lamdaCut * chopperDetectorDistance / hdm * 1.e-13  # tof of frame start
 
+        tofOffset = chopperTriggerPhase * tau / 180      # mismatch of chopper pulse and time-zero
         tof_e  = np.array(ev['/entry1/Amor/detector/data/event_time_offset'][:], dtype=np.uint64)/1.e9 + tofOffset # tof 
     
         detPixelID_e = np.array(ev['/entry1/Amor/detector/data/event_id'][:], dtype=np.uint64)  # pixel index
@@ -896,8 +880,8 @@ def process(dataPath, ident, clas):
 
     if clas.spy:
         number = filename.split('n')[1].split('.')[0].lstrip('0')
-        logging.info('chopper speed={:>4.0f} rpm, phase={:>5.3f} deg, tau={} s'.format(30/tau, chPh, tau))
-        logging.info('nr={}, spn={}, cnt={}, tme={}'.format(number, spin, np.shape(data_eSum)[0], sumTime))
+        logging.info('chopper speed={:>4.0f} rpm, phase={:>5.3f} deg, tau={} s'.format(30/tau, chopperTriggerPhase, tau))
+        logging.info('nr={}, spn={}, cnt={}, tme={}'.format(number, polarizationConfig, np.shape(data_eSum)[0], sumTime))
         logging.info('mu={:>1.2f}, nu={:>1.2f}, kap={:>1.2f}, kad={:>1.2f}, div={:>1.2f}'.format(mu, nu, kap, kad, div))
         sys.exit()
 
@@ -912,7 +896,7 @@ def process(dataPath, ident, clas):
     #string = f"plott.{plotType} (numberString, '{arg}', data_e)"
     try:
         plotFunction = getattr(plott, plotType)
-        plotFunction(numberString, arg, data_e)
+        plotFunction(numberString, arg, data_e, polarizationConfig)
         plt.close()
     except Exception as e:
         logging.error(f"ERROR: '{plotType}' is no known output format!")
@@ -932,6 +916,8 @@ def commandLineArgs():
                             help ="chopper speed in rpm")
     clas.add_argument("-d", "--dataPath",  
                             help ="relative path to directory with .hdf files")
+    clas.add_argument("-D", "--absDataPath",  
+                            help ="absolute path to directory with .hdf files")
     clas.add_argument("-f", "--fileIdent",       
                             default='0',                               
                             help ="file number or offset (if negative)")
@@ -959,7 +945,7 @@ def commandLineArgs():
                             default=99.,
                             type=float,
                             help ="value of nu")
-    clas.add_argument("-P", "--chopperPhase",    
+    clas.add_argument("-P", "--chopperTriggerPhase",    
                             default=-7.5,                     
                             type=float,
                             help ="chopper phase offset")
@@ -1007,12 +993,14 @@ def get_dataPath(clas):
         dataPath = clas.dataPath + '/'
         if not os.path.exists(dataPath):
              sys.exit('# *** the directory "'+dataPath+'" does not exist ***')
+    if clas.absDataPath:
+        dataPath = clas.absDataPath + '/'
     elif os.path.exists('./raw'):
         dataPath  = "./raw/"
     elif os.path.exists('../raw'):
         dataPath  = "../raw/"
     else:
-        sys.exit('# *** please provide the path to the .hdf data files (-d <path>, default is "./raw")')
+        sys.exit('# *** please provide the path to the .hdf data files (-d <rel path> | -D <abs path>, default is "./raw")')
 
     return dataPath
 

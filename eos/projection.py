@@ -81,7 +81,7 @@ class LZProjection:
         lamda_c = (lamda_l[:-1]+lamda_l[1:])/2
 
         lz_shape = self.grid.lz()
-        # TODO: do we really need 2D arrays of these quantities? We cuold to that operation on the fly.
+
         self.lamda  = lz_shape*lamda_c[:, np.newaxis]
         self.alphaF = lz_shape*alphaF_z[np.newaxis, :]
         self.data = np.zeros(self.alphaF.shape, dtype=[
@@ -180,10 +180,10 @@ class LZProjection:
         thetaN_z = Detector.delta_z+norm.angle
         thetaN_lz = np.ones_like(norm_lz)*thetaN_z
         thetaN_lz = np.where(np.absolute(thetaN_lz)>5e-3, thetaN_lz, np.nan)
-        mask_lz = self.data.mask & (np.absolute(thetaN_lz)>5e-3)
+        self.data.mask &=  (np.absolute(thetaN_lz)>5e-3)
         ref_lz = (self.data.I*np.absolute(thetaN_lz))/(norm_lz*np.absolute(self.alphaF))
         ref_lz *= norm.monitor/self.monitor
-        ref_lz[np.logical_not(mask_lz)] = np.nan
+        ref_lz[np.logical_not(self.data.mask)] = np.nan
         self.data.norm = norm_lz
         self.data.ref = ref_lz
         self.calc_error()

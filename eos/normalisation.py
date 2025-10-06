@@ -26,6 +26,7 @@ class LZNormalisation:
         norm_lz, _, _ = np.histogram2d(lamda_e, detZ_e, bins=(grid.lamda(), grid.z()))
         norm_lz = np.where(norm_lz>2, norm_lz, np.nan)
         if normalisationMethod==NormalisationMethod.direct_beam:
+            # TODO: move flipping to projection
             self.norm = np.flip(norm_lz, 1)
         else:
             # correct for reference sm reflectivity
@@ -35,6 +36,7 @@ class LZNormalisation:
             theta_lz = grid.lz()*theta_z
             qz_lz = 4.0*np.pi*np.sin(np.deg2rad(theta_lz))/lamda_lz
             # TODO: introduce variable for `m` and propably for the slope
+            # Correct reflectivity of m=5 supermirror
             Rsm_lz = np.ones(np.shape(qz_lz))
             Rsm_lz = np.where(qz_lz>0.0217, 1-(qz_lz-0.0217)*(0.0625/0.0217), Rsm_lz)
             Rsm_lz = np.where(qz_lz>0.0217*5, np.nan, Rsm_lz)
