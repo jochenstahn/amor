@@ -62,6 +62,7 @@ class CalculateWavelength(EventDataAction):
         #lamdaMax = const.lamdaCut+1.e13*dataset.timing.tau*const.hdm/(dataset.geometry.chopperDetectorDistance+124.)
 
         # lambda
+        # TODO: one of the most time consuming actions, could be implemented in numba, instead?
         lamda = (1.e13*const.hdm)*d.events.tof/(dataset.geometry.chopperDetectorDistance+d.events.detXdist)
 
         final_events = append_fields(d.events, [('lamda', np.float64)])

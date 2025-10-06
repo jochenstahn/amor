@@ -157,9 +157,9 @@ class ApplyMask(EventDataAction):
         self.bitmask_filter = bitmask_filter
 
     def perform_action(self, dataset: EventDatasetProtocol) ->None:
+        # TODO: why is this action time consuming?
         d = dataset.data
-        logging.info(f'      number of events: total = {d.events.shape[0]:7d}, '
-                     f'filtered = {(d.events.mask!=0).sum():7d}')
+        pre_filter = d.events.shape[0]
         if logging.getLogger().level == logging.DEBUG:
             # only run this calculation if debug level is actually active
             filtered_by_mask = {}
@@ -173,3 +173,5 @@ class ApplyMask(EventDataAction):
             # this means that all bits that are set in bitmask_filter will NOT be used to filter events
             fltr = (d.events.mask & (~self.bitmask_filter)) == 0
             d.events = d.events[fltr]
+        post_filter = d.events.shape[0]
+        logging.info(f'      number of events: total = {pre_filter:7d}, filtered = {pre_filter-post_filter:7d}')
