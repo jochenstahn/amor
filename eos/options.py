@@ -3,13 +3,17 @@ Classes for stroing various configurations needed for reduction.
 """
 import argparse
 from dataclasses import dataclass, field, Field, fields, MISSING
-from enum import StrEnum
 from typing import get_args, get_origin, List, Optional, Tuple, Union
 from datetime import datetime
 from os import path
 import numpy as np
 
 import logging
+
+try:
+    from enum import StrEnum
+except ImportError:
+    from backports.strenum import StrEnum
 
 @dataclass
 class CommandlineParameterConfig:

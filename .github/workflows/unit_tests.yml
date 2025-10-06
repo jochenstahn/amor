@@ -36,6 +36,11 @@ jobs:
         run: |
           pip install backports.zoneinfo
 
+      - name: Backport StrEnum
+        if: matrix.python-version < '3.11'
+        run: |
+          pip install backports.strenum
+
       - name: Test with pytest
         run: |
           python -m pytest tests
