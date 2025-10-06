@@ -8,19 +8,15 @@ import numpy as np
 import platform
 import logging
 import subprocess
-import sys
-import os
 
 from datetime import datetime
 
 from orsopy import fileio
 from orsopy.fileio.model_language import SampleModel
 
-from . import const, event_handling as eh, event_analysis as ea
+from . import const
 from .header import Header
-from .path_handling import PathResolver
 from .event_data_types import AmorGeometry, AmorTiming, AmorEventStream, PACKET_TYPE, EVENT_TYPE, PULSE_TYPE, PC_TYPE
-from .options import ExperimentConfig, IncidentAngle, ReaderConfig, MonitorType
 
 try:
     import zoneinfo
@@ -345,117 +341,3 @@ class AmorEventData:
         output.data = AmorEventStream(self.data.events[event_filter], self.data.packets,
                                       self.data.pulses[pulse_filter], self.data.proton_current)
         return output
-
-class AmorData:
-    """re-implement old AmorData class functionality until refactoring is complete"""
-    chopperDetectorDistance: float
-    chopperDistance: float
-    chopperPhase: float
-    chopperSpeed: float
-    chopper1TriggerPhase: float
-    chopper2TriggerPhase: float
-    div: float
-    data_file_numbers: List[int]
-    delta_z: np.ndarray
-    detZ_e: np.ndarray
-    lamda_e: np.ndarray
-    wallTime_e: np.ndarray
-    kad: float
-    kap: float
-    lambdaMax: float
-    lambda_e: np.ndarray
-    # monitor: float
-    mu: float
-    nu: float
-    tau: float
-    tofCut: float
-    start_date: str
-    monitorType: str
-
-    seriesStartTime = None
-
-    # -------------------------------------------------------------------------------------------------
-    def __init__(self, header: Header, reader_config: ReaderConfig, config: ExperimentConfig,
-                 short_notation: str, norm=False):
-        # self.startTime = reader_config.startTime
-        self.header = header
-        self.config = config
-        self.reader_config = reader_config
-        resolver = PathResolver(reader_config.year, reader_config.rawPath)
-        self.file_list = resolver.resolve(short_notation)
-        self.norm = norm
-        self.prepare_actions()
-        self.process()
-        self.assign()
-
-    def prepare_actions(self):
-        # setup all actions performed in origin AmorData, time correction requires first dataset start time
-        # The order of these corrections matter as some rely on parameters modified before
-        self.time_correction = eh.CorrectSeriesTime(0)
-        self.event_actions = eh.ApplyPhaseOffset(self.config.chopperPhaseOffset)
-        self.event_actions |= eh.ApplyParameterOverwrites(self.config) # some actions use instrument parameters, change before that
-        self.event_actions |= eh.CorrectChopperPhase()
-        self.event_actions |= eh.ExtractWalltime()
-        self.event_actions |= self.time_correction
-        self.event_actions |= eh.AssociatePulseWithMonitor(self.config.monitorType, self.config.lowCurrentThreshold)
-        self.event_actions |= eh.FilterStrangeTimes()
-        self.event_actions |= eh.MergeFrames()
-        self.event_actions |= ea.AnalyzePixelIDs(self.config.yRange)
-        self.event_actions |= ea.TofTimeCorrection(self.config.incidentAngle==IncidentAngle.alphaF)
-        self.event_actions |= ea.CalculateWavelength(self.config.lambdaRange)
-        self.event_actions |= ea.CalculateQ(self.config.incidentAngle)
-        self.event_actions |= ea.FilterQzRange(self.config.qzRange)
-        self.event_actions |= ea.ApplyMask()
-
-    def process(self):
-        self.dataset = AmorEventData(self.file_list[0])
-        if self.config.monitorType==MonitorType.auto:
-            if self.dataset.data.proton_current.current.sum()>1:
-                self.monitorType = MonitorType.proton_charge
-                logging.debug('      monitor type set to "proton current"')
-            else:
-                self.monitorType = MonitorType.time
-                logging.debug('      monitor type set to "time"')
-            # update actions to sue selected monitor
-            self.prepare_actions()
-
-        self.time_correction.seriesStartTime = self.dataset.eventStartTime
-        self.event_actions(self.dataset)
-        if not self.norm:
-            self.dataset.update_header(self.header)
-            self.event_actions.update_header(self.header)
-        for fi in self.file_list[1:]:
-            di = AmorEventData(fi)
-            self.event_actions(di)
-            self.dataset.append(di)
-
-        for fileName in self.file_list:
-            if self.norm:
-                self.header.measurement_additional_files.append(fileio.File(
-                        file=fileName.split('/')[-1],
-                        timestamp=self.dataset.fileDate))
-            else:
-                self.header.measurement_data_files.append(fileio.File(
-                        file=fileName.split('/')[-1],
-                        timestamp=self.dataset.fileDate))
-
-    def assign(self):
-        # assigne old class parameters from dataset object.
-        ds = self.dataset
-        ev = ds.data.events
-        self.detZ_e = ev.detZ
-        self.lamda_e = ev.lamda
-        self.wallTime_e = ev.wallTime
-        self.qz_e = ev.qz
-        try:
-            self.qx_e = ev.qx
-        except AttributeError:
-            self.qx_e = 0.*self.qz_e
-        self.pulseTimeS = ds.data.pulses.time
-        self.monitorPerPulse = ds.data.pulses.monitor
-
-        for key, value in ds.geometry.__dict__.items():
-            setattr(self, key, value)
-        for key, value in ds.timing.__dict__.items():
-            setattr(self, key, value)
-        self.startTime = ds.eventStartTime

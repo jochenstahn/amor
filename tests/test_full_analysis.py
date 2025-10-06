@@ -32,14 +32,14 @@ class FullAmorTest(TestCase):
         self.pr.enable()
         self.reader_config = options.ReaderConfig(
                 year=2025,
-                rawPath=[os.path.join('..', "test_data")],
+                rawPath=["test_data"],
                 )
 
     def tearDown(self):
         self.pr.disable()
-        for fi in ['../test_results/test.Rqz.ort', '../test_results/5952.norm']:
+        for fi in ['test_results/test.Rqz.ort', 'test_results/5952.norm']:
             try:
-                os.unlink(os.path.join(self.reader_config.rawPath[0], fi))
+                os.unlink(fi)
             except FileNotFoundError:
                 pass
 
@@ -71,7 +71,7 @@ class FullAmorTest(TestCase):
         output_config = options.OutputConfig(
                 outputFormats=[options.OutputFomatOption.Rqz_ort],
                 outputName='test',
-                outputPath=os.path.join('..', 'test_results'),
+                outputPath='test_results',
                 )
         config=options.EOSConfig(self.reader_config, experiment_config, reduction_config, output_config)
         # run three times to get similar timing to noslicing runs
@@ -109,7 +109,7 @@ class FullAmorTest(TestCase):
         output_config = options.OutputConfig(
                 outputFormats=[options.OutputFomatOption.Rqz_ort],
                 outputName='test',
-                outputPath=os.path.join('..', 'test_results'),
+                outputPath='test_results',
                 )
         config=options.EOSConfig(self.reader_config, experiment_config, reduction_config, output_config)
         reducer = reduction.AmorReduction(config)

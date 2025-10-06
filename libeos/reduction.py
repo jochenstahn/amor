@@ -5,7 +5,7 @@ import sys
 import numpy as np
 from orsopy import fileio
 
-from .file_reader import AmorData, AmorEventData
+from .file_reader import AmorEventData
 from .header import Header
 from .path_handling import PathResolver
 from .options import EOSConfig, IncidentAngle, MonitorType, NormalisationMethod
@@ -37,12 +37,8 @@ class AmorReduction:
 
     def prepare_actions(self):
         """
-        TODO: Evaluates configuration to define a list of actions to be performed.
         Does not do any actual reduction.
         """
-        # TODO: bad work-around, should make better destriction of parameters usage
-        self.experiment_config.qzRange = self.reduction_config.qzRange
-
         self.path_resolver = PathResolver(self.reader_config.year, self.reader_config.rawPath)
 
         # setup all actions performed on event datasets before projection on the grid
@@ -51,6 +47,8 @@ class AmorReduction:
             # explicit steps performed on AmorEventDataset for normalization files
             self.normevent_actions = eh.ApplyPhaseOffset(self.experiment_config.chopperPhaseOffset)
             self.normevent_actions |= eh.CorrectChopperPhase()
+            if self.experiment_config.monitorType in [MonitorType.proton_charge, MonitorType.debug]:
+                self.normevent_actions |= eh.ExtractWalltime()
             self.normevent_actions |= eh.AssociatePulseWithMonitor(self.experiment_config.monitorType,
                                                                    self.experiment_config.lowCurrentThreshold)
             self.normevent_actions |= eh.FilterStrangeTimes()
@@ -74,7 +72,7 @@ class AmorReduction:
         self.dataevent_actions |= ea.TofTimeCorrection(self.experiment_config.incidentAngle==IncidentAngle.alphaF)
         self.dataevent_actions |= ea.CalculateWavelength(self.experiment_config.lambdaRange)
         self.dataevent_actions |= ea.CalculateQ(self.experiment_config.incidentAngle)
-        self.dataevent_actions |= ea.FilterQzRange(self.experiment_config.qzRange)
+        self.dataevent_actions |= ea.FilterQzRange(self.reduction_config.qzRange)
         self.dataevent_actions |= ea.ApplyMask()
 
         self.grid = LZGrid(self.reduction_config.qResolution, self.reduction_config.qzRange)
@@ -116,18 +114,42 @@ class AmorReduction:
 
     def read_file_block(self, i, short_notation):
         logging.warning('reading input:')
+        file_list = self.path_resolver.resolve(short_notation)
+
         self.header.measurement_data_files = []
-        self.file_reader = AmorData(header=self.header,
-                                    reader_config=self.reader_config,
-                                    config=self.experiment_config,
-                                    short_notation=short_notation)
+
+        self.dataset = AmorEventData(file_list[0])
+        if self.experiment_config.monitorType==MonitorType.auto:
+            if self.dataset.data.proton_current.current.sum()>1:
+                self.experiment_config.monitorType = MonitorType.proton_charge
+                logging.debug('      monitor type set to "proton current"')
+            else:
+                self.experiment_config.monitorType = MonitorType.time
+                logging.debug('      monitor type set to "time"')
+            # update actions to sue selected monitor
+            self.prepare_actions()
+
+        self.dataevent_time_correction.seriesStartTime = self.dataset.eventStartTime
+        self.dataevent_actions(self.dataset)
+        self.dataset.update_header(self.header)
+        self.dataevent_actions.update_header(self.header)
+        for fi in file_list[1:]:
+            di = AmorEventData(fi)
+            self.dataevent_actions(di)
+            self.dataset.append(di)
+
+        for fileName in file_list:
+            self.header.measurement_data_files.append(fileio.File( file=fileName.split('/')[-1],
+                                                                   timestamp=self.dataset.fileDate))
+
+
         if self.reduction_config.timeSlize:
             self.read_timeslices(i)
         else:
             self.read_unsliced(i)
 
     def read_unsliced(self, i):
-        self.monitor = np.sum(self.file_reader.monitorPerPulse)
+        self.monitor = np.sum(self.dataset.data.pulses.monitor)
         logging.warning(f'    monitor = {self.monitor:8.2f} {MONITOR_UNITS[self.experiment_config.monitorType]}')
 
         proj:LZProjection = self.project_on_lz()
@@ -139,7 +161,7 @@ class AmorReduction:
 
         if 'Rqz.ort' in self.output_config.outputFormats:
             headerRqz = self.header.orso_header()
-            headerRqz.data_set = f'Nr {i} : mu = {self.file_reader.mu:6.3f} deg'
+            headerRqz.data_set = f'Nr {i} : mu = {self.dataset.geometry.mu:6.3f} deg'
 
             # projection on qz-grid
             result = proj.project_on_qz()
@@ -175,7 +197,6 @@ class AmorReduction:
                 fileio.Column('mask', '', 'pixels used for calculating R(q_z)'),
                 fileio.Column('Qx', '1/angstrom', 'parallel momentum transfer'),
                 ]
-            # data_source = file_reader.data_source
 
             ts, zs = proj.data.shape
             lindex_lz = np.tile(np.arange(1, ts+1), (zs, 1)).T
@@ -204,8 +225,8 @@ class AmorReduction:
                 j += 1
 
     def read_timeslices(self, i):
-        wallTime_e = np.float64(self.file_reader.wallTime_e)/1e9
-        pulseTimeS = np.float64(self.file_reader.pulseTimeS)/1e9
+        wallTime_e = np.float64(self.dataset.data.events.wallTime)/1e9
+        pulseTimeS = np.float64(self.dataset.data.pulses.time)/1e9
         interval = self.reduction_config.timeSlize[0]
         try:
             start = self.reduction_config.timeSlize[1]
@@ -220,7 +241,7 @@ class AmorReduction:
         logging.warning(f'    time slizing')
         logging.info('      slize  time  monitor')
         for ti, time in enumerate(np.arange(start, stop, interval)):
-            slice = self.file_reader.dataset.get_timeslice(time, time+interval)
+            slice = self.dataset.get_timeslice(time, time+interval)
             self.monitor = np.sum(slice.data.pulses.monitor)
             logging.info(f'      {ti:<4d}  {time:6.0f}  {self.monitor:7.2f} {MONITOR_UNITS[self.experiment_config.monitorType]}')
 
@@ -316,7 +337,7 @@ class AmorReduction:
 
     def project_on_lz(self, dataset=None):
         if dataset is None:
-            dataset=self.file_reader.dataset
+            dataset=self.dataset
         proj = LZProjection.from_dataset(dataset, self.grid,
                                          has_offspecular=(self.experiment_config.incidentAngle==IncidentAngle.alphaF))
 
