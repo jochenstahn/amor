@@ -70,7 +70,7 @@ jobs:
         C:\Miniconda\condabin\conda.bat init powershell
     - name: Build with pyinstaller
       run: |
-        pyinstaller windows_folder.spec
+        pyinstaller windows_build.spec
         cd dist\eos
         Compress-Archive -Path .\* -Destination ..\..\eos.zip
     - name: Archive distribution
