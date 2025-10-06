@@ -344,7 +344,7 @@ class AmorReduction:
         if dataset is None:
             dataset=self.dataset
         proj = LZProjection.from_dataset(dataset, self.grid,
-                                         has_offspecular=(self.experiment_config.incidentAngle==IncidentAngle.alphaF))
+                                         has_offspecular=(self.experiment_config.incidentAngle!=IncidentAngle.alphaF))
 
         if not self.reduction_config.is_default('thetaRangeR'):
             t0 = dataset.geometry.nu - dataset.geometry.mu
