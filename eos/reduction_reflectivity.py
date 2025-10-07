@@ -158,7 +158,7 @@ class ReflectivityReduction:
             self.analyze_unsliced(i)
 
     def analyze_unsliced(self, i):
-        self.monitor = np.sum(self.dataset.data.pulses.monitor)
+        self.monitor = self.dataset.data.pulses.monitor.sum()
         logging.warning(f'    monitor = {self.monitor:8.2f} {MONITOR_UNITS[self.config.experiment.monitorType]}')
 
         proj:LZProjection = self.project_on_lz()

@@ -18,7 +18,7 @@ class ExtractWalltime(EventDataAction):
     def perform_action(self, dataset: EventDatasetProtocol) ->None:
         wallTime = extract_walltime(dataset.data.events.tof,
                                     dataset.data.packets.start_index,
-                                    dataset.data.packets.Time)
+                                    dataset.data.packets.time)
         logging.debug(f'        expending event stream by wallTime')
         new_events = append_fields(dataset.data.events, [('wallTime', wallTime.dtype)])
         new_events.wallTime = wallTime

@@ -1,6 +1,7 @@
 """
 Defines how file paths are resolved from short_notation, year and number to filename.
 """
+import logging
 import os
 from typing import List
 
@@ -18,7 +19,7 @@ class PathResolver:
         """Evaluate string entry for file number lists"""
         file_list = []
         for i in short_notation.split(','):
-            if '-' in i:
+            if '-' in i and not i.startswith('-'):
                 if ':' in i:
                     step = i.split(':', 1)[1]
                     file_list += range(int(i.split('-', 1)[0]),
@@ -34,6 +35,8 @@ class PathResolver:
         return list(sorted(file_list))
 
     def get_path(self, number):
+        if number<=0:
+            number = self.search_latest(number)
         fileName = f'amor{self.year}n{number:06d}.hdf'
         path = ''
         for rawd in self.rawPath:
@@ -41,9 +44,32 @@ class PathResolver:
                 path = rawd
                 break
         if not path:
-            if os.path.exists(
-                    f'/afs/psi.ch/project/sinqdata/{self.year}/amor/{int(number/1000)}/{fileName}'):
-                path = f'/afs/psi.ch/project/sinqdata/{self.year}/amor/{int(number/1000)}'
+            from glob import glob
+            potential_file = glob(f'/home/amor/data/{self.year}/*/{fileName}')
+            if len(potential_file)>0:
+                path = os.path.dirname(potential_file[0])
             else:
                 raise FileNotFoundError(f'# ERROR: the file {fileName} can not be found in {self.rawPath}')
         return os.path.join(path, fileName)
+
+    def search_latest(self, number):
+        if number>0:
+            raise ValueError('number needs to be relative index (negative)')
+        if os.path.exists(f'/home/amor/data/{self.year}/DataNumber'):
+            try:
+                with open(f'/home/amor/data/{self.year}/DataNumber', 'r') as fh:
+                    current_index = int(fh.readline())-1
+            except Exception:
+                logging.error('Can not access DataNumber', exc_info=True)
+            else:
+                return current_index+number
+        # find all files from the given year, convert to number and return latest
+        from glob import glob
+        possible_files = []
+        for rawd in self.rawPath:
+            possible_files += glob(os.path.join(rawd, f'amor{self.year}n??????.hdf'))
+
+        possible_files += glob(f'/home/amor/data/{self.year}/*/amor{self.year}n??????.hdf')
+        possible_indices = list(set([int(os.path.basename(fi)[9:15]) for fi in possible_files]))
+        possible_indices.sort()
+        return possible_indices[number-1]

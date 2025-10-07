@@ -30,7 +30,7 @@ AMOR_LOCAL_TIMEZONE = zoneinfo.ZoneInfo(key='Europe/Zurich')
 
 if  platform.node().startswith('amor'):
     NICOS_CACHE_DIR = '/home/amor/nicosdata/amor/cache/'
-    GREP = '/usr/bin/grep "%s"'
+    GREP = '/usr/bin/grep "value"'
 else:
     NICOS_CACHE_DIR = None
 
@@ -63,10 +63,11 @@ class AmorHeader:
                 try:
                     logging.warning(f"     using parameter {nicos_key} from nicos cache")
                     year_date = self.fileDate.strftime('%Y')
-                    value = str(subprocess.getoutput(f'{GREP} {NICOS_CACHE_DIR}nicos-{nicos_key}/{year_date}')).split('\t')[-1]
+                    call = f'{GREP} {NICOS_CACHE_DIR}nicos-{nicos_key}/{year_date}'
+                    value = str(subprocess.getoutput(call)).split('\t')[-1]
                     return dtype(value)
                 except Exception:
-                    logging.error("Couldn't get value from nicos cache", exc_info=True)
+                    logging.error(f"Couldn't get value from nicos cache {nicos_key}, {call}")
                     return dtype(0)
             else:
                 logging.warning(f"     parameter {key} not found, relpace by zero")
@@ -151,7 +152,7 @@ class AmorHeader:
                                      chopperSeparation, detectorDistance, chopperDetectorDistance)
         self.timing = AmorTiming(ch1TriggerPhase, ch2TriggerPhase, chopperSpeed, chopperPhase, tau)
 
-        polarizationConfigLabel = self._replace_if_missing('polarization/configuration/average_value', 'polarizer_config_label', int)
+        polarizationConfigLabel = self._replace_if_missing('polarization/configuration/average_value', 'polarization_config_label', int)
         polarizationConfig = fileio.Polarization(polarizationConfigs[polarizationConfigLabel])
         logging.debug(f'      polarization configuration: {polarizationConfig} (index {polarizationConfigLabel})')
 
@@ -236,10 +237,6 @@ class AmorEventData(AmorHeader):
         self.hdf = hdf
         self.read_event_stream()
 
-        # actions applied to any dataset
-        self.read_chopper_trigger_stream()
-        self.read_proton_current_stream()
-
         if type(fileName) is str:
             # close the input file to free memory, only if the file was opened in this object
             self.hdf.close()
@@ -253,12 +250,13 @@ class AmorEventData(AmorHeader):
         """
         packets = np.recarray(self.hdf['/entry1/Amor/detector/data/event_index'].shape, dtype=PACKET_TYPE)
         packets.start_index = self.hdf['/entry1/Amor/detector/data/event_index'][:]
-        packets.Time = self.hdf['/entry1/Amor/detector/data/event_time_zero'][:]
+        packets.time = self.hdf['/entry1/Amor/detector/data/event_time_zero'][:]
         try:
             # packet index that matches first event index
             start_packet = int(np.where(packets.start_index==self.first_index)[0][0])
         except IndexError:
-            raise IndexError(f'No event packet found starting at event #{self.first_index}')
+            raise EOFError(f'No event packet found starting at event #{self.first_index}, '
+                           f'number of events is {self.hdf["/entry1/Amor/detector/data/event_time_offset"].shape[0]}')
         packets = packets[start_packet:]
 
         nevts = self.hdf['/entry1/Amor/detector/data/event_time_offset'].shape[0]
@@ -279,15 +277,15 @@ class AmorEventData(AmorHeader):
         events.pixelID = self.hdf['/entry1/Amor/detector/data/event_id'][self.first_index:self.last_index+1]
         events.mask = 0
 
-        pulses = self.read_chopper_trigger_stream()
-        current = self.read_proton_current_stream()
+        pulses = self.read_chopper_trigger_stream(packets)
+        current = self.read_proton_current_stream(packets)
         self.data = AmorEventStream(events, packets, pulses, current)
 
         if self.first_index>0 and not self.EOF:
             # label the file name if not all events were used
             self.file_list[0] += f'[{self.first_index}:{self.last_index}]'
 
-    def read_chopper_trigger_stream(self):
+    def read_chopper_trigger_stream(self, packets):
         chopper1TriggerTime = np.array(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_zero'][:-2], dtype=np.int64)
         #self.chopper2TriggerTime = self.chopper1TriggerTime + np.array(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time'][:-2], dtype=np.int64)
         #                           + np.array(self.hdf['entry1/Amor/chopper/ch2_trigger/event_time_offset'][:], dtype=np.int64)
@@ -304,17 +302,17 @@ class AmorEventData(AmorHeader):
         pulses.monitor = 1. # default is monitor pulses as it requires no calculation
         # apply filter in case the events were filtered
         if self.first_index>0 or not self.EOF:
-            pulses = pulses[(pulses.time>=self.data.packets.Time[0])&(pulses.time<=self.data.packets.Time[-1])]
+            pulses = pulses[(pulses.time>=packets.time[0])&(pulses.time<=packets.time[-1])]
         self.eventStartTime = startTime
         return pulses
 
-    def read_proton_current_stream(self):
+    def read_proton_current_stream(self, packets):
         proton_current = np.recarray(self.hdf['entry1/Amor/detector/proton_current/time'].shape, dtype=PC_TYPE)
         proton_current.time = self.hdf['entry1/Amor/detector/proton_current/time'][:]
         proton_current.current = self.hdf['entry1/Amor/detector/proton_current/value'][:,0]
         if self.first_index>0 or not self.EOF:
-            proton_current = proton_current[(proton_current.time>=self.data.packets.Time[0])&
-                                            (proton_current.time<=self.data.packets.Time[-1])]
+            proton_current = proton_current[(proton_current.time>=packets.time[0])&
+                                            (proton_current.time<=packets.time[-1])]
         return proton_current
 
     def info(self):

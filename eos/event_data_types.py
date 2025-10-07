@@ -31,7 +31,7 @@ class AmorTiming:
 
 # Structured datatypes used for event streams
 EVENT_TYPE = np.dtype([('tof', np.float64), ('pixelID', np.uint32), ('mask', np.int32)])
-PACKET_TYPE = np.dtype([('start_index', np.uint32), ('Time', np.int64)])
+PACKET_TYPE = np.dtype([('start_index', np.uint32), ('time', np.int64)])
 PULSE_TYPE = np.dtype([('time', np.int64), ('monitor', np.float32)])
 PC_TYPE = np.dtype([('current', np.float32), ('time', np.int64)])
 

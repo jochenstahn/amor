@@ -661,6 +661,14 @@ class E2HReductionConfig(ArgParsable):
                 },
             )
 
+    plot_colormap: PlotColormaps = field(
+            default=PlotColormaps.gist_ncar,
+            metadata={
+                'short': 'pcmap',
+                'group': 'output',
+                'help': 'matplotlib colormap used in lambda-theta graphs when plotting',
+                },
+            )
 
 
 @dataclass

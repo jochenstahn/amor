@@ -3,6 +3,8 @@ Classes used to calculate projections/binnings from event data onto given grids.
 """
 
 import logging
+from typing import Protocol
+
 import numpy as np
 from dataclasses import dataclass
 
@@ -74,6 +76,12 @@ class ProjectedReflectivity:
         plt.yscale('log')
         plt.xlabel('Q / $\\AA^{-1}$')
         plt.ylabel('R')
+
+class ProjectionInterface(Protocol):
+    def project(self, dataset: EventDatasetProtocol, monitor: float): ...
+    def clear(self): ...
+    def plot(self, **kwargs): ...
+    def update_plot(self): ...
 
 class LZProjection:
     grid: LZGrid
@@ -165,12 +173,18 @@ class LZProjection:
             Project dataset on grid and add to intensity.
             Can be called multiple times to sequentially add events.
         """
+        # TODO: maybe move monitor calculation in here instead of reduction?
         e = dataset.data.events
         int_lz, *_  = np.histogram2d(e.lamda, e.detZ, bins = (self.grid.lamda(), self.grid.z()))
         self.data.I += int_lz
         self.monitor += monitor
         # in case the intensity changed one needs to normalize again
         self.is_normalized = False
+
+    def clear(self):
+        # empty data
+        self.data[:] = 0
+        self.data.mask = True
 
     @property
     def I(self):
@@ -304,14 +318,23 @@ class LZProjection:
         if self.is_normalized:
             if not 'norm' in kwargs:
                 kwargs['norm'] = LogNorm(2e-3, 2.0)
-            plt.pcolormesh(self.lamda, self.alphaF, self.data.ref, **kwargs)
+            self._graph = plt.pcolormesh(self.lamda, self.alphaF, self.data.ref, **kwargs)
             if cmap:
                 plt.colorbar(label='R')
         else:
             if not 'norm' in kwargs:
                 kwargs['norm'] = LogNorm()
-            plt.pcolormesh(self.lamda, self.alphaF, self.data.I, **kwargs)
+            self._graph = plt.pcolormesh(self.lamda, self.alphaF, self.data.I, **kwargs)
             if cmap:
                 plt.colorbar(label='I / cpm')
         plt.xlabel('$\\lambda$ / $\\AA$')
         plt.ylabel('$\\Theta$ / °')
+
+    def update_plot(self):
+        """
+        Inline update of last plot by just updating the data.
+        """
+        if self.is_normalized:
+            self._graph.set_array(self.data.ref)
+        else:
+            self._graph.set_array(self.data.I)

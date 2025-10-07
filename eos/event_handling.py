@@ -149,6 +149,9 @@ class TofTimeCorrection(EventDataAction):
         self.correct_chopper_opening = correct_chopper_opening
 
     def perform_action(self, dataset: EventDatasetProtocol) ->None:
+        if not 'delta' in dataset.data.events.dtype.names:
+            raise ValueError(
+                    "TofTimeCorrection requires delta to be extracted, please run AnalyzePixelIDs first")
         d = dataset.data
         if self.correct_chopper_opening:
             d.events.tof -= ( d.events.delta / 180. ) * dataset.timing.tau

@@ -1,28 +1,32 @@
 import logging
 
 # need to do absolute import here as pyinstaller requires it
-from eos.options import E2HConfig, ReaderConfig, ExperimentConfig
+from eos.options import E2HConfig, ReaderConfig, ExperimentConfig, E2HReductionConfig
 from eos.command_line import commandLineArgs
 from eos.logconfig import setup_logging, update_loglevel
+from eos.reduction_e2h import E2HReduction
+
 
 def main():
     setup_logging()
+    logging.getLogger('matplotlib').setLevel(logging.WARNING)
 
     # read command line arguments and generate classes holding configuration parameters
-    clas = commandLineArgs([ReaderConfig, ExperimentConfig],
+    clas = commandLineArgs([ReaderConfig, ExperimentConfig, E2HReductionConfig],
                            'events2histogram')
     update_loglevel(clas.verbose)
 
     reader_config = ReaderConfig.from_args(clas)
     experiment_config = ExperimentConfig.from_args(clas)
-    config = E2HConfig(reader_config, experiment_config, )
+    reduction_config = E2HReductionConfig.from_args(clas)
+    config = E2HConfig(reader_config, experiment_config, reduction_config)
 
     logging.warning('######## events2histogram - data vizualization for Amor ########')
 
     # only import heavy module if sufficient command line parameters were provided
     from eos.reduction_reflectivity import ReflectivityReduction
     # Create reducer with these arguments
-    reducer = ReflectivityReduction(config)
+    reducer = E2HReduction(config)
     # Perform actual reduction
     reducer.reduce()
 
