@@ -83,14 +83,10 @@ class AssociatePulseWithMonitor(EventDataAction):
     def perform_action(self, dataset: EventDatasetProtocol)->None:
         logging.debug(f'      using monitor type {self.monitorType}')
         if self.monitorType in [MonitorType.proton_charge or MonitorType.debug]:
-            monitorPerPulse = self.get_current_per_pulse(dataset.data.pulses.time,
+            dataset.data.pulses.monitor = self.get_current_per_pulse(dataset.data.pulses.time,
                                                               dataset.data.proton_current.time,
                                                               dataset.data.proton_current.current)\
                                                               * 2*dataset.timing.tau * 1e-3
-            # filter low-current pulses
-            dataset.data.pulses.monitor = np.where(
-                    monitorPerPulse > 2*dataset.timing.tau * self.lowCurrentThreshold * 1e-3,
-                    monitorPerPulse, 0)
         elif self.monitorType==MonitorType.time:
             dataset.data.pulses.monitor  = 2*dataset.timing.tau
         else:  # pulses
@@ -125,8 +121,11 @@ class FilterMonitorThreshold(EventDataAction):
         if not 'wallTime' in dataset.data.events.dtype.names:
             raise ValueError(
                     "FilterMonitorThreshold requires walltTime to be extracted, please run ExtractWalltime first")
-        goodTimeS = dataset.data.pulses.time[dataset.data.pulses.monitor!=0]
+        low_current_filter = dataset.data.pulses.monitor>2*dataset.timing.tau*self.lowCurrentThreshold*1e-3
+        dataset.data.pulses.monitor[np.logical_not(low_current_filter)] = 0.
+        goodTimeS = dataset.data.pulses.time[low_current_filter]
         filter_e = np.logical_not(np.isin(dataset.data.events.wallTime, goodTimeS))
+
         dataset.data.events.mask += EVENT_BITMASKS['MonitorThreshold']*filter_e
         logging.info(f'      low-beam (<{self.lowCurrentThreshold} mC) rejected pulses: '
                      f'{dataset.data.pulses.monitor.shape[0]-goodTimeS.shape[0]} '

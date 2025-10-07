@@ -14,7 +14,7 @@ class FullAmorTest(TestCase):
     def setUpClass(cls):
         # generate map for option defaults
         cls._field_defaults = {}
-        for opt in [options.ExperimentConfig, options.ReductionConfig, options.OutputConfig]:
+        for opt in [options.ExperimentConfig, options.ReflectivityReductionConfig, options.ReflectivityOutputConfig]:
             defaults = {}
             for field in fields(opt):
                 if field.default not in [None, MISSING]:
@@ -58,28 +58,28 @@ class FullAmorTest(TestCase):
                 muOffset=0.0,
                 sampleModel='air | 10 H2O | D2O'
                 )
-        reduction_config = options.ReductionConfig(
-                normalisationMethod=self._field_defaults['ReductionConfig']['normalisationMethod'],
+        reduction_config = options.ReflectivityReductionConfig(
+                normalisationMethod=self._field_defaults['ReflectivityReductionConfig']['normalisationMethod'],
                 qResolution=0.01,
-                qzRange=self._field_defaults['ReductionConfig']['qzRange'],
+                qzRange=self._field_defaults['ReflectivityReductionConfig']['qzRange'],
                 thetaRange=(-0.75, 0.75),
                 fileIdentifier=["6003-6005"],
                 scale=[1],
                 normalisationFileIdentifier=[],
                 timeSlize=[300.0]
                 )
-        output_config = options.OutputConfig(
+        output_config = options.ReflectivityOutputConfig(
                 outputFormats=[options.OutputFomatOption.Rqz_ort],
                 outputName='test',
                 outputPath='test_results',
                 )
-        config=options.EOSConfig(self.reader_config, experiment_config, reduction_config, output_config)
+        config=options.ReflectivityConfig(self.reader_config, experiment_config, reduction_config, output_config)
         # run three times to get similar timing to noslicing runs
-        reducer = reduction.ReflectivityReduction(config)
+        reducer = reduction_reflectivity.ReflectivityReduction(config)
         reducer.reduce()
-        reducer = reduction.ReflectivityReduction(config)
+        reducer = reduction_reflectivity.ReflectivityReduction(config)
         reducer.reduce()
-        reducer = reduction.ReflectivityReduction(config)
+        reducer = reduction_reflectivity.ReflectivityReduction(config)
         reducer.reduce()
 
     def test_noslicing(self):
@@ -96,24 +96,24 @@ class FullAmorTest(TestCase):
                 nu=0,
                 muOffset=0.0,
                 )
-        reduction_config = options.ReductionConfig(
-                normalisationMethod=self._field_defaults['ReductionConfig']['normalisationMethod'],
+        reduction_config = options.ReflectivityReductionConfig(
+                normalisationMethod=self._field_defaults['ReflectivityReductionConfig']['normalisationMethod'],
                 qResolution=0.01,
-                qzRange=self._field_defaults['ReductionConfig']['qzRange'],
+                qzRange=self._field_defaults['ReflectivityReductionConfig']['qzRange'],
                 thetaRange=(-0.75, 0.75),
                 fileIdentifier=["6003", "6004", "6005"],
                 scale=[1],
                 normalisationFileIdentifier=["5952"],
                 autoscale=(0.0, 0.05),
                 )
-        output_config = options.OutputConfig(
+        output_config = options.ReflectivityOutputConfig(
                 outputFormats=[options.OutputFomatOption.Rqz_ort],
                 outputName='test',
                 outputPath='test_results',
                 )
-        config=options.EOSConfig(self.reader_config, experiment_config, reduction_config, output_config)
-        reducer = reduction.ReflectivityReduction(config)
+        config=options.ReflectivityConfig(self.reader_config, experiment_config, reduction_config, output_config)
+        reducer = reduction_reflectivity.ReflectivityReduction(config)
         reducer.reduce()
         # run second time to reuse norm file
-        reducer = reduction.ReflectivityReduction(config)
+        reducer = reduction_reflectivity.ReflectivityReduction(config)
         reducer.reduce()

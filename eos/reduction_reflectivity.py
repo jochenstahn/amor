@@ -8,7 +8,7 @@ from orsopy import fileio
 from .file_reader import AmorEventData
 from .header import Header
 from .path_handling import PathResolver
-from .options import EOSConfig, IncidentAngle, MonitorType, NormalisationMethod, MONITOR_UNITS
+from .options import ReflectivityConfig, IncidentAngle, MonitorType, NormalisationMethod, MONITOR_UNITS
 from .instrument import LZGrid
 from .normalization import LZNormalisation
 from . import event_handling as eh, event_analysis as ea
@@ -16,12 +16,12 @@ from .projection import LZProjection
 
 
 class ReflectivityReduction:
-    config: EOSConfig
+    config: ReflectivityConfig
     header: Header
     normevent_actions: eh.EventDataAction
     dataevent_actions: eh.EventDataAction
     
-    def __init__(self, config: EOSConfig):
+    def __init__(self, config: ReflectivityConfig):
         self.config = config
 
         self.header = Header()
@@ -44,7 +44,7 @@ class ReflectivityReduction:
             self.normevent_actions |= eh.AssociatePulseWithMonitor(self.config.experiment.monitorType)
             if self.config.experiment.monitorType in [MonitorType.proton_charge, MonitorType.debug]:
                 self.normevent_actions |= ea.ExtractWalltime()
-                self.dataevent_actions |= eh.FilterMonitorThreshold(self.config.experiment.lowCurrentThreshold)
+                self.normevent_actions |= eh.FilterMonitorThreshold(self.config.experiment.lowCurrentThreshold)
             self.normevent_actions |= eh.FilterStrangeTimes()
             self.normevent_actions |= ea.MergeFrames()
             self.normevent_actions |= ea.AnalyzePixelIDs(self.config.experiment.yRange)

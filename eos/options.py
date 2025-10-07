@@ -10,6 +10,7 @@ import numpy as np
 
 import logging
 
+
 try:
     from enum import StrEnum
 except ImportError:
@@ -316,7 +317,7 @@ class NormalisationMethod(StrEnum):
     under_illuminated = 'u'
 
 @dataclass
-class ReductionConfig(ArgParsable):
+class ReflectivityReductionConfig(ArgParsable):
     fileIdentifier: List[str] = field(
             metadata={
                 'short':    'f',
@@ -423,7 +424,7 @@ class PlotColormaps(StrEnum):
     nipy_spectral = "nipy_spectral"
 
 @dataclass
-class OutputConfig(ArgParsable):
+class ReflectivityOutputConfig(ArgParsable):
     outputFormats: List[OutputFomatOption] = field(
             default_factory=lambda: ['Rqz.ort'],
             metadata={
@@ -492,11 +493,11 @@ class OutputConfig(ArgParsable):
 # ===================================
 
 @dataclass
-class EOSConfig:
+class ReflectivityConfig:
     reader: ReaderConfig
     experiment: ExperimentConfig
-    reduction: ReductionConfig
-    output: OutputConfig
+    reduction: ReflectivityReductionConfig
+    output: ReflectivityOutputConfig
     
     _call_string_overwrite=None
     
@@ -589,7 +590,81 @@ class EOSConfig:
         logging.debug(f'Argument list build in EOSConfig.call_string: {mlst}')
         return  mlst
 
+class E2HPlotSelection(StrEnum):
+    All = 'all'
+    YZ = 'Iyz'
+    LT = 'Ilt'
+    TZ = 'Itz'
+    Q = 'Iq'
+    L = 'Il'
+    T = 'It'
+    ToF = 'tof'
+
+
+class E2HPlotArguments(StrEnum):
+    Default = 'def'
+    OutputFile = 'file'
+    Logarithmic = 'log'
+
+@dataclass
+class E2HReductionConfig(ArgParsable):
+    fileIdentifier: str = field(
+            metadata={
+                'short':    'f',
+                'priority': 100,
+                'group':    'input data',
+                'help':     'file number(s) or offset (if < 1), events2histogram only accepts one short code',
+                },
+            )
+
+    show_plot: bool = field(
+            default=False,
+            metadata={
+                'short': 'sp',
+                'group': 'output',
+                'help': 'show matplotlib graphs of results',
+                },
+            )
+
+    plot: E2HPlotSelection = field(
+            default=E2HPlotSelection.All,
+            metadata={
+                'short': 'p',
+                'group': 'output',
+                'help': 'select what to plot or write',
+                },
+            )
+
+    plotArgs: E2HPlotArguments = field(
+            default=E2HPlotArguments.Default,
+            metadata={
+                'short': 'pa',
+                'group': 'output',
+                'help': 'select configuration for plot',
+                },
+            )
+
+    update: bool = field(
+            default=False,
+            metadata={
+                'short': 'u',
+                'group': 'output',
+                'help': 'keep running in the background and update plot when file is modified, implies --plot',
+                },
+            )
+
+    fast: bool = field(
+            default=False,
+            metadata={
+                'group': 'input data',
+                'help': 'skip some reduction steps to speed up calculations',
+                },
+            )
+
+
+
 @dataclass
 class E2HConfig:
     reader: ReaderConfig
-
+    experiment: ExperimentConfig
+    reduction: E2HReductionConfig

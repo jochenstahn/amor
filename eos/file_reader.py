@@ -34,47 +34,21 @@ if  platform.node().startswith('amor'):
 else:
     NICOS_CACHE_DIR = None
 
-class AmorEventData:
+class AmorHeader:
     """
-    Read one amor NeXus datafile and extract relevant header information.
-
-    Implements EventDatasetProtocol
+    Collects header information from Amor NeXus fiel without reading event data.
     """
-    file_list: List[str]
-    first_index: int
-    last_index: int = -1
-    EOF: bool = False
-    max_events: int
-    owner: fileio.Person
-    experiment: fileio.Experiment
-    sample: fileio.Sample
-    instrument_settings: fileio.InstrumentSettings
-    geometry: AmorGeometry
-    timing: AmorTiming
-    data: AmorEventStream
 
-    eventStartTime: np.int64
-
-    def __init__(self, fileName:Union[str, h5py.File, BinaryIO], first_index:int=0, max_events:int=100_000_000):
+    def __init__(self, fileName:Union[str, h5py.File, BinaryIO]):
         if type(fileName) is str:
-            self.file_list = [fileName]
             self.hdf = h5py.File(fileName, 'r', swmr=True)
         elif type(fileName) is h5py.File:
-            self.file_list = [fileName.filename]
             self.hdf = fileName
         else:
-            self.file_list = [repr(fileName)]
             self.hdf = h5py.File(fileName, 'r')
-        self.first_index = first_index
-        self.max_events = max_events
 
         self.read_header_info()
         self.read_instrument_configuration()
-        self.read_event_stream()
-
-        # actions applied to any dataset
-        self.read_chopper_trigger_stream()
-        self.read_proton_current_stream()
 
         if type(fileName) is str:
             # close the input file to free memory, only if the file was opened in this object
@@ -222,6 +196,55 @@ class AmorEventData:
         header.experiment = self.experiment
         header.sample = self.sample
         header.measurement_instrument_settings = self.instrument_settings
+
+
+class AmorEventData(AmorHeader):
+    """
+    Read one amor NeXus datafile and extract relevant header information.
+
+    Implements EventDatasetProtocol
+    """
+    file_list: List[str]
+    first_index: int
+    last_index: int = -1
+    EOF: bool = False
+    max_events: int
+    owner: fileio.Person
+    experiment: fileio.Experiment
+    sample: fileio.Sample
+    instrument_settings: fileio.InstrumentSettings
+    geometry: AmorGeometry
+    timing: AmorTiming
+    data: AmorEventStream
+
+    eventStartTime: np.int64
+
+    def __init__(self, fileName:Union[str, h5py.File, BinaryIO], first_index:int=0, max_events:int=100_000_000):
+        if type(fileName) is str:
+            self.file_list = [fileName]
+            hdf = h5py.File(fileName, 'r', swmr=True)
+        elif type(fileName) is h5py.File:
+            self.file_list = [fileName.filename]
+            hdf = fileName
+        else:
+            self.file_list = [repr(fileName)]
+            hdf = h5py.File(fileName, 'r')
+        self.first_index = first_index
+        self.max_events = max_events
+
+        super().__init__(hdf)
+        self.hdf = hdf
+        self.read_event_stream()
+
+        # actions applied to any dataset
+        self.read_chopper_trigger_stream()
+        self.read_proton_current_stream()
+
+        if type(fileName) is str:
+            # close the input file to free memory, only if the file was opened in this object
+            self.hdf.close()
+        del(self.hdf)
+
 
     def read_event_stream(self):
         """

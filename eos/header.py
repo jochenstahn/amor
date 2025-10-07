@@ -5,6 +5,7 @@ Class to handle Orso header information that changes gradually during the reduct
 import platform
 import sys
 from datetime import datetime
+from typing import List, Literal
 
 from orsopy import fileio
 
@@ -13,13 +14,16 @@ from . import __version__
 
 class Header:
     """orso compatible output file header content"""
+    owner: fileio.Person
+    experiment: fileio.Experiment
+    sample: fileio.Sample
+    measurement_instrument_settings: fileio.InstrumentSettings
+    measurement_scheme: Literal["angle- and energy-dispersive", "angle-dispersive", "energy-dispersive"]
+    measurement_data_files: List[fileio.File]
+    measurement_additional_files: List[fileio.File]
+
 
     def __init__(self):
-        self.owner                           = None
-        self.experiment                      = None
-        self.sample                          = None
-        self.measurement_instrument_settings = None
-        self.measurement_scheme              = None
         self.measurement_data_files          = []
         self.measurement_additional_files    = []
 
@@ -64,10 +68,3 @@ class Header:
         if columns is None:
             columns = self.columns()
         return fileio.Orso(ds, red, columns+extra_columns)
-    #-------------------------------------------------------------------------------------------------
-    def create_call_string(self):
-        callString = ' '.join(sys.argv)
-        if '-Y' not in callString:
-            callString += f' -Y {datetime.now().year}'
-        return callString
-    #-------------------------------------------------------------------------------------------------

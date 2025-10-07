@@ -8,7 +8,7 @@ Author: Jochen Stahn (algorithms, python draft),
 import logging
 
 # need to do absolute import here as pyinstaller requires it
-from eos.options import EOSConfig, ReaderConfig, ExperimentConfig, ReductionConfig, OutputConfig
+from eos.options import ReflectivityConfig, ReaderConfig, ExperimentConfig, ReflectivityReductionConfig, ReflectivityOutputConfig
 from eos.command_line import commandLineArgs
 from eos.logconfig import setup_logging, update_loglevel
 
@@ -16,15 +16,15 @@ def main():
     setup_logging()
 
     # read command line arguments and generate classes holding configuration parameters
-    clas = commandLineArgs([ReaderConfig, ExperimentConfig, ReductionConfig, OutputConfig],
+    clas = commandLineArgs([ReaderConfig, ExperimentConfig, ReflectivityReductionConfig, ReflectivityOutputConfig],
                            'eos')
     update_loglevel(clas.verbose)
 
     reader_config = ReaderConfig.from_args(clas)
     experiment_config = ExperimentConfig.from_args(clas)
-    reduction_config = ReductionConfig.from_args(clas)
-    output_config = OutputConfig.from_args(clas)
-    config = EOSConfig(reader_config, experiment_config, reduction_config, output_config)
+    reduction_config = ReflectivityReductionConfig.from_args(clas)
+    output_config = ReflectivityOutputConfig.from_args(clas)
+    config = ReflectivityConfig(reader_config, experiment_config, reduction_config, output_config)
 
     logging.warning('######## eos - data reduction for Amor ########')
 
