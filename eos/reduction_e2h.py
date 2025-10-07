@@ -6,6 +6,7 @@ Can be used as a live preview with automatic update when files are modified.
 import logging
 import os
 import matplotlib.pyplot as plt
+import numpy as np
 
 from orsopy import fileio
 from datetime import datetime
@@ -142,7 +143,20 @@ class E2HReduction:
         plt.title(self.create_title())
         self.projection.plot(**self.plot_kwds)
         plt.tight_layout()
+        if self.config.reduction.plot==E2HPlotSelection.LT:
+            plt.connect('button_press_event', self.draw_qline)
 
+    def draw_qline(self, event):
+        if event.button is plt.MouseButton.LEFT and self.fig.canvas.manager.toolbar.mode=='':
+            slope = event.ydata/event.xdata
+            xmax = 12.5
+            plt.plot([0, xmax], [0, slope*xmax], '-', color='grey')
+            plt.text(event.xdata, event.ydata, f'q={np.deg2rad(slope)*4.*np.pi:.3f}', backgroundcolor='white')
+            plt.draw()
+        if event.button is plt.MouseButton.RIGHT and self.fig.canvas.manager.toolbar.mode=='':
+            for art in list(plt.gca().lines)+list(plt.gca().texts):
+                art.remove()
+            plt.draw()
 
     def replace_dataset(self, latest):
         self.file_list = self.path_resolver.resolve(f'{latest}')
