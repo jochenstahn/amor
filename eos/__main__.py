@@ -29,9 +29,9 @@ def main():
     logging.warning('######## eos - data reduction for Amor ########')
 
     # only import heavy module if sufficient command line parameters were provided
-    from eos.reduction import AmorReduction
+    from eos.reduction import ReflectivityReduction
     # Create reducer with these arguments
-    reducer = AmorReduction(config)
+    reducer = ReflectivityReduction(config)
     # Perform actual reduction
     reducer.reduce()
 

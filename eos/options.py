@@ -395,33 +395,6 @@ class ReductionConfig(ArgParsable):
                 },
             )
 
-    def _expand_file_list(self, short_notation:str):
-        """Evaluate string entry for file number lists"""
-        file_list=[]
-        for i in short_notation.split(','):
-            if '-' in i:
-                if ':' in i:
-                    step = i.split(':', 1)[1]
-                    file_list += range(int(i.split('-', 1)[0]),
-                                       int((i.rsplit('-', 1)[1]).split(':', 1)[0])+1,
-                                       int(step))
-                else:
-                    step = 1
-                    file_list += range(int(i.split('-', 1)[0]),
-                                       int(i.split('-', 1)[1])+1,
-                                       int(step))
-            else:
-                file_list += [int(i)]
-        file_list.sort()
-        return file_list
-
-    def data_files(self):
-        # get input files from expanding fileIdentifier
-        return list(map(self._expand_file_list, self.fileIdentifier))
-
-    def normal_files(self):
-        return list(map(self._expand_file_list, self.normalisationFileIdentifier))
-
 
 class OutputFomatOption(StrEnum):
     Rqz_ort = "Rqz.ort"

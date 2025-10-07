@@ -23,12 +23,14 @@ MONITOR_UNITS = {
     MonitorType.debug: 'mC',
     }
 
-class AmorReduction:
+class ReflectivityReduction:
+    config: EOSConfig
+    header: Header
+    normevent_actions: eh.EventDataAction
+    dataevent_actions: eh.EventDataAction
+    
     def __init__(self, config: EOSConfig):
-        self.experiment_config = config.experiment
-        self.reader_config = config.reader
-        self.reduction_config = config.reduction
-        self.output_config = config.output
+        self.config = config
 
         self.header = Header()
         self.header.reduction.call = config.call_string()
@@ -39,59 +41,59 @@ class AmorReduction:
         """
         Does not do any actual reduction.
         """
-        self.path_resolver = PathResolver(self.reader_config.year, self.reader_config.rawPath)
+        self.path_resolver = PathResolver(self.config.reader.year, self.config.reader.rawPath)
 
         # setup all actions performed on event datasets before projection on the grid
         # The order of these corrections matter as some rely on parameters modified before
-        if self.reduction_config.normalisationFileIdentifier:
+        if self.config.reduction.normalisationFileIdentifier:
             # explicit steps performed on AmorEventDataset for normalization files
-            self.normevent_actions = eh.ApplyPhaseOffset(self.experiment_config.chopperPhaseOffset)
+            self.normevent_actions = eh.ApplyPhaseOffset(self.config.experiment.chopperPhaseOffset)
             self.normevent_actions |= eh.CorrectChopperPhase()
-            if self.experiment_config.monitorType in [MonitorType.proton_charge, MonitorType.debug]:
+            if self.config.experiment.monitorType in [MonitorType.proton_charge, MonitorType.debug]:
                 self.normevent_actions |= ea.ExtractWalltime()
-            self.normevent_actions |= eh.AssociatePulseWithMonitor(self.experiment_config.monitorType,
-                                                                   self.experiment_config.lowCurrentThreshold)
+            self.normevent_actions |= eh.AssociatePulseWithMonitor(self.config.experiment.monitorType,
+                                                                   self.config.experiment.lowCurrentThreshold)
             self.normevent_actions |= eh.FilterStrangeTimes()
             self.normevent_actions |= ea.MergeFrames()
-            self.normevent_actions |= ea.AnalyzePixelIDs(self.experiment_config.yRange)
-            self.normevent_actions |= eh.TofTimeCorrection(self.experiment_config.incidentAngle==IncidentAngle.alphaF)
-            self.normevent_actions |= ea.CalculateWavelength(self.experiment_config.lambdaRange)
+            self.normevent_actions |= ea.AnalyzePixelIDs(self.config.experiment.yRange)
+            self.normevent_actions |= eh.TofTimeCorrection(self.config.experiment.incidentAngle==IncidentAngle.alphaF)
+            self.normevent_actions |= ea.CalculateWavelength(self.config.experiment.lambdaRange)
             self.normevent_actions |= eh.ApplyMask()
         # Actions on datasets not used for normalization
-        self.dataevent_actions = eh.ApplyPhaseOffset(self.experiment_config.chopperPhaseOffset)
-        self.dataevent_actions |= eh.ApplyParameterOverwrites(self.experiment_config) # some actions use instrument parameters, change before that
+        self.dataevent_actions = eh.ApplyPhaseOffset(self.config.experiment.chopperPhaseOffset)
+        self.dataevent_actions |= eh.ApplyParameterOverwrites(self.config.experiment) # some actions use instrument parameters, change before that
         self.dataevent_actions |= eh.CorrectChopperPhase()
         self.dataevent_actions |= ea.ExtractWalltime()
         self.dataevent_time_correction = eh.CorrectSeriesTime(0) # will be set from first dataset
         self.dataevent_actions |= self.dataevent_time_correction
-        self.dataevent_actions |= eh.AssociatePulseWithMonitor(self.experiment_config.monitorType,
-                                                               self.experiment_config.lowCurrentThreshold)
+        self.dataevent_actions |= eh.AssociatePulseWithMonitor(self.config.experiment.monitorType,
+                                                               self.config.experiment.lowCurrentThreshold)
         self.dataevent_actions |= eh.FilterStrangeTimes()
         self.dataevent_actions |= ea.MergeFrames()
-        self.dataevent_actions |= ea.AnalyzePixelIDs(self.experiment_config.yRange)
-        self.dataevent_actions |= eh.TofTimeCorrection(self.experiment_config.incidentAngle==IncidentAngle.alphaF)
-        self.dataevent_actions |= ea.CalculateWavelength(self.experiment_config.lambdaRange)
-        self.dataevent_actions |= ea.CalculateQ(self.experiment_config.incidentAngle)
-        self.dataevent_actions |= ea.FilterQzRange(self.reduction_config.qzRange)
+        self.dataevent_actions |= ea.AnalyzePixelIDs(self.config.experiment.yRange)
+        self.dataevent_actions |= eh.TofTimeCorrection(self.config.experiment.incidentAngle==IncidentAngle.alphaF)
+        self.dataevent_actions |= ea.CalculateWavelength(self.config.experiment.lambdaRange)
+        self.dataevent_actions |= ea.CalculateQ(self.config.experiment.incidentAngle)
+        self.dataevent_actions |= ea.FilterQzRange(self.config.reduction.qzRange)
         self.dataevent_actions |= eh.ApplyMask()
 
-        self.grid = LZGrid(self.reduction_config.qResolution, self.reduction_config.qzRange)
+        self.grid = LZGrid(self.config.reduction.qResolution, self.config.reduction.qzRange)
 
     def reduce(self):
-        if not os.path.exists(f'{self.output_config.outputPath}'):
-            logging.debug(f'Creating destination path {self.output_config.outputPath}')
-            os.system(f'mkdir {self.output_config.outputPath}')
+        if not os.path.exists(f'{self.config.output.outputPath}'):
+            logging.debug(f'Creating destination path {self.config.output.outputPath}')
+            os.system(f'mkdir {self.config.output.outputPath}')
 
         # load or create normalisation matrix
-        if self.reduction_config.normalisationFileIdentifier:
+        if self.config.reduction.normalisationFileIdentifier:
             # TODO: change option definition to single normalization short_code
-            self.create_normalisation_map(self.reduction_config.normalisationFileIdentifier[0])
+            self.create_normalisation_map(self.config.reduction.normalisationFileIdentifier[0])
         else:
             self.norm = LZNormalisation.unity(self.grid)
 
         # load R(q_z) curve to be subtracted:
-        if self.reduction_config.subtract:
-            self.sq_q, self.sR_q, self.sdR_q, self.sFileName = self.loadRqz(self.reduction_config.subtract)
+        if self.config.reduction.subtract:
+            self.sq_q, self.sR_q, self.sdR_q, self.sFileName = self.loadRqz(self.config.reduction.subtract)
             logging.warning(f'loaded background file: {self.sFileName}')
             self.header.reduction.corrections.append(f'background from \'{self.sFileName}\' subtracted')
             self.subtract = True
@@ -101,21 +103,21 @@ class AmorReduction:
         # load measurement data and do the reduction
         self.datasetsRqz = []
         self.datasetsRlt = []
-        for i, short_notation in enumerate(self.reduction_config.fileIdentifier):
+        for i, short_notation in enumerate(self.config.reduction.fileIdentifier):
             self.read_file_block(i, short_notation)
 
         # output
         logging.warning('output:')
 
-        if 'Rqz.ort' in self.output_config.outputFormats:
+        if 'Rqz.ort' in self.config.output.outputFormats:
             self.save_Rqz()
 
-        if 'Rlt.ort' in self.output_config.outputFormats:
+        if 'Rlt.ort' in self.config.output.outputFormats:
             self.save_Rtl()
 
-        if self.output_config.plot:
+        if self.config.output.plot:
             import matplotlib.pyplot as plt
-            if 'Rqz.ort' in self.output_config.outputFormats:
+            if 'Rqz.ort' in self.config.output.outputFormats:
                 plt.figure(num=99)
                 plt.legend()
             plt.show()
@@ -127,18 +129,18 @@ class AmorReduction:
         self.header.measurement_data_files = []
 
         self.dataset = AmorEventData(file_list[0])
-        if self.experiment_config.monitorType==MonitorType.auto:
+        if self.config.experiment.monitorType==MonitorType.auto:
             if self.dataset.data.proton_current.current.sum()>1:
-                self.experiment_config.monitorType = MonitorType.proton_charge
+                self.config.experiment.monitorType = MonitorType.proton_charge
                 logging.debug('      monitor type set to "proton current"')
             else:
-                self.experiment_config.monitorType = MonitorType.time
+                self.config.experiment.monitorType = MonitorType.time
                 logging.debug('      monitor type set to "time"')
             # update actions to sue selected monitor
             self.prepare_actions()
             # reload normalization to make sure the monitor matches
-            if self.reduction_config.normalisationFileIdentifier:
-                self.create_normalisation_map(self.reduction_config.normalisationFileIdentifier[0])
+            if self.config.reduction.normalisationFileIdentifier:
+                self.create_normalisation_map(self.config.reduction.normalisationFileIdentifier[0])
 
         self.dataevent_time_correction.seriesStartTime = self.dataset.eventStartTime
         self.dataevent_actions(self.dataset)
@@ -154,7 +156,7 @@ class AmorReduction:
                                                                    timestamp=self.dataset.fileDate))
 
 
-        if self.reduction_config.timeSlize:
+        if self.config.reduction.timeSlize:
             if i>0:
                 logging.warning("    time slizing should only be used for one set of datafiles, check parameters")
             self.analyze_timeslices(i)
@@ -163,25 +165,25 @@ class AmorReduction:
 
     def analyze_unsliced(self, i):
         self.monitor = np.sum(self.dataset.data.pulses.monitor)
-        logging.warning(f'    monitor = {self.monitor:8.2f} {MONITOR_UNITS[self.experiment_config.monitorType]}')
+        logging.warning(f'    monitor = {self.monitor:8.2f} {MONITOR_UNITS[self.config.experiment.monitorType]}')
 
         proj:LZProjection = self.project_on_lz()
         try:
-            scale = self.reduction_config.scale[i]
+            scale = self.config.reduction.scale[i]
         except IndexError:
-            scale = self.reduction_config.scale[-1]
+            scale = self.config.reduction.scale[-1]
         proj.scale(scale)
 
-        if 'Rqz.ort' in self.output_config.outputFormats:
+        if 'Rqz.ort' in self.config.output.outputFormats:
             headerRqz = self.header.orso_header()
             headerRqz.data_set = f'Nr {i} : mu = {self.dataset.geometry.mu:6.3f} deg'
 
             # projection on qz-grid
             result = proj.project_on_qz()
 
-            if self.reduction_config.autoscale:
+            if self.config.reduction.autoscale:
                 if i==0:
-                    result.autoscale(self.reduction_config.autoscale)
+                    result.autoscale(self.config.reduction.autoscale)
                 else:
                     result.stitch(self.last_result)
 
@@ -196,12 +198,12 @@ class AmorReduction:
             self.last_result = result
             self.datasetsRqz.append(orso_data)
 
-            if self.output_config.plot:
+            if self.config.output.plot:
                 import matplotlib.pyplot as plt
                 # plot all reflectivity results in same graph
                 plt.figure(num=99)
-                result.plot(label=f'{self.reduction_config.fileIdentifier[i]}')
-        if 'Rlt.ort' in self.output_config.outputFormats:
+                result.plot(label=f'{self.config.reduction.fileIdentifier[i]}')
+        if 'Rlt.ort' in self.config.output.outputFormats:
             columns = [
                 fileio.Column('Qz', '1/angstrom', 'normal momentum transfer'),
                 fileio.Column('R', '', 'specular reflectivity'),
@@ -243,22 +245,22 @@ class AmorReduction:
                 self.datasetsRlt.append(orso_data)
                 j += 1
 
-            if self.output_config.plot:
+            if self.config.output.plot:
                 import matplotlib.pyplot as plt
                 plt.figure()
-                proj.plot(colorbar=True, cmap=str(self.output_config.plot_colormap))
-                plt.title(f'{self.reduction_config.fileIdentifier[i]}')
+                proj.plot(colorbar=True, cmap=str(self.config.output.plot_colormap))
+                plt.title(f'{self.config.reduction.fileIdentifier[i]}')
 
     def analyze_timeslices(self, i):
         wallTime_e = np.float64(self.dataset.data.events.wallTime)/1e9
         pulseTimeS = np.float64(self.dataset.data.pulses.time)/1e9
-        interval = self.reduction_config.timeSlize[0]
+        interval = self.config.reduction.timeSlize[0]
         try:
-            start = self.reduction_config.timeSlize[1]
+            start = self.config.reduction.timeSlize[1]
         except IndexError:
             start = 0
         try:
-            stop = self.reduction_config.timeSlize[2]
+            stop = self.config.reduction.timeSlize[2]
         except IndexError:
             stop = wallTime_e[-1]
         # make overwriting log lines possible by removing newline at the end
@@ -268,23 +270,23 @@ class AmorReduction:
         for ti, time in enumerate(np.arange(start, stop, interval)):
             slice = self.dataset.get_timeslice(time, time+interval)
             self.monitor = np.sum(slice.data.pulses.monitor)
-            logging.info(f'      {ti:<4d}  {time:6.0f}  {self.monitor:7.2f} {MONITOR_UNITS[self.experiment_config.monitorType]}')
+            logging.info(f'      {ti:<4d}  {time:6.0f}  {self.monitor:7.2f} {MONITOR_UNITS[self.config.experiment.monitorType]}')
 
             proj: LZProjection = self.project_on_lz(slice)
             try:
-                scale = self.reduction_config.scale[i]
+                scale = self.config.reduction.scale[i]
             except IndexError:
-                scale = self.reduction_config.scale[-1]
+                scale = self.config.reduction.scale[-1]
             proj.scale(scale)
 
             # projection on qz-grid
             result = proj.project_on_qz()
 
-            if self.reduction_config.autoscale:
+            if self.config.reduction.autoscale:
                 # scale every slice the same
                 if ti==0:
                     if i==0:
-                        atscale = result.autoscale(self.reduction_config.autoscale)
+                        atscale = result.autoscale(self.config.reduction.autoscale)
                     else:
                         atscale = result.stitch(self.last_result)
                 else:
@@ -303,11 +305,11 @@ class AmorReduction:
             orso_data = fileio.OrsoDataset(headerRqz, result.data_for_time(time))
             self.datasetsRqz.append(orso_data)
 
-            if self.output_config.plot:
+            if self.config.output.plot:
                 import matplotlib.pyplot as plt
                 # plot all reflectivity results in same graph
                 plt.figure(num=99)
-                result.plot(label=f'{self.reduction_config.fileIdentifier[i]} @ {time:.1f}s')
+                result.plot(label=f'{self.config.reduction.fileIdentifier[i]} @ {time:.1f}s')
 
         self.last_result = result
         # reset normal logging behavior
@@ -315,19 +317,19 @@ class AmorReduction:
         logging.info(f'      done  {min(time+interval, pulseTimeS[-1]):5.0f}')
 
     def save_Rqz(self):
-        fname = os.path.join(self.output_config.outputPath, f'{self.output_config.outputName}.Rqz.ort')
+        fname = os.path.join(self.config.output.outputPath, f'{self.config.output.outputName}.Rqz.ort')
         logging.warning(f'    {fname}')
         theSecondLine = f' {self.header.experiment.title} | {self.header.experiment.start_date} | sample {self.header.sample.name} | R(q_z)'
         fileio.save_orso(self.datasetsRqz, fname, data_separator='\n', comment=theSecondLine)
 
     def save_Rtl(self):
-        fname = os.path.join(self.output_config.outputPath, f'{self.output_config.outputName}.Rlt.ort')
+        fname = os.path.join(self.config.output.outputPath, f'{self.config.output.outputName}.Rlt.ort')
         logging.warning(f'    {fname}')
         theSecondLine = f' {self.header.experiment.title} | {self.header.experiment.start_date} | sample {self.header.sample.name} | R(lambda, theta)'
         fileio.save_orso(self.datasetsRlt, fname, data_separator='\n', comment=theSecondLine)
 
     def loadRqz(self, name):
-        fname = os.path.join(self.output_config.outputPath, name)
+        fname = os.path.join(self.config.output.outputPath, name)
         if os.path.exists(fname):
             fileName = fname
         elif os.path.exists(f'{fname}.Rqz.ort'):
@@ -340,7 +342,7 @@ class AmorReduction:
         return q_q, Sq_q, dS_q, fileName
 
     def create_normalisation_map(self, short_notation):
-        outputPath = self.output_config.outputPath
+        outputPath = self.config.output.outputPath
         normalisation_list = self.path_resolver.expand_file_list(short_notation)
         name = '_'.join(map(str, normalisation_list))
         n_path = os.path.join(outputPath, f'{name}.norm')
@@ -364,7 +366,7 @@ class AmorReduction:
                 toadd = AmorEventData(nfi)
                 self.normevent_actions(toadd)
                 reference.append(toadd)
-            self.norm = LZNormalisation(reference, self.reduction_config.normalisationMethod, self.grid)
+            self.norm = LZNormalisation(reference, self.config.reduction.normalisationMethod, self.grid)
             if reference.data.events.shape[0] > 1e6:
                 self.norm.safe(n_path, self.normevent_actions.action_hash())
 
@@ -375,33 +377,33 @@ class AmorReduction:
         if dataset is None:
             dataset=self.dataset
         proj = LZProjection.from_dataset(dataset, self.grid,
-                                         has_offspecular=(self.experiment_config.incidentAngle!=IncidentAngle.alphaF))
+                                         has_offspecular=(self.config.experiment.incidentAngle!=IncidentAngle.alphaF))
 
-        if not self.reduction_config.is_default('thetaRangeR'):
+        if not self.config.reduction.is_default('thetaRangeR'):
             t0 = dataset.geometry.nu - dataset.geometry.mu
             # adjust range based on detector center
-            thetaRange = [ti+t0 for ti in self.reduction_config.thetaRangeR]
+            thetaRange = [ti+t0 for ti in self.config.reduction.thetaRangeR]
             proj.apply_theta_mask(thetaRange)
-        elif not self.reduction_config.is_default('thetaRange'):
-            proj.apply_theta_mask(self.reduction_config.thetaRange)
+        elif not self.config.reduction.is_default('thetaRange'):
+            proj.apply_theta_mask(self.config.reduction.thetaRange)
         else:
             thetaRange = [dataset.geometry.nu - dataset.geometry.mu - dataset.geometry.div/2,
                                               dataset.geometry.nu - dataset.geometry.mu + dataset.geometry.div/2]
             proj.apply_theta_mask(thetaRange)
 
-        proj.apply_lamda_mask(self.experiment_config.lambdaRange)
+        proj.apply_lamda_mask(self.config.experiment.lambdaRange)
 
         proj.apply_norm_mask(self.norm)
 
         proj.project(dataset, self.monitor)
 
-        if self.reduction_config.normalisationMethod == NormalisationMethod.over_illuminated:
+        if self.config.reduction.normalisationMethod == NormalisationMethod.over_illuminated:
             logging.debug('      assuming an overilluminated sample and correcting for the angle of incidence')
             proj.normalize_over_illuminated(self.norm)
-        elif self.reduction_config.normalisationMethod==NormalisationMethod.under_illuminated:
+        elif self.config.reduction.normalisationMethod==NormalisationMethod.under_illuminated:
             logging.debug('      assuming an underilluminated sample and ignoring the angle of incidence')
             proj.normalize_no_footprint(self.norm)
-        elif self.reduction_config.normalisationMethod==NormalisationMethod.direct_beam:
+        elif self.config.reduction.normalisationMethod==NormalisationMethod.direct_beam:
             logging.debug('      assuming direct beam for normalisation and ignoring the angle of incidence')
             proj.normalize_no_footprint(self.norm)
         else:

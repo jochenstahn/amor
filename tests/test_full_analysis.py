@@ -75,11 +75,11 @@ class FullAmorTest(TestCase):
                 )
         config=options.EOSConfig(self.reader_config, experiment_config, reduction_config, output_config)
         # run three times to get similar timing to noslicing runs
-        reducer = reduction.AmorReduction(config)
+        reducer = reduction.ReflectivityReduction(config)
         reducer.reduce()
-        reducer = reduction.AmorReduction(config)
+        reducer = reduction.ReflectivityReduction(config)
         reducer.reduce()
-        reducer = reduction.AmorReduction(config)
+        reducer = reduction.ReflectivityReduction(config)
         reducer.reduce()
 
     def test_noslicing(self):
@@ -112,8 +112,8 @@ class FullAmorTest(TestCase):
                 outputPath='test_results',
                 )
         config=options.EOSConfig(self.reader_config, experiment_config, reduction_config, output_config)
-        reducer = reduction.AmorReduction(config)
+        reducer = reduction.ReflectivityReduction(config)
         reducer.reduce()
         # run second time to reuse norm file
-        reducer = reduction.AmorReduction(config)
+        reducer = reduction.ReflectivityReduction(config)
         reducer.reduce()
