@@ -1,10 +1,10 @@
 import argparse
 
-from typing import List
+from typing import List, Type
 from .options import ArgParsable
 
 
-def commandLineArgs(config_items: List[ArgParsable], program_name=None):
+def commandLineArgs(config_items: List[Type[ArgParsable]], program_name=None):
     """
     Process command line argument.
     The type of the default values is used for conversion and validation.

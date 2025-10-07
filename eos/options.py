@@ -201,6 +201,14 @@ class MonitorType(StrEnum):
     neutron_monitor = 'n'
     debug = 'x'
 
+MONITOR_UNITS = {
+    MonitorType.neutron_monitor: 'cnts',
+    MonitorType.proton_charge: 'mC',
+    MonitorType.time: 's',
+    MonitorType.auto: 'various',
+    MonitorType.debug: 'mC',
+    }
+
 @dataclass
 class ExperimentConfig(ArgParsable):
     chopperPhase: float = field(
@@ -581,4 +589,7 @@ class EOSConfig:
         logging.debug(f'Argument list build in EOSConfig.call_string: {mlst}')
         return  mlst
 
-            
+@dataclass
+class E2HConfig:
+    reader: ReaderConfig
+

@@ -29,7 +29,7 @@ def main():
     logging.warning('######## eos - data reduction for Amor ########')
 
     # only import heavy module if sufficient command line parameters were provided
-    from eos.reduction import ReflectivityReduction
+    from eos.reduction_reflectivity import ReflectivityReduction
     # Create reducer with these arguments
     reducer = ReflectivityReduction(config)
     # Perform actual reduction

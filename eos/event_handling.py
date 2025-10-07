@@ -77,16 +77,12 @@ class CorrectSeriesTime(EventDataAction):
 
 
 class AssociatePulseWithMonitor(EventDataAction):
-    def __init__(self, monitorType:MonitorType, lowCurrentThreshold:float):
+    def __init__(self, monitorType:MonitorType):
         self.monitorType = monitorType
-        self.lowCurrentThreshold = lowCurrentThreshold
 
     def perform_action(self, dataset: EventDatasetProtocol)->None:
         logging.debug(f'      using monitor type {self.monitorType}')
         if self.monitorType in [MonitorType.proton_charge or MonitorType.debug]:
-            if not 'wallTime' in dataset.data.events.dtype.names:
-                raise ValueError(
-                    "AssociatePulseWithMonitor requires walltTime to be extracted, please run ExtractWalltime first")
             monitorPerPulse = self.get_current_per_pulse(dataset.data.pulses.time,
                                                               dataset.data.proton_current.time,
                                                               dataset.data.proton_current.current)\
@@ -101,24 +97,11 @@ class AssociatePulseWithMonitor(EventDataAction):
             dataset.data.pulses.monitor  = 1
 
         if self.monitorType == MonitorType.debug:
+            if not 'wallTime' in dataset.data.events.dtype.names:
+                raise ValueError(
+                    "AssociatePulseWithMonitor requires walltTime for debugging, please run ExtractWalltime first")
             cpp, t_bins = np.histogram(dataset.data.events.wallTime, dataset.data.pulses.time)
             np.savetxt('tme.hst', np.vstack((dataset.data.pulses.time[:-1], cpp, dataset.data.pulses.monitor[:-1])).T)
-
-        if self.monitorType in [MonitorType.proton_charge or MonitorType.debug]:
-            self.monitor_threshold(dataset)
-
-    def monitor_threshold(self, dataset):
-        goodTimeS = dataset.data.pulses.time[dataset.data.pulses.monitor!=0]
-        filter_e = np.logical_not(np.isin(dataset.data.events.wallTime, goodTimeS))
-        dataset.data.events.mask += EVENT_BITMASKS['MonitorThreshold']*filter_e
-        logging.info(f'      low-beam (<{self.lowCurrentThreshold} mC) rejected pulses: '
-                     f'{dataset.data.pulses.monitor.shape[0]-goodTimeS.shape[0]} '
-                     f'out of {dataset.data.pulses.monitor.shape[0]}')
-        logging.info(f'          with {filter_e.sum()} events')
-        if goodTimeS.shape[0]:
-            logging.info(f'      average counts per pulse =  {dataset.data.events.shape[0]/goodTimeS.shape[0]:7.1f}')
-        else:
-            logging.info(f'      average counts per pulse = undefined')
 
     @staticmethod
     def get_current_per_pulse(pulseTimeS, currentTimeS, currents):
@@ -134,6 +117,25 @@ class AssociatePulseWithMonitor(EventDataAction):
             pulseCurrentS[i] = currents[j]
         return pulseCurrentS
 
+class FilterMonitorThreshold(EventDataAction):
+    def __init__(self, lowCurrentThreshold:float):
+        self.lowCurrentThreshold = lowCurrentThreshold
+
+    def perform_action(self, dataset: EventDatasetProtocol) ->None:
+        if not 'wallTime' in dataset.data.events.dtype.names:
+            raise ValueError(
+                    "FilterMonitorThreshold requires walltTime to be extracted, please run ExtractWalltime first")
+        goodTimeS = dataset.data.pulses.time[dataset.data.pulses.monitor!=0]
+        filter_e = np.logical_not(np.isin(dataset.data.events.wallTime, goodTimeS))
+        dataset.data.events.mask += EVENT_BITMASKS['MonitorThreshold']*filter_e
+        logging.info(f'      low-beam (<{self.lowCurrentThreshold} mC) rejected pulses: '
+                     f'{dataset.data.pulses.monitor.shape[0]-goodTimeS.shape[0]} '
+                     f'out of {dataset.data.pulses.monitor.shape[0]}')
+        logging.info(f'          with {filter_e.sum()} events')
+        if goodTimeS.shape[0]:
+            logging.info(f'      average counts per pulse =  {dataset.data.events.shape[0]/goodTimeS.shape[0]:7.1f}')
+        else:
+            logging.info(f'      average counts per pulse = undefined')
 
 class FilterStrangeTimes(EventDataAction):
     def perform_action(self, dataset: EventDatasetProtocol)->None:
