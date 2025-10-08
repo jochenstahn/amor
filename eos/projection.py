@@ -4,6 +4,7 @@ Classes used to calculate projections/binnings from event data onto given grids.
 
 import logging
 from abc import ABC, abstractmethod
+from typing import List, Tuple, Union
 
 import numpy as np
 from dataclasses import dataclass
@@ -26,7 +27,7 @@ class ProjectionInterface(ABC):
     def update_plot(self): ...
 
 @dataclass
-class ProjectedReflectivity(ProjectionInterface):
+class ProjectedReflectivity:
     R: np.ndarray
     dR: np.ndarray
     Q: np.ndarray
@@ -82,33 +83,6 @@ class ProjectedReflectivity(ProjectionInterface):
         # subtract another dataset with same q-points
         self.R -= R
         self.dR = np.sqrt(self.dR**2+dR**2)
-
-    def project(self, dataset: EventDatasetProtocol, monitor: float):
-        raise NotImplementedError("Direct projection from dataset is not yet available")
-
-    def clear(self):
-        raise NotImplementedError("Direct projection from dataset is not yet available")
-
-    def plot(self, **kwargs):
-        from matplotlib import pyplot as plt
-        self._graph = plt.errorbar(self.Q, self.R, xerr=self.dQ, yerr=self.dR, **kwargs)
-        self._graph_axis = plt.gca()
-        plt.yscale('log')
-        plt.xlabel('Q / $\\AA^{-1}$')
-        plt.ylabel('R')
-
-    def update_plot(self):
-        ln, (errx_top, errx_bot, erry_top, erry_bot), (barsx, barsy) = self._graph.lines
-
-        yerr_top = self.R+self.dR
-        yerr_bot = self.R-self.dR
-
-        errx_top.set_ydata(self.R)
-        errx_bot.set_ydata(self.R)
-        erry_top.set_ydata(yerr_top)
-        erry_bot.set_ydata(yerr_bot)
-
-        ln.set_ydata(self.R)
 
 
 class LZProjection(ProjectionInterface):
@@ -318,6 +292,7 @@ class LZProjection(ProjectionInterface):
         plt.xlim(3., 12.)
         af = self.alphaF[self.data.mask]
         plt.ylim(af.min(), af.max())
+        plt.title('Wavelength vs. Reflection Angle')
 
         self._graph_axis = plt.gca()
         plt.connect('button_press_event', self.draw_qline)
@@ -339,13 +314,56 @@ class LZProjection(ProjectionInterface):
         if event.button is plt.MouseButton.LEFT and tbm=='':
             slope = event.ydata/event.xdata
             xmax = 12.5
-            plt.plot([0, xmax], [0, slope*xmax], '-', color='grey')
-            plt.text(event.xdata, event.ydata, f'q={np.deg2rad(slope)*4.*np.pi:.3f}', backgroundcolor='white')
+            self._graph_axis.plot([0, xmax], [0, slope*xmax], '-', color='grey')
+            self._graph_axis.text(event.xdata, event.ydata, f'q={np.deg2rad(slope)*4.*np.pi:.3f}', backgroundcolor='white')
             plt.draw()
         if event.button is plt.MouseButton.RIGHT and tbm=='':
-            for art in list(plt.gca().lines)+list(plt.gca().texts):
+            for art in list(self._graph_axis.lines)+list(self._graph_axis.texts):
                 art.remove()
             plt.draw()
+
+ONLY_MAP = ['colorbar', 'cmap', 'norm']
+
+class ReflectivityProjector(ProjectionInterface):
+    lzprojection: LZProjection
+    data: ProjectedReflectivity
+    # TODO: maybe implement direct 1d projection in here
+
+    def __init__(self, lzprojection, norm):
+        self.lzprojection = lzprojection
+        self.norm = norm
+
+    def project(self, dataset: EventDatasetProtocol, monitor: float):
+        self.lzprojection.project(dataset, monitor)
+        self.lzprojection.normalize_over_illuminated(self.norm)
+        self.data = self.lzprojection.project_on_qz()
+
+    def clear(self):
+        self.lzprojection.clear()
+
+    def plot(self, **kwargs):
+        from matplotlib import pyplot as plt
+        for key in ONLY_MAP:
+            if key in kwargs: del(kwargs[key])
+
+        self._graph = plt.errorbar(self.data.Q, self.data.R, xerr=self.data.dQ, yerr=self.data.dR, **kwargs)
+        self._graph_axis = plt.gca()
+        plt.yscale('log')
+        plt.xlabel('Q / $\\AA^{-1}$')
+        plt.ylabel('R')
+
+    def update_plot(self):
+        ln, (errx_top, errx_bot, erry_top, erry_bot), (barsx, barsy) = self._graph.lines
+
+        yerr_top = self.data.R+self.data.dR
+        yerr_bot = self.data.R-self.data.dR
+
+        errx_top.set_ydata(self.data.R)
+        errx_bot.set_ydata(self.data.R)
+        erry_top.set_ydata(yerr_top)
+        erry_bot.set_ydata(yerr_bot)
+
+        ln.set_ydata(self.data.R)
 
 
 class YZProjection(ProjectionInterface):
@@ -405,6 +423,7 @@ class YZProjection(ProjectionInterface):
         plt.ylabel('Z')
         plt.xlim(self.y[0], self.y[-1])
         plt.ylim(self.z[0], self.z[-1])
+        plt.title('Horizontal Pixel vs. Vertical Pixel')
 
         self._graph_axis = plt.gca()
         plt.connect('button_press_event', self.draw_yzcross)
@@ -421,12 +440,12 @@ class YZProjection(ProjectionInterface):
         from matplotlib import pyplot as plt
         tbm = self._graph_axis.figure.canvas.manager.toolbar.mode
         if event.button is plt.MouseButton.LEFT and tbm=='':
-            plt.plot([event.xdata, event.xdata], [self.z[0], self.z[-1]], '-', color='grey')
-            plt.plot([self.y[0], self.y[-1]], [event.ydata, event.ydata], '-', color='grey')
-            plt.text(event.xdata, event.ydata, f'({event.xdata:.1f}, {event.ydata:.1f})', backgroundcolor='white')
+            self._graph_axis.plot([event.xdata, event.xdata], [self.z[0], self.z[-1]], '-', color='grey')
+            self._graph_axis.plot([self.y[0], self.y[-1]], [event.ydata, event.ydata], '-', color='grey')
+            self._graph_axis.text(event.xdata, event.ydata, f'({event.xdata:.1f}, {event.ydata:.1f})', backgroundcolor='white')
             plt.draw()
         if event.button is plt.MouseButton.RIGHT and tbm=='':
-            for art in list(plt.gca().lines)+list(plt.gca().texts):
+            for art in list(self._graph_axis.lines)+list(self._graph_axis.texts):
                 art.remove()
             plt.draw()
 
@@ -490,6 +509,7 @@ class TofZProjection(ProjectionInterface):
         plt.ylabel('Z')
         plt.xlim(self.tof[0]*1e3, self.tof[-1]*1e3)
         plt.ylim(self.z[0], self.z[-1])
+        plt.title('Time of Flight vs. Vertical Pixel')
 
         self._graph_axis = plt.gca()
         plt.connect('button_press_event', self.draw_tzcross)
@@ -506,11 +526,49 @@ class TofZProjection(ProjectionInterface):
         from matplotlib import pyplot as plt
         tbm = self._graph_axis.figure.canvas.manager.toolbar.mode
         if event.button is plt.MouseButton.LEFT and tbm=='':
-            plt.plot([event.xdata, event.xdata], [self.z[0], self.z[-1]], '-', color='grey')
-            plt.plot([self.tof[0]*1e3, self.tof[-1]*1e3], [event.ydata, event.ydata], '-', color='grey')
-            plt.text(event.xdata, event.ydata, f'({event.xdata:.2f}, {event.ydata:.1f})', backgroundcolor='white')
+            self._graph_axis.plot([event.xdata, event.xdata], [self.z[0], self.z[-1]], '-', color='grey')
+            self._graph_axis.plot([self.tof[0]*1e3, self.tof[-1]*1e3], [event.ydata, event.ydata], '-', color='grey')
+            self._graph_axis.text(event.xdata, event.ydata, f'({event.xdata:.2f}, {event.ydata:.1f})', backgroundcolor='white')
             plt.draw()
         if event.button is plt.MouseButton.RIGHT and tbm=='':
-            for art in list(plt.gca().lines)+list(plt.gca().texts):
+            for art in list(self._graph_axis.lines)+list(self._graph_axis.texts):
                 art.remove()
             plt.draw()
+
+class CombinedProjection(ProjectionInterface):
+    """
+    Allows to put multiple projections together to conveniently generate combined graphs.
+    """
+    projections: List[ProjectionInterface]
+    projection_placements: List[Union[Tuple[int, int], Tuple[int, int, int, int]]]
+    grid_size: Tuple[int, int]
+
+
+    def __init__(self, grid_rows, grid_cols, projections, projection_placements):
+        self.projections = projections
+        self.projection_placements = projection_placements
+        self.grid_size = grid_rows, grid_cols
+
+    def project(self, dataset: EventDatasetProtocol, monitor: float):
+        for pi in self.projections:
+            pi.project(dataset, monitor)
+
+    def clear(self):
+        for pi in self.projections:
+            pi.clear()
+
+    def plot(self, **kwargs):
+        from matplotlib import pyplot as plt
+        fig = plt.gcf()
+        axs = fig.add_gridspec(self.grid_size[0], self.grid_size[1])
+        self._axes = []
+        for pi, placement in zip(self.projections, self.projection_placements):
+            if len(placement) == 2:
+                ax = fig.add_subplot(axs[placement[0], placement[1]])
+            else:
+                ax = fig.add_subplot(axs[placement[0]:placement[1], placement[2]:placement[3]])
+            pi.plot(**dict(kwargs))
+
+    def update_plot(self):
+        for pi in self.projections:
+            pi.update_plot()

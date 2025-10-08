@@ -66,6 +66,30 @@ class LZNormalisation:
         self.monitor = 1.
         return self
 
+    @classmethod
+    def model(cls, grid:LZGrid) -> 'LZNormalisation':
+        # generate a normalization based on angular and wavelength distribution model
+        # TODO: add options for sample size for better absolute normalization
+        logging.warning(f'normalisation is model')
+        self = super().__new__(cls)
+        self.angle = 1.0
+        self.monitor = 4e6
+
+        lamda_l  = grid.lamda()
+        lamda_c = (lamda_l[:-1]+lamda_l[1:])/2
+
+        delta = np.rad2deg(np.arctan2(grid.z(), Detector.distance))/2.0
+        delta_c = (delta[:-1]+delta[1:])/2-delta.mean()
+
+        # approximate spectrum by Maxwell-Boltzmann and intensity by linear footprint
+        a = 3.8
+        Ilambda = np.sqrt(2./np.pi)*lamda_c**2/a**3*np.exp(-lamda_c**2/(2.*a**2))
+        Idelta = np.where(abs(delta_c)<0.75, (self.angle-delta_c), np.nan)
+
+        self.norm = 1e6*Ilambda[:, np.newaxis]*Idelta[np.newaxis, :]
+
+        return self
+
     def safe(self, filename, hash):
         with open(filename, 'wb') as fh:
             np.save(fh, hash, allow_pickle=False)

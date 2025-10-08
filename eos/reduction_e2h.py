@@ -18,7 +18,8 @@ from .normalization import LZNormalisation
 from .options import E2HConfig, E2HPlotArguments, IncidentAngle, MonitorType, E2HPlotSelection
 from . import event_handling as eh
 from .path_handling import PathResolver
-from .projection import LZProjection, ProjectionInterface, TofZProjection, YZProjection
+from .projection import CombinedProjection, LZProjection, ProjectionInterface, ReflectivityProjector, TofZProjection, \
+    YZProjection
 
 NEEDS_LAMDA = (E2HPlotSelection.All, E2HPlotSelection.LT, E2HPlotSelection.Q, E2HPlotSelection.L)
 
@@ -85,13 +86,16 @@ class E2HReduction:
         if self.config.reduction.plot in [E2HPlotSelection.All, E2HPlotSelection.LT, E2HPlotSelection.Q]:
             self.grid = LZGrid(0.01, [0.0, 0.25])
 
-        if self.config.reduction.plot in [E2HPlotSelection.LT, E2HPlotSelection.YZ, E2HPlotSelection.TZ]:
+        if self.config.reduction.plot in [E2HPlotSelection.All, E2HPlotSelection.LT, E2HPlotSelection.YZ, E2HPlotSelection.TZ]:
             self.plot_kwds['colorbar'] = True
             self.plot_kwds['cmap'] = str(self.config.reduction.plot_colormap)
 
     def reduce(self):
         if self.config.reduction.plot in [E2HPlotSelection.All, E2HPlotSelection.LT, E2HPlotSelection.Q]:
-            self.norm = LZNormalisation.unity(self.grid)
+            if self.config.reduction.normalizationModel:
+                self.norm = LZNormalisation.model(self.grid)
+            else:
+                self.norm = LZNormalisation.unity(self.grid)
 
         self.prepare_graphs()
 
@@ -123,12 +127,35 @@ class E2HReduction:
             self.projection = LZProjection(tthh, self.grid)
             if not self.config.reduction.fast:
                 self.projection.correct_gravity(last_file_header.geometry.detectorDistance)
+            self.projection.apply_lamda_mask(self.config.experiment.lambdaRange)
+            self.projection.apply_norm_mask(self.norm)
+
+        if self.config.reduction.plot==E2HPlotSelection.Q:
+            plz = LZProjection(tthh, self.grid)
+            if not self.config.reduction.fast:
+                plz.correct_gravity(last_file_header.geometry.detectorDistance)
+            plz.calculate_q()
+            plz.apply_lamda_mask(self.config.experiment.lambdaRange)
+            plz.apply_norm_mask(self.norm)
+            self.projection = ReflectivityProjector(plz, self.norm)
 
         if self.config.reduction.plot==E2HPlotSelection.YZ:
             self.projection = YZProjection()
 
         if self.config.reduction.plot==E2HPlotSelection.TZ:
             self.projection = TofZProjection(last_file_header.timing.tau, foldback=not self.config.reduction.fast)
+
+        if self.config.reduction.plot==E2HPlotSelection.All:
+            plz = LZProjection(tthh, self.grid)
+            if not self.config.reduction.fast:
+                plz.correct_gravity(last_file_header.geometry.detectorDistance)
+            plz.calculate_q()
+            plz.apply_lamda_mask(self.config.experiment.lambdaRange)
+            plz.apply_norm_mask(self.norm)
+            pr = ReflectivityProjector(plz, self.norm)
+            pyz = YZProjection()
+            self.projection = CombinedProjection(3, 2, [plz, pyz, pr],
+                                                 [(0, 2, 0, 1), (0, 2, 1, 2), (2, 3, 0, 2)])
 
     def read_data(self):
         fileName = self.file_list[self.file_index]
@@ -143,6 +170,8 @@ class E2HReduction:
     def add_data(self):
         self.monitor = self.dataset.data.pulses.monitor.sum()
         self.projection.project(self.dataset, monitor=self.monitor)
+        if self.config.reduction.plot==E2HPlotSelection.LT:
+            self.projection.normalize_over_illuminated(self.norm)
 
     def create_file_output(self):
         ...
@@ -157,7 +186,7 @@ class E2HReduction:
         return output
 
     def create_graph(self):
-        plt.title(self.create_title())
+        plt.suptitle(self.create_title())
         self.projection.plot(**self.plot_kwds)
         plt.tight_layout()
 

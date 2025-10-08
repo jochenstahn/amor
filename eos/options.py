@@ -662,6 +662,15 @@ class E2HReductionConfig(ArgParsable):
                 },
             )
 
+    normalizationModel: bool = field(
+            default=False,
+            metadata={
+                'short': 'nm',
+                'group': 'input data',
+                'help': 'use model for incoming spectrum and divergence to normalize for reflectivity',
+                },
+            )
+
     plot_colormap: PlotColormaps = field(
             default=PlotColormaps.gist_ncar,
             metadata={
