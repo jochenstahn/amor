@@ -609,6 +609,7 @@ class E2HPlotArguments(StrEnum):
 @dataclass
 class E2HReductionConfig(ArgParsable):
     fileIdentifier: str = field(
+            default='0',
             metadata={
                 'short':    'f',
                 'priority': 100,

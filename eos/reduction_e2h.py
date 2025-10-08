@@ -16,10 +16,11 @@ from .header import Header
 from .instrument import LZGrid
 from .normalization import LZNormalisation
 from .options import E2HConfig, E2HPlotArguments, IncidentAngle, MonitorType, E2HPlotSelection
-from . import event_handling as eh, event_analysis as ea
+from . import event_handling as eh
 from .path_handling import PathResolver
-from .projection import LZProjection, ProjectionInterface, YZProjection
+from .projection import LZProjection, ProjectionInterface, TofZProjection, YZProjection
 
+NEEDS_LAMDA = (E2HPlotSelection.All, E2HPlotSelection.LT, E2HPlotSelection.Q, E2HPlotSelection.L)
 
 class E2HReduction:
     config: E2HConfig
@@ -50,6 +51,9 @@ class E2HReduction:
             # live update implies plotting
             self.config.reduction.show_plot = True
 
+        if not self.config.reduction.fast or self.config.reduction.plot in NEEDS_LAMDA:
+            from . import event_analysis as ea
+
         # Actions on datasets not used for normalization
         self.event_actions = eh.ApplyPhaseOffset(self.config.experiment.chopperPhaseOffset)
         if not self.config.reduction.fast:
@@ -64,9 +68,13 @@ class E2HReduction:
             self.event_actions |= eh.FilterMonitorThreshold(self.config.experiment.lowCurrentThreshold)
         if not self.config.reduction.fast:
             self.event_actions |= eh.FilterStrangeTimes()
+            if self.config.reduction.plot==E2HPlotSelection.TZ:
+                # perform time fold-back and corrections for tof if not fast mode
+                self.event_actions |= ea.MergeFrames()
+                self.event_actions |= ea.AnalyzePixelIDs(self.config.experiment.yRange)
+                self.event_actions |= eh.TofTimeCorrection(self.config.experiment.incidentAngle==IncidentAngle.alphaF)
         # select needed actions in depenence of plots
-        if self.config.reduction.plot in [E2HPlotSelection.All, E2HPlotSelection.LT, E2HPlotSelection.Q,
-                                          E2HPlotSelection.L]:
+        if self.config.reduction.plot in NEEDS_LAMDA:
             self.event_actions |= ea.MergeFrames()
             self.event_actions |= ea.AnalyzePixelIDs(self.config.experiment.yRange)
             self.event_actions |= eh.TofTimeCorrection(self.config.experiment.incidentAngle==IncidentAngle.alphaF)
@@ -77,7 +85,7 @@ class E2HReduction:
         if self.config.reduction.plot in [E2HPlotSelection.All, E2HPlotSelection.LT, E2HPlotSelection.Q]:
             self.grid = LZGrid(0.01, [0.0, 0.25])
 
-        if self.config.reduction.plot in [E2HPlotSelection.LT, E2HPlotSelection.YZ]:
+        if self.config.reduction.plot in [E2HPlotSelection.LT, E2HPlotSelection.YZ, E2HPlotSelection.TZ]:
             self.plot_kwds['colorbar'] = True
             self.plot_kwds['cmap'] = str(self.config.reduction.plot_colormap)
 
@@ -118,6 +126,9 @@ class E2HReduction:
 
         if self.config.reduction.plot==E2HPlotSelection.YZ:
             self.projection = YZProjection()
+
+        if self.config.reduction.plot==E2HPlotSelection.TZ:
+            self.projection = TofZProjection(last_file_header.timing.tau, foldback=not self.config.reduction.fast)
 
     def read_data(self):
         fileName = self.file_list[self.file_index]

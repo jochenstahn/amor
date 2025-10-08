@@ -12,6 +12,7 @@ from eos.options import ReflectivityConfig, ReaderConfig, ExperimentConfig, Refl
 from eos.command_line import commandLineArgs
 from eos.logconfig import setup_logging, update_loglevel
 
+
 def main():
     setup_logging()
 

@@ -394,7 +394,10 @@ class YZProjection(ProjectionInterface):
         if not 'norm' in kwargs:
             kwargs['norm'] = LogNorm()
 
-        self._graph = plt.imshow(self.data.I[:, ::-1].T,  **kwargs)
+        self._graph = plt.imshow(self.data.I.T,
+                                 extent=(float(self.y[0]), float(self.y[-1]),
+                                         float(self.z[0]), float(self.z[-1])),
+                                 **kwargs)
         if cmap:
             plt.colorbar(label='I / cpm')
 
@@ -410,7 +413,7 @@ class YZProjection(ProjectionInterface):
         """
         Inline update of previous plot by just updating the data.
         """
-        self._graph.set_array(self.data.I[:, ::-1].T)
+        self._graph.set_array(self.data.I.T)
 
     def draw_yzcross(self, event):
         if event.inaxes is not self._graph_axis:
@@ -421,6 +424,91 @@ class YZProjection(ProjectionInterface):
             plt.plot([event.xdata, event.xdata], [self.z[0], self.z[-1]], '-', color='grey')
             plt.plot([self.y[0], self.y[-1]], [event.ydata, event.ydata], '-', color='grey')
             plt.text(event.xdata, event.ydata, f'({event.xdata:.1f}, {event.ydata:.1f})', backgroundcolor='white')
+            plt.draw()
+        if event.button is plt.MouseButton.RIGHT and tbm=='':
+            for art in list(plt.gca().lines)+list(plt.gca().texts):
+                art.remove()
+            plt.draw()
+
+class TofZProjection(ProjectionInterface):
+    tof: np.ndarray
+    z: np.ndarray
+
+    data: np.recarray
+    _dtype = np.dtype([
+            ('cts', np.float64),
+            ('I', np.float64),
+            ('err', np.float64),
+            ])
+
+    def __init__(self, tau, foldback=False):
+        self.z = np.arange(Detector.nBlades*Detector.nWires+1)-0.5
+        if foldback:
+            self.tof = np.arange(0, tau, 0.0005)
+        else:
+            self.tof = np.arange(0, 2*tau, 0.0005)
+        self.data = np.zeros((self.tof.shape[0]-1, self.z.shape[0]-1), dtype=self._dtype).view(np.recarray)
+        self.monitor = 0.
+
+    def project(self, dataset: EventDatasetProtocol, monitor: float):
+        detYi, detZi, detX, delta = Detector.pixelLookUp[dataset.data.events.pixelID-1].T
+
+        cts , *_ = np.histogram2d(dataset.data.events.tof, detZi, bins=(self.tof, self.z))
+        self.data.cts += cts
+        self.monitor += monitor
+
+        self.data.I = self.data.cts / self.monitor
+        self.data.err = np.sqrt(self.data.cts) / self.monitor
+
+    def clear(self):
+        self.data[:] = 0
+        self.monitor = 0.
+
+    def plot(self, **kwargs):
+        from matplotlib import pyplot as plt
+        from matplotlib.colors import LogNorm
+
+        if 'colorbar' in kwargs:
+            cmap=True
+            del(kwargs['colorbar'])
+        else:
+            cmap=False
+        if not 'aspect' in kwargs:
+            kwargs['aspect'] = 'auto'
+
+        if not 'norm' in kwargs:
+            kwargs['norm'] = LogNorm()
+
+        self._graph = plt.imshow(self.data.I.T,
+                                 extent=(float(self.tof[0])*1e3, float(self.tof[-1])*1e3,
+                                         float(self.z[0]), float(self.z[-1])),
+                                 **kwargs)
+        if cmap:
+            plt.colorbar(label='I / cpm')
+
+        plt.xlabel('Time of Flight / ms')
+        plt.ylabel('Z')
+        plt.xlim(self.tof[0]*1e3, self.tof[-1]*1e3)
+        plt.ylim(self.z[0], self.z[-1])
+
+        self._graph_axis = plt.gca()
+        plt.connect('button_press_event', self.draw_tzcross)
+
+    def update_plot(self):
+        """
+        Inline update of previous plot by just updating the data.
+        """
+        self._graph.set_array(self.data.I.T)
+
+    def draw_tzcross(self, event):
+        if event.inaxes is not self._graph_axis:
+            return
+        from matplotlib import pyplot as plt
+        tbm = self._graph_axis.figure.canvas.manager.toolbar.mode
+        if event.button is plt.MouseButton.LEFT and tbm=='':
+            plt.plot([event.xdata, event.xdata], [self.z[0], self.z[-1]], '-', color='grey')
+            plt.plot([self.tof[0]*1e3, self.tof[-1]*1e3], [event.ydata, event.ydata], '-', color='grey')
+            plt.text(event.xdata, event.ydata, f'({event.xdata:.2f}, {event.ydata:.1f})', backgroundcolor='white')
             plt.draw()
         if event.button is plt.MouseButton.RIGHT and tbm=='':
             for art in list(plt.gca().lines)+list(plt.gca().texts):

@@ -49,7 +49,8 @@ class PathResolver:
             if len(potential_file)>0:
                 path = os.path.dirname(potential_file[0])
             else:
-                raise FileNotFoundError(f'# ERROR: the file {fileName} can not be found in {self.rawPath}')
+                raise FileNotFoundError(f'# ERROR: the file {fileName} can not be found '
+                                        f'in {self.rawPath+["/home/amor/data"]}')
         return os.path.join(path, fileName)
 
     def search_latest(self, number):
@@ -72,4 +73,10 @@ class PathResolver:
         possible_files += glob(f'/home/amor/data/{self.year}/*/amor{self.year}n??????.hdf')
         possible_indices = list(set([int(os.path.basename(fi)[9:15]) for fi in possible_files]))
         possible_indices.sort()
-        return possible_indices[number-1]
+        try:
+            return possible_indices[number-1]
+        except IndexError:
+            raise FileNotFoundError(f'# Could not find suitable file for relative index {number} '
+                                    f'in {self.rawPath+["/home/amor/data"]}, '
+                                    f'possible indices {possible_indices}')
+
