@@ -275,15 +275,14 @@ class LZProjection(ProjectionInterface):
         else:
             cmap=False
 
+        if not 'norm' in kwargs:
+            kwargs['norm'] = LogNorm()
+
         if self.is_normalized:
-            if not 'norm' in kwargs:
-                kwargs['norm'] = LogNorm(2e-3, 2.0)
             self._graph = plt.pcolormesh(self.lamda, self.alphaF, self.data.ref, **kwargs)
             if cmap:
                 plt.colorbar(label='R')
         else:
-            if not 'norm' in kwargs:
-                kwargs['norm'] = LogNorm()
             self._graph = plt.pcolormesh(self.lamda, self.alphaF, self.data.I, **kwargs)
             if cmap:
                 plt.colorbar(label='I / cpm')
@@ -348,20 +347,23 @@ class ReflectivityProjector(ProjectionInterface):
 
         self._graph = plt.errorbar(self.data.Q, self.data.R, xerr=self.data.dQ, yerr=self.data.dR, **kwargs)
         self._graph_axis = plt.gca()
+        plt.title('Reflectivity (might be improperly normalized)')
         plt.yscale('log')
         plt.xlabel('Q / $\\AA^{-1}$')
         plt.ylabel('R')
 
     def update_plot(self):
-        ln, (errx_top, errx_bot, erry_top, erry_bot), (barsx, barsy) = self._graph.lines
+        ln, _, (barsx, barsy) = self._graph
 
         yerr_top = self.data.R+self.data.dR
         yerr_bot = self.data.R-self.data.dR
+        xerr_top = self.data.Q+self.data.dQ
+        xerr_bot = self.data.Q-self.data.dQ
 
-        errx_top.set_ydata(self.data.R)
-        errx_bot.set_ydata(self.data.R)
-        erry_top.set_ydata(yerr_top)
-        erry_bot.set_ydata(yerr_bot)
+        new_segments_x = [np.array([[xt, y], [xb, y]]) for xt, xb, y in zip(xerr_top, xerr_bot, self.data.R)]
+        new_segments_y = [np.array([[x, yt], [x, yb]]) for x, yt, yb in zip(self.data.Q, yerr_top, yerr_bot)]
+        barsx.set_segments(new_segments_x)
+        barsy.set_segments(new_segments_y)
 
         ln.set_ydata(self.data.R)
 
@@ -561,6 +563,8 @@ class CombinedProjection(ProjectionInterface):
         from matplotlib import pyplot as plt
         fig = plt.gcf()
         axs = fig.add_gridspec(self.grid_size[0], self.grid_size[1])
+        # axs = fig.add_gridspec(self.grid_size[0]+1, self.grid_size[1],
+        #                        height_ratios=[1.0 for i in range(self.grid_size[0])]+[0.2])
         self._axes = []
         for pi, placement in zip(self.projections, self.projection_placements):
             if len(placement) == 2:
@@ -568,7 +572,15 @@ class CombinedProjection(ProjectionInterface):
             else:
                 ax = fig.add_subplot(axs[placement[0]:placement[1], placement[2]:placement[3]])
             pi.plot(**dict(kwargs))
+        # Create the RangeSlider
+        # from matplotlib.widgets import RangeSlider
+        # slider_ax = fig.add_subplot(axs[self.grid_size[0], :])
+        # self._slider = RangeSlider(slider_ax, "Plot Range", 0., 1., valinit=(0., 1.))
+        # self._slider.on_changed(self.update_range)
 
     def update_plot(self):
         for pi in self.projections:
             pi.update_plot()
+
+    # def update_range(self, event):
+    #     ...

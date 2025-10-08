@@ -55,15 +55,15 @@ class AmorHeader:
             self.hdf.close()
         del(self.hdf)
 
-    def _replace_if_missing(self, key, nicos_key, dtype=float):
+    def _replace_if_missing(self, key, nicos_key, dtype=float, suffix=''):
         try:
             return dtype(self.hdf[f'/entry1/Amor/{key}'][0])
         except(KeyError, IndexError):
             if NICOS_CACHE_DIR:
                 try:
-                    logging.warning(f"     using parameter {nicos_key} from nicos cache")
+                    logging.info(f"     using parameter {nicos_key} from nicos cache")
                     year_date = self.fileDate.strftime('%Y')
-                    call = f'{GREP} {NICOS_CACHE_DIR}nicos-{nicos_key}/{year_date}'
+                    call = f'{GREP} {NICOS_CACHE_DIR}nicos-{nicos_key}/{year_date}{suffix}'
                     value = str(subprocess.getoutput(call)).split('\t')[-1]
                     return dtype(value)
                 except Exception:
@@ -152,7 +152,7 @@ class AmorHeader:
                                      chopperSeparation, detectorDistance, chopperDetectorDistance)
         self.timing = AmorTiming(ch1TriggerPhase, ch2TriggerPhase, chopperSpeed, chopperPhase, tau)
 
-        polarizationConfigLabel = self._replace_if_missing('polarization/configuration/average_value', 'polarization_config_label', int)
+        polarizationConfigLabel = self._replace_if_missing('polarization/configuration/average_value', 'polarization_config_label', int, suffix='/*')
         polarizationConfig = fileio.Polarization(polarizationConfigs[polarizationConfigLabel])
         logging.debug(f'      polarization configuration: {polarizationConfig} (index {polarizationConfigLabel})')
 

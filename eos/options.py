@@ -605,6 +605,7 @@ class E2HPlotArguments(StrEnum):
     Default = 'def'
     OutputFile = 'file'
     Logarithmic = 'log'
+    Linear = 'lin'
 
 @dataclass
 class E2HReductionConfig(ArgParsable):
@@ -677,6 +678,14 @@ class E2HReductionConfig(ArgParsable):
                 'short': 'pcmap',
                 'group': 'output',
                 'help': 'matplotlib colormap used in lambda-theta graphs when plotting',
+                },
+            )
+
+    max_events: int = field(
+            default = 10_000_000,
+            metadata={
+                'group': 'input data',
+                'help':  'maximum number of events read at once',
                 },
             )
 

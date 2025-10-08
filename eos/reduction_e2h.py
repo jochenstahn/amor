@@ -89,6 +89,8 @@ class E2HReduction:
         if self.config.reduction.plot in [E2HPlotSelection.All, E2HPlotSelection.LT, E2HPlotSelection.YZ, E2HPlotSelection.TZ]:
             self.plot_kwds['colorbar'] = True
             self.plot_kwds['cmap'] = str(self.config.reduction.plot_colormap)
+            if self.config.reduction.plotArgs==E2HPlotArguments.Linear:
+                self.plot_kwds['norm'] = None
 
     def reduce(self):
         if self.config.reduction.plot in [E2HPlotSelection.All, E2HPlotSelection.LT, E2HPlotSelection.Q]:
@@ -159,8 +161,9 @@ class E2HReduction:
 
     def read_data(self):
         fileName = self.file_list[self.file_index]
-        self.file_index += 1
-        self.dataset = AmorEventData(fileName)
+        self.dataset = AmorEventData(fileName, max_events=self.config.reduction.max_events)
+        if self.dataset.EOF or fileName==self.file_list[-1]:
+            self.file_index += 1
         self.event_actions(self.dataset)
         self.dataset.update_header(self.header)
 
@@ -179,16 +182,16 @@ class E2HReduction:
     def create_title(self):
         output = "Events to Histogram - "
         output += ",".join(["#"+os.path.basename(fi)[9:15].lstrip('0') for fi in self.file_list])
-        output += f"\n$\\mu$={self.dataset.geometry.mu:.2f}"
-        output += f" $\\nu$={self.dataset.geometry.nu:.2f}"
+        output += f" ($\\mu$={self.dataset.geometry.mu:.2f} ;"
+        output += f" $\\nu$={self.dataset.geometry.nu:.2f})"
         if self.config.reduction.update:
-            output += f"\n at "+datetime.now().strftime("%m/%d/%Y %I:%M:%S")
+            output += f"\n at "+datetime.now().strftime("%m/%d/%Y %H:%M:%S")
         return output
 
     def create_graph(self):
         plt.suptitle(self.create_title())
         self.projection.plot(**self.plot_kwds)
-        plt.tight_layout()
+        plt.tight_layout(pad=0.5)
 
     def replace_dataset(self, latest):
         new_files = self.path_resolver.resolve(f'{latest}')
@@ -212,12 +215,14 @@ class E2HReduction:
             if latest>current:
                 self.replace_dataset(latest)
                 return
-        if os.path.getmtime(self.file_list[-1])<=self._last_mtime:
+        # if all events were read last time, only load more if file was modified
+        if self.dataset.EOF and os.path.getmtime(self.file_list[-1])<=self._last_mtime:
             return
 
         self._last_mtime = os.path.getmtime(self.file_list[-1])
         try:
-            update_data = AmorEventData(self.file_list[-1], self.dataset.last_index+1)
+            update_data = AmorEventData(self.file_list[-1], self.dataset.last_index+1,
+                                        max_events=self.config.reduction.max_events)
         except EOFError:
             return
         logging.info("    updating with new data")
@@ -228,5 +233,5 @@ class E2HReduction:
         self.projection.project(update_data, self.monitor)
 
         self.projection.update_plot()
-        plt.title(self.create_title())
+        plt.suptitle(self.create_title())
         plt.draw()
