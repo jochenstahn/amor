@@ -537,6 +537,56 @@ class TofZProjection(ProjectionInterface):
                 art.remove()
             plt.draw()
 
+class TofProjection(ProjectionInterface):
+    tof: np.ndarray
+
+    data: np.recarray
+    _dtype = np.dtype([
+            ('cts', np.float64),
+            ('I', np.float64),
+            ('err', np.float64),
+            ])
+
+    def __init__(self, tau, foldback=False):
+        if foldback:
+            self.tof = np.arange(0, tau, 0.0005)
+        else:
+            self.tof = np.arange(0, 2*tau, 0.0005)
+        self.data = np.zeros(self.tof.shape[0]-1, dtype=self._dtype).view(np.recarray)
+        self.monitor = 0.
+
+    def project(self, dataset: EventDatasetProtocol, monitor: float):
+        cts , *_ = np.histogram(dataset.data.events.tof, bins=self.tof)
+        self.data.cts += cts
+        self.monitor += monitor
+
+        self.data.I = self.data.cts / self.monitor
+        self.data.err = np.sqrt(self.data.cts) / self.monitor
+
+    def clear(self):
+        self.data[:] = 0
+        self.monitor = 0.
+
+    def plot(self, **kwargs):
+        from matplotlib import pyplot as plt
+        for key in ONLY_MAP:
+            if key in kwargs: del(kwargs[key])
+
+
+        self._graph = plt.plot(self.tof[:-1]*1e3, self.data.I, **kwargs)
+
+        plt.xlabel('Time of Flight / ms')
+        plt.ylabel('I / cpm')
+        plt.xlim(self.tof[0]*1e3, self.tof[-1]*1e3)
+        plt.title('Time of Flight')
+
+    def update_plot(self):
+        """
+        Inline update of previous plot by just updating the data.
+        """
+        self._graph[0].set_ydata(self.data.I.T)
+
+
 class CombinedProjection(ProjectionInterface):
     """
     Allows to put multiple projections together to conveniently generate combined graphs.

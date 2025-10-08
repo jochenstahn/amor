@@ -18,7 +18,8 @@ from .normalization import LZNormalisation
 from .options import E2HConfig, E2HPlotArguments, IncidentAngle, MonitorType, E2HPlotSelection
 from . import event_handling as eh
 from .path_handling import PathResolver
-from .projection import CombinedProjection, LZProjection, ProjectionInterface, ReflectivityProjector, TofZProjection, \
+from .projection import CombinedProjection, LZProjection, ProjectionInterface, ReflectivityProjector, TofProjection, \
+    TofZProjection, \
     YZProjection
 
 NEEDS_LAMDA = (E2HPlotSelection.All, E2HPlotSelection.LT, E2HPlotSelection.Q, E2HPlotSelection.L)
@@ -146,6 +147,9 @@ class E2HReduction:
 
         if self.config.reduction.plot==E2HPlotSelection.TZ:
             self.projection = TofZProjection(last_file_header.timing.tau, foldback=not self.config.reduction.fast)
+
+        if self.config.reduction.plot==E2HPlotSelection.ToF:
+            self.projection = TofProjection(last_file_header.timing.tau, foldback=not self.config.reduction.fast)
 
         if self.config.reduction.plot==E2HPlotSelection.All:
             plz = LZProjection(tthh, self.grid)
