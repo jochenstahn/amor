@@ -18,7 +18,7 @@ from .normalization import LZNormalisation
 from .options import E2HConfig, E2HPlotArguments, IncidentAngle, MonitorType, E2HPlotSelection
 from . import event_handling as eh, event_analysis as ea
 from .path_handling import PathResolver
-from .projection import LZProjection, ProjectionInterface
+from .projection import LZProjection, ProjectionInterface, YZProjection
 
 
 class E2HReduction:
@@ -27,6 +27,7 @@ class E2HReduction:
     event_actions: eh.EventDataAction
 
     _last_mtime = 0.
+    projection: ProjectionInterface
 
     def __init__(self, config: E2HConfig):
         self.config = config
@@ -76,12 +77,13 @@ class E2HReduction:
         if self.config.reduction.plot in [E2HPlotSelection.All, E2HPlotSelection.LT, E2HPlotSelection.Q]:
             self.grid = LZGrid(0.01, [0.0, 0.25])
 
-        if self.config.reduction.plot==E2HPlotSelection.LT:
+        if self.config.reduction.plot in [E2HPlotSelection.LT, E2HPlotSelection.YZ]:
             self.plot_kwds['colorbar'] = True
             self.plot_kwds['cmap'] = str(self.config.reduction.plot_colormap)
 
     def reduce(self):
-        self.norm = LZNormalisation.unity(self.grid)
+        if self.config.reduction.plot in [E2HPlotSelection.All, E2HPlotSelection.LT, E2HPlotSelection.Q]:
+            self.norm = LZNormalisation.unity(self.grid)
 
         self.prepare_graphs()
 
@@ -94,7 +96,8 @@ class E2HReduction:
         if self.config.reduction.plotArgs!=E2HPlotArguments.OutputFile or self.config.reduction.show_plot:
             self.create_graph()
 
-        if self.config.reduction.plotArgs==E2HPlotArguments.Default:
+        if self.config.reduction.plotArgs==E2HPlotArguments.Default and not self.config.reduction.update:
+            # safe to image file if not auto-updating graph
             plt.savefig(f'e2h_{self.config.reduction.plot}.png', dpi=300)
         if self.config.reduction.update:
             self.timer = self.fig.canvas.new_timer(1000)
@@ -112,6 +115,9 @@ class E2HReduction:
             self.projection = LZProjection(tthh, self.grid)
             if not self.config.reduction.fast:
                 self.projection.correct_gravity(last_file_header.geometry.detectorDistance)
+
+        if self.config.reduction.plot==E2HPlotSelection.YZ:
+            self.projection = YZProjection()
 
     def read_data(self):
         fileName = self.file_list[self.file_index]
@@ -143,23 +149,13 @@ class E2HReduction:
         plt.title(self.create_title())
         self.projection.plot(**self.plot_kwds)
         plt.tight_layout()
-        if self.config.reduction.plot==E2HPlotSelection.LT:
-            plt.connect('button_press_event', self.draw_qline)
-
-    def draw_qline(self, event):
-        if event.button is plt.MouseButton.LEFT and self.fig.canvas.manager.toolbar.mode=='':
-            slope = event.ydata/event.xdata
-            xmax = 12.5
-            plt.plot([0, xmax], [0, slope*xmax], '-', color='grey')
-            plt.text(event.xdata, event.ydata, f'q={np.deg2rad(slope)*4.*np.pi:.3f}', backgroundcolor='white')
-            plt.draw()
-        if event.button is plt.MouseButton.RIGHT and self.fig.canvas.manager.toolbar.mode=='':
-            for art in list(plt.gca().lines)+list(plt.gca().texts):
-                art.remove()
-            plt.draw()
 
     def replace_dataset(self, latest):
-        self.file_list = self.path_resolver.resolve(f'{latest}')
+        new_files = self.path_resolver.resolve(f'{latest}')
+        if not os.path.exists(new_files[-1]):
+            return
+        logging.warning(f"Preceding to next file {latest}")
+        self.file_list = new_files
         self.file_index = 0
         self.read_data()
         self.projection.clear()
@@ -168,6 +164,7 @@ class E2HReduction:
         self.create_graph()
 
     def update(self):
+        logging.debug("    check for update")
         if self.config.reduction.fileIdentifier=='0':
             # if latest file was choosen, check if new one available and switch to it
             current = int(os.path.basename(self.file_list[-1])[9:15])
@@ -183,7 +180,7 @@ class E2HReduction:
             update_data = AmorEventData(self.file_list[-1], self.dataset.last_index+1)
         except EOFError:
             return
-
+        logging.info("    updating with new data")
 
         self.event_actions(update_data)
         self.dataset=update_data

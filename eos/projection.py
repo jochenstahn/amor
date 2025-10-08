@@ -3,7 +3,7 @@ Classes used to calculate projections/binnings from event data onto given grids.
 """
 
 import logging
-from typing import Protocol
+from abc import ABC, abstractmethod
 
 import numpy as np
 from dataclasses import dataclass
@@ -12,8 +12,21 @@ from .event_data_types import EventDatasetProtocol
 from .instrument import Detector, LZGrid
 from .normalization import LZNormalisation
 
+class ProjectionInterface(ABC):
+    @abstractmethod
+    def project(self, dataset: EventDatasetProtocol, monitor: float): ...
+
+    @abstractmethod
+    def clear(self): ...
+
+    @abstractmethod
+    def plot(self, **kwargs): ...
+
+    @abstractmethod
+    def update_plot(self): ...
+
 @dataclass
-class ProjectedReflectivity:
+class ProjectedReflectivity(ProjectionInterface):
     R: np.ndarray
     dR: np.ndarray
     Q: np.ndarray
@@ -70,26 +83,51 @@ class ProjectedReflectivity:
         self.R -= R
         self.dR = np.sqrt(self.dR**2+dR**2)
 
+    def project(self, dataset: EventDatasetProtocol, monitor: float):
+        raise NotImplementedError("Direct projection from dataset is not yet available")
+
+    def clear(self):
+        raise NotImplementedError("Direct projection from dataset is not yet available")
+
     def plot(self, **kwargs):
         from matplotlib import pyplot as plt
-        plt.errorbar(self.Q, self.R, xerr=self.dQ, yerr=self.dR, **kwargs)
+        self._graph = plt.errorbar(self.Q, self.R, xerr=self.dQ, yerr=self.dR, **kwargs)
+        self._graph_axis = plt.gca()
         plt.yscale('log')
         plt.xlabel('Q / $\\AA^{-1}$')
         plt.ylabel('R')
 
-class ProjectionInterface(Protocol):
-    def project(self, dataset: EventDatasetProtocol, monitor: float): ...
-    def clear(self): ...
-    def plot(self, **kwargs): ...
-    def update_plot(self): ...
+    def update_plot(self):
+        ln, (errx_top, errx_bot, erry_top, erry_bot), (barsx, barsy) = self._graph.lines
 
-class LZProjection:
+        yerr_top = self.R+self.dR
+        yerr_bot = self.R-self.dR
+
+        errx_top.set_ydata(self.R)
+        errx_bot.set_ydata(self.R)
+        erry_top.set_ydata(yerr_top)
+        erry_bot.set_ydata(yerr_bot)
+
+        ln.set_ydata(self.R)
+
+
+class LZProjection(ProjectionInterface):
     grid: LZGrid
     lamda: np.ndarray
     alphaF: np.ndarray
     is_normalized: bool
 
     data: np.recarray
+    _dtype = np.dtype([
+            ('I', np.float64),
+            ('mask', bool),
+            ('ref', np.float64),
+            ('err', np.float64),
+            ('res', np.float64),
+            ('qz', np.float64),
+            ('qx', np.float64),
+            ('norm', np.float64),
+            ])
 
     def __init__(self, tthh: float, grid: LZGrid):
         self.grid = grid
@@ -103,16 +141,7 @@ class LZProjection:
 
         self.lamda  = lz_shape*lamda_c[:, np.newaxis]
         self.alphaF = lz_shape*alphaF_z[np.newaxis, :]
-        self.data = np.zeros(self.alphaF.shape, dtype=[
-            ('I', np.float64),
-            ('mask', bool),
-            ('ref', np.float64),
-            ('err', np.float64),
-            ('res', np.float64),
-            ('qz', np.float64),
-            ('qx', np.float64),
-            ('norm', np.float64),
-            ]).view(np.recarray)
+        self.data = np.zeros(self.alphaF.shape, dtype=self._dtype).view(np.recarray)
         self.data.mask = True
         self.monitor = 0.
 
@@ -185,6 +214,7 @@ class LZProjection:
         # empty data
         self.data[:] = 0
         self.data.mask = True
+        self.monitor = 0.
 
     @property
     def I(self):
@@ -261,50 +291,6 @@ class LZProjection:
 
         return ProjectedReflectivity(R_q, dR_q, (q_q[1:]+q_q[:-1])/2., dq_q)
 
-    ############## potential speedup not used right now, needs to be tested ####################
-    @classmethod
-    def histogram2d_lz(cls, lamda_e, detZ_e, bins):
-        """
-        Perform binning operation equivalent to numpy bin2d for the sepcial case
-        of the second dimension using integer positions (pre-defined pixels).
-        Based on the devide_bin algorithm below.
-        """
-        dimension = bins[1].shape[0]-1
-        if not (np.array(bins[1])==np.arange(dimension+1)).all():
-            raise ValueError("histogram2d_lz requires second bin dimension to be contigous integer range")
-        binning = cls.devide_bin(lamda_e, detZ_e.astype(np.int64), bins[0], dimension)
-        return np.array(binning), bins[0], bins[1]
-
-    @classmethod
-    def devide_bin(cls, lambda_e, position_e, lamda_edges, dimension):
-        '''
-        Use a divide and conquer strategy to bin the data. For the actual binning the
-        numpy bincount function is used, as it is much faster than histogram for
-        counting of integer values.
-
-        :param lambda_e: Array of wavelength for each event
-        :param position_e: Array of positional indices for each event
-        :param lamda_edges: The edges of bins to be used for the histogram
-        :param dimension: position number of buckets in output arrray
-
-        :return: 2D list of dimensions (lambda, x) of counts
-        '''
-        if len(lambda_e)==0:
-            # no more events in range, return empty bins
-            return [np.zeros(dimension, dtype=np.int64).tolist()]*(len(lamda_edges)-1)
-        if len(lamda_edges)==2:
-            # deepest recursion reached, all items should be within the two ToF edges
-            return [np.bincount(position_e, minlength=dimension).tolist()]
-        # split all events into two time of flight regions
-        split_idx = len(lamda_edges)//2
-        left_region = lambda_e<lamda_edges[split_idx]
-        left_list = cls.devide_bin(lambda_e[left_region], position_e[left_region],
-                                             lamda_edges[:split_idx+1], dimension)
-        right_region = np.logical_not(left_region)
-        right_list = cls.devide_bin(lambda_e[right_region], position_e[right_region],
-                                              lamda_edges[split_idx:], dimension)
-        return left_list+right_list
-
     def plot(self, **kwargs):
         from matplotlib import pyplot as plt
         from matplotlib.colors import LogNorm
@@ -329,12 +315,114 @@ class LZProjection:
                 plt.colorbar(label='I / cpm')
         plt.xlabel('$\\lambda$ / $\\AA$')
         plt.ylabel('$\\Theta$ / °')
+        plt.xlim(3., 12.)
+        af = self.alphaF[self.data.mask]
+        plt.ylim(af.min(), af.max())
+
+        self._graph_axis = plt.gca()
+        plt.connect('button_press_event', self.draw_qline)
 
     def update_plot(self):
         """
-        Inline update of last plot by just updating the data.
+        Inline update of previous plot by just updating the data.
         """
         if self.is_normalized:
             self._graph.set_array(self.data.ref)
         else:
             self._graph.set_array(self.data.I)
+
+    def draw_qline(self, event):
+        if event.inaxes is not self._graph_axis:
+            return
+        from matplotlib import pyplot as plt
+        tbm = self._graph_axis.figure.canvas.manager.toolbar.mode
+        if event.button is plt.MouseButton.LEFT and tbm=='':
+            slope = event.ydata/event.xdata
+            xmax = 12.5
+            plt.plot([0, xmax], [0, slope*xmax], '-', color='grey')
+            plt.text(event.xdata, event.ydata, f'q={np.deg2rad(slope)*4.*np.pi:.3f}', backgroundcolor='white')
+            plt.draw()
+        if event.button is plt.MouseButton.RIGHT and tbm=='':
+            for art in list(plt.gca().lines)+list(plt.gca().texts):
+                art.remove()
+            plt.draw()
+
+
+class YZProjection(ProjectionInterface):
+    y: np.ndarray
+    z: np.ndarray
+
+    data: np.recarray
+    _dtype = np.dtype([
+            ('cts', np.float64),
+            ('I', np.float64),
+            ('err', np.float64),
+            ])
+
+    def __init__(self):
+        self.z = np.arange(Detector.nBlades*Detector.nWires+1)-0.5
+        self.y = np.arange(Detector.nStripes+1)-0.5
+        self.data = np.zeros((self.y.shape[0]-1, self.z.shape[0]-1), dtype=self._dtype).view(np.recarray)
+        self.monitor = 0.
+
+    def project(self, dataset: EventDatasetProtocol, monitor: float):
+        detYi, detZi, detX, delta = Detector.pixelLookUp[dataset.data.events.pixelID-1].T
+
+        cts , *_ = np.histogram2d(detYi, detZi, bins=(self.y, self.z))
+        self.data.cts += cts
+        self.monitor += monitor
+
+        self.data.I = self.data.cts / self.monitor
+        self.data.err = np.sqrt(self.data.cts) / self.monitor
+
+    def clear(self):
+        self.data[:] = 0
+        self.monitor = 0.
+
+    def plot(self, **kwargs):
+        from matplotlib import pyplot as plt
+        from matplotlib.colors import LogNorm
+
+        if 'colorbar' in kwargs:
+            cmap=True
+            del(kwargs['colorbar'])
+        else:
+            cmap=False
+        if not 'aspect' in kwargs:
+            kwargs['aspect'] = 'auto'
+
+        if not 'norm' in kwargs:
+            kwargs['norm'] = LogNorm()
+
+        self._graph = plt.imshow(self.data.I[:, ::-1].T,  **kwargs)
+        if cmap:
+            plt.colorbar(label='I / cpm')
+
+        plt.xlabel('Y')
+        plt.ylabel('Z')
+        plt.xlim(self.y[0], self.y[-1])
+        plt.ylim(self.z[0], self.z[-1])
+
+        self._graph_axis = plt.gca()
+        plt.connect('button_press_event', self.draw_yzcross)
+
+    def update_plot(self):
+        """
+        Inline update of previous plot by just updating the data.
+        """
+        self._graph.set_array(self.data.I[:, ::-1].T)
+
+    def draw_yzcross(self, event):
+        if event.inaxes is not self._graph_axis:
+            return
+        from matplotlib import pyplot as plt
+        tbm = self._graph_axis.figure.canvas.manager.toolbar.mode
+        if event.button is plt.MouseButton.LEFT and tbm=='':
+            plt.plot([event.xdata, event.xdata], [self.z[0], self.z[-1]], '-', color='grey')
+            plt.plot([self.y[0], self.y[-1]], [event.ydata, event.ydata], '-', color='grey')
+            plt.text(event.xdata, event.ydata, f'({event.xdata:.1f}, {event.ydata:.1f})', backgroundcolor='white')
+            plt.draw()
+        if event.button is plt.MouseButton.RIGHT and tbm=='':
+            for art in list(plt.gca().lines)+list(plt.gca().texts):
+                art.remove()
+            plt.draw()

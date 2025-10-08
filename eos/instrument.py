@@ -99,6 +99,7 @@ class LZGrid:
 
     @cache
     def z(self):
+        # TODO: shouldn't this be -0.5 to be the edges of each pixel?
         return np.arange(Detector.nBlades*Detector.nWires+1)
 
     @cache
