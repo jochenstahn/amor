@@ -663,6 +663,52 @@ class TofProjection(ProjectionInterface):
         """
         self._graph[0].set_ydata(self.data.I.T)
 
+class LProjection(ProjectionInterface):
+    lamda: np.ndarray
+
+    data: np.recarray
+    _dtype = np.dtype([
+            ('cts', np.float64),
+            ('I', np.float64),
+            ('err', np.float64),
+            ])
+
+    def __init__(self):
+        self.lamda = np.linspace(3.0, 12.0, 91)
+        self.data = np.zeros(self.lamda.shape[0]-1, dtype=self._dtype).view(np.recarray)
+        self.monitor = 0.
+
+    def project(self, dataset: EventDatasetProtocol, monitor: float):
+        cts , *_ = np.histogram(dataset.data.events.lamda, bins=self.lamda)
+        self.data.cts += cts
+        self.monitor += monitor
+
+        self.data.I = self.data.cts / self.monitor
+        self.data.err = np.sqrt(self.data.cts) / self.monitor
+
+    def clear(self):
+        self.data[:] = 0
+        self.monitor = 0.
+
+    def plot(self, **kwargs):
+        from matplotlib import pyplot as plt
+        for key in ONLY_MAP:
+            if key in kwargs: del(kwargs[key])
+
+
+        self._graph = plt.plot(self.lamda[:-1], self.data.I, **kwargs)
+
+        plt.xlabel('Wavelength / Angstrom')
+        plt.ylabel('I / cpm')
+        plt.xlim(self.lamda[0], self.lamda[-1])
+        plt.title('Wavelength')
+
+    def update_plot(self):
+        """
+        Inline update of previous plot by just updating the data.
+        """
+        self._graph[0].set_ydata(self.data.I.T)
+
 
 class CombinedProjection(ProjectionInterface):
     """

@@ -19,7 +19,8 @@ from .normalization import LZNormalisation
 from .options import E2HConfig, E2HPlotArguments, IncidentAngle, MonitorType, E2HPlotSelection
 from . import event_handling as eh
 from .path_handling import PathResolver
-from .projection import CombinedProjection, LZProjection, ProjectionInterface, ReflectivityProjector, TofProjection, \
+from .projection import CombinedProjection, LProjection, LZProjection, ProjectionInterface, ReflectivityProjector, \
+    TofProjection, \
     TofZProjection, \
     YTProjection, YZProjection
 
@@ -90,7 +91,9 @@ class E2HReduction:
         if self.config.reduction.plot in [E2HPlotSelection.All, E2HPlotSelection.LT, E2HPlotSelection.Q]:
             self.grid = LZGrid(0.01, [0.0, 0.25])
 
-        if self.config.reduction.plot in [E2HPlotSelection.All, E2HPlotSelection.LT, E2HPlotSelection.YZ, E2HPlotSelection.YT]:
+        if self.config.reduction.plot in [E2HPlotSelection.All, E2HPlotSelection.LT,
+                                          E2HPlotSelection.YZ, E2HPlotSelection.YT,
+                                          E2HPlotSelection.TZ]:
             self.plot_kwds['colorbar'] = True
             self.plot_kwds['cmap'] = str(self.config.reduction.plot_colormap)
             if self.config.reduction.plotArgs==E2HPlotArguments.Linear:
@@ -166,6 +169,9 @@ class E2HReduction:
 
         if self.config.reduction.plot==E2HPlotSelection.YT:
             self.projection = YTProjection(tthh)
+
+        if self.config.reduction.plot==E2HPlotSelection.L:
+            self.projection = LProjection()
 
         if self.config.reduction.plot==E2HPlotSelection.TZ:
             self.projection = TofZProjection(last_file_header.timing.tau, foldback=not self.config.reduction.fast)
