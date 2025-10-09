@@ -422,6 +422,7 @@ class PlotColormaps(StrEnum):
     inferno = "inferno"
     gist_rainbow = "gist_rainbow"
     nipy_spectral = "nipy_spectral"
+    jochen_deluxe = "jochen_deluxe"
 
 @dataclass
 class ReflectivityOutputConfig(ArgParsable):
@@ -458,7 +459,7 @@ class ReflectivityOutputConfig(ArgParsable):
             )
 
     plot_colormap: PlotColormaps = field(
-            default=PlotColormaps.gist_ncar,
+            default=PlotColormaps.jochen_deluxe,
             metadata={
                 'short': 'pcmap',
                 'group': 'output',
@@ -594,6 +595,7 @@ class E2HPlotSelection(StrEnum):
     All = 'all'
     YZ = 'Iyz'
     LT = 'Ilt'
+    YT = 'Iyt'
     TZ = 'Itz'
     Q = 'Iq'
     L = 'Il'
@@ -673,7 +675,7 @@ class E2HReductionConfig(ArgParsable):
             )
 
     plot_colormap: PlotColormaps = field(
-            default=PlotColormaps.gist_ncar,
+            default=PlotColormaps.jochen_deluxe,
             metadata={
                 'short': 'pcmap',
                 'group': 'output',
@@ -689,6 +691,14 @@ class E2HReductionConfig(ArgParsable):
                 },
             )
 
+    thetaRangeR: Tuple[float, float] = field(
+            default_factory=lambda: [-0.75, 0.75],
+            metadata={
+                'short': 'T',
+                'group': 'region of interest',
+                'help': 'theta region of interest w.r.t. beam center',
+                },
+            )
 
 @dataclass
 class E2HConfig:

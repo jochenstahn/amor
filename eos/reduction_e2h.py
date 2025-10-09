@@ -5,8 +5,9 @@ Can be used as a live preview with automatic update when files are modified.
 
 import logging
 import os
-import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap
 
 from orsopy import fileio
 from datetime import datetime
@@ -20,7 +21,7 @@ from . import event_handling as eh
 from .path_handling import PathResolver
 from .projection import CombinedProjection, LZProjection, ProjectionInterface, ReflectivityProjector, TofProjection, \
     TofZProjection, \
-    YZProjection
+    YTProjection, YZProjection
 
 NEEDS_LAMDA = (E2HPlotSelection.All, E2HPlotSelection.LT, E2HPlotSelection.Q, E2HPlotSelection.L)
 
@@ -70,10 +71,12 @@ class E2HReduction:
             self.event_actions |= eh.FilterMonitorThreshold(self.config.experiment.lowCurrentThreshold)
         if not self.config.reduction.fast:
             self.event_actions |= eh.FilterStrangeTimes()
-            if self.config.reduction.plot==E2HPlotSelection.TZ:
-                # perform time fold-back and corrections for tof if not fast mode
+            if self.config.reduction.plot in [E2HPlotSelection.YT, E2HPlotSelection.YZ]:
+                # perform time fold-back and apply yRange filter if not fast mode
                 self.event_actions |= ea.MergeFrames()
                 self.event_actions |= ea.AnalyzePixelIDs(self.config.experiment.yRange)
+            if self.config.reduction.plot==E2HPlotSelection.YT:
+                # perform corrections for tof if not fast mode
                 self.event_actions |= eh.TofTimeCorrection(self.config.experiment.incidentAngle==IncidentAngle.alphaF)
         # select needed actions in depenence of plots
         if self.config.reduction.plot in NEEDS_LAMDA:
@@ -87,11 +90,13 @@ class E2HReduction:
         if self.config.reduction.plot in [E2HPlotSelection.All, E2HPlotSelection.LT, E2HPlotSelection.Q]:
             self.grid = LZGrid(0.01, [0.0, 0.25])
 
-        if self.config.reduction.plot in [E2HPlotSelection.All, E2HPlotSelection.LT, E2HPlotSelection.YZ, E2HPlotSelection.TZ]:
+        if self.config.reduction.plot in [E2HPlotSelection.All, E2HPlotSelection.LT, E2HPlotSelection.YZ, E2HPlotSelection.YT]:
             self.plot_kwds['colorbar'] = True
             self.plot_kwds['cmap'] = str(self.config.reduction.plot_colormap)
             if self.config.reduction.plotArgs==E2HPlotArguments.Linear:
                 self.plot_kwds['norm'] = None
+
+        self.register_colormap()
 
     def reduce(self):
         if self.config.reduction.plot in [E2HPlotSelection.All, E2HPlotSelection.LT, E2HPlotSelection.Q]:
@@ -121,16 +126,29 @@ class E2HReduction:
         if self.config.reduction.show_plot:
             plt.show()
 
+    def register_colormap(self):
+        cmap = plt.colormaps['gnuplot'](np.arange(256))
+        cmap[:1, :] = np.array([256/256, 255/256, 236/256, 1])
+        cmap = ListedColormap(cmap, name='jochen_deluxe', N=cmap.shape[0])
+        #cmap.set_bad((1.,1.,0.9))
+        plt.colormaps.register(cmap)
+
     def prepare_graphs(self):
         last_file_header = AmorHeader(self.file_list[-1])
         tthh  = last_file_header.geometry.nu - last_file_header.geometry.mu
 
+        if not self.config.reduction.is_default('thetaRangeR'):
+            # adjust range based on detector center
+            thetaRange = [ti+tthh for ti in self.config.reduction.thetaRangeR]
+        else:
+            thetaRange = [tthh - last_file_header.geometry.div/2, tthh + last_file_header.geometry.div/2]
 
         if self.config.reduction.plot==E2HPlotSelection.LT:
             self.projection = LZProjection(tthh, self.grid)
             if not self.config.reduction.fast:
                 self.projection.correct_gravity(last_file_header.geometry.detectorDistance)
             self.projection.apply_lamda_mask(self.config.experiment.lambdaRange)
+            self.projection.apply_theta_mask(thetaRange)
             self.projection.apply_norm_mask(self.norm)
 
         if self.config.reduction.plot==E2HPlotSelection.Q:
@@ -139,11 +157,15 @@ class E2HReduction:
                 plz.correct_gravity(last_file_header.geometry.detectorDistance)
             plz.calculate_q()
             plz.apply_lamda_mask(self.config.experiment.lambdaRange)
+            plz.apply_theta_mask(thetaRange)
             plz.apply_norm_mask(self.norm)
             self.projection = ReflectivityProjector(plz, self.norm)
 
         if self.config.reduction.plot==E2HPlotSelection.YZ:
             self.projection = YZProjection()
+
+        if self.config.reduction.plot==E2HPlotSelection.YT:
+            self.projection = YTProjection(tthh)
 
         if self.config.reduction.plot==E2HPlotSelection.TZ:
             self.projection = TofZProjection(last_file_header.timing.tau, foldback=not self.config.reduction.fast)
@@ -157,6 +179,7 @@ class E2HReduction:
                 plz.correct_gravity(last_file_header.geometry.detectorDistance)
             plz.calculate_q()
             plz.apply_lamda_mask(self.config.experiment.lambdaRange)
+            plz.apply_theta_mask(thetaRange)
             plz.apply_norm_mask(self.norm)
             pr = ReflectivityProjector(plz, self.norm)
             pyz = YZProjection()

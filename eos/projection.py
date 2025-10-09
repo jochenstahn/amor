@@ -3,11 +3,14 @@ Classes used to calculate projections/binnings from event data onto given grids.
 """
 
 import logging
+import warnings
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Union
 
 import numpy as np
 from dataclasses import dataclass
+
+from matplotlib.colors import LogNorm
 
 from .event_data_types import EventDatasetProtocol
 from .instrument import Detector, LZGrid
@@ -275,16 +278,25 @@ class LZProjection(ProjectionInterface):
         else:
             cmap=False
 
-        if not 'norm' in kwargs:
-            kwargs['norm'] = LogNorm()
-
         if self.is_normalized:
-            self._graph = plt.pcolormesh(self.lamda, self.alphaF, self.data.ref, **kwargs)
-            if cmap:
-                plt.colorbar(label='R')
+            I = self.data.ref
         else:
-            self._graph = plt.pcolormesh(self.lamda, self.alphaF, self.data.I, **kwargs)
-            if cmap:
+            I = self.data.I
+
+
+        if not 'norm' in kwargs:
+            vmin = I[(I>0)].min()
+            vmax = np.nanmax(I)
+            kwargs['norm'] = LogNorm(vmin, vmax, clip=True)
+
+
+        # suppress warning for wrongly sorted y-axis pixels (blades overlap)
+        with warnings.catch_warnings(action='ignore', category=UserWarning):
+            self._graph = plt.pcolormesh(self.lamda, self.alphaF, I, **kwargs)
+        if cmap:
+            if self.is_normalized:
+                plt.colorbar(label='R')
+            else:
                 plt.colorbar(label='I / cpm')
         plt.xlabel('$\\lambda$ / $\\AA$')
         plt.ylabel('$\\Theta$ / °')
@@ -300,6 +312,20 @@ class LZProjection(ProjectionInterface):
         """
         Inline update of previous plot by just updating the data.
         """
+        if self.is_normalized:
+            I = self.data.ref
+        else:
+            I = self.data.I
+
+        if isinstance(self._graph.norm, LogNorm):
+            vmin = I[(I>0)].min()*0.5
+        else:
+            vmin = 0
+        vmax = np.nanmax(I)
+        self._graph.set_array(I)
+        self._graph.norm.vmin = vmin
+        self._graph.norm.vmax = vmax
+
         if self.is_normalized:
             self._graph.set_array(self.data.ref)
         else:
@@ -408,23 +434,21 @@ class YZProjection(ProjectionInterface):
             del(kwargs['colorbar'])
         else:
             cmap=False
-        if not 'aspect' in kwargs:
-            kwargs['aspect'] = 'auto'
+
+        vmax = self.data.I.max()
 
         if not 'norm' in kwargs:
-            kwargs['norm'] = LogNorm()
+            vmin = self.data.I[(self.data.I>0)].min()*0.5
+            kwargs['norm'] = LogNorm(vmin, vmax)
 
-        self._graph = plt.imshow(self.data.I.T,
-                                 extent=(float(self.y[0]), float(self.y[-1]),
-                                         float(self.z[0]), float(self.z[-1])),
-                                 **kwargs)
+        self._graph = plt.pcolormesh(self.y, self.z, self.data.I.T, **kwargs)
         if cmap:
             plt.colorbar(label='I / cpm')
 
         plt.xlabel('Y')
         plt.ylabel('Z')
         plt.xlim(self.y[0], self.y[-1])
-        plt.ylim(self.z[0], self.z[-1])
+        plt.ylim(self.z[-1], self.z[0])
         plt.title('Horizontal Pixel vs. Vertical Pixel')
 
         self._graph_axis = plt.gca()
@@ -434,7 +458,14 @@ class YZProjection(ProjectionInterface):
         """
         Inline update of previous plot by just updating the data.
         """
+        if isinstance(self._graph.norm, LogNorm):
+            vmin = self.data.I[(self.data.I>0)].min()*0.5
+        else:
+            vmin = 0
+        vmax = self.data.I.max()
         self._graph.set_array(self.data.I.T)
+        self._graph.norm.vmin = vmin
+        self._graph.norm.vmax = vmax
 
     def draw_yzcross(self, event):
         if event.inaxes is not self._graph_axis:
@@ -450,6 +481,57 @@ class YZProjection(ProjectionInterface):
             for art in list(self._graph_axis.lines)+list(self._graph_axis.texts):
                 art.remove()
             plt.draw()
+
+class YTProjection(YZProjection):
+    theta: np.ndarray
+
+    def __init__(self, tthh: float):
+        dd = Detector.delta_z[1]-Detector.delta_z[0]
+        delta = np.hstack([Detector.delta_z, Detector.delta_z[-1]+dd])-dd/2.
+        self.theta  = tthh + delta
+        super().__init__()
+
+    def plot(self, **kwargs):
+        from matplotlib import pyplot as plt
+        from matplotlib.colors import LogNorm
+
+        if 'colorbar' in kwargs:
+            cmap=True
+            del(kwargs['colorbar'])
+        else:
+            cmap=False
+
+        if not 'norm' in kwargs:
+            kwargs['norm'] = LogNorm()
+
+        self._graph = plt.pcolormesh(self.y, self.theta, self.data.I.T, **kwargs)
+        if cmap:
+            plt.colorbar(label='I / cpm')
+
+        plt.xlabel('Y')
+        plt.ylabel('Theta / °')
+        plt.xlim(self.y[0], self.y[-1])
+        plt.ylim(self.theta[-1], self.theta[0])
+        plt.title('Horizontal Pixel vs. Angle')
+
+        self._graph_axis = plt.gca()
+        plt.connect('button_press_event', self.draw_tzcross)
+
+    def draw_tzcross(self, event):
+        if event.inaxes is not self._graph_axis:
+            return
+        from matplotlib import pyplot as plt
+        tbm = self._graph_axis.figure.canvas.manager.toolbar.mode
+        if event.button is plt.MouseButton.LEFT and tbm=='':
+            self._graph_axis.plot([event.xdata, event.xdata], [self.theta[0], self.theta[-1]], '-', color='grey')
+            self._graph_axis.plot([self.y[0], self.y[-1]], [event.ydata, event.ydata], '-', color='grey')
+            self._graph_axis.text(event.xdata, event.ydata, f'({event.xdata:.1f}, {event.ydata:.1f})', backgroundcolor='white')
+            plt.draw()
+        if event.button is plt.MouseButton.RIGHT and tbm=='':
+            for art in list(self._graph_axis.lines)+list(self._graph_axis.texts):
+                art.remove()
+            plt.draw()
+
 
 class TofZProjection(ProjectionInterface):
     tof: np.ndarray
@@ -494,23 +576,18 @@ class TofZProjection(ProjectionInterface):
             del(kwargs['colorbar'])
         else:
             cmap=False
-        if not 'aspect' in kwargs:
-            kwargs['aspect'] = 'auto'
 
         if not 'norm' in kwargs:
             kwargs['norm'] = LogNorm()
 
-        self._graph = plt.imshow(self.data.I.T,
-                                 extent=(float(self.tof[0])*1e3, float(self.tof[-1])*1e3,
-                                         float(self.z[0]), float(self.z[-1])),
-                                 **kwargs)
+        self._graph = plt.pcolormesh(self.tof*1e3, self.z, self.data.I.T, **kwargs)
         if cmap:
             plt.colorbar(label='I / cpm')
 
         plt.xlabel('Time of Flight / ms')
         plt.ylabel('Z')
         plt.xlim(self.tof[0]*1e3, self.tof[-1]*1e3)
-        plt.ylim(self.z[0], self.z[-1])
+        plt.ylim(self.z[-1], self.z[0])
         plt.title('Time of Flight vs. Vertical Pixel')
 
         self._graph_axis = plt.gca()
