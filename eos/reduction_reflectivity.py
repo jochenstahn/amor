@@ -373,8 +373,8 @@ class ReflectivityReduction:
         proj = LZProjection.from_dataset(dataset, self.grid,
                                          has_offspecular=(self.config.experiment.incidentAngle!=IncidentAngle.alphaF))
 
+        t0 = dataset.geometry.nu-dataset.geometry.mu
         if not self.config.reduction.is_default('thetaRangeR'):
-            t0 = dataset.geometry.nu - dataset.geometry.mu
             # adjust range based on detector center
             thetaRange = [ti+t0 for ti in self.config.reduction.thetaRangeR]
             proj.apply_theta_mask(thetaRange)
@@ -384,6 +384,9 @@ class ReflectivityReduction:
             thetaRange = [dataset.geometry.nu - dataset.geometry.mu - dataset.geometry.div/2,
                                               dataset.geometry.nu - dataset.geometry.mu + dataset.geometry.div/2]
             proj.apply_theta_mask(thetaRange)
+        for thi in self.config.reduction.thetaFilters:
+            # apply theta filters relative to angle on detector (issues with parts of the incoming divergence)
+            proj.apply_theta_filter((thi[0]+t0, thi[1]+t0))
 
         proj.apply_lamda_mask(self.config.experiment.lambdaRange)
 

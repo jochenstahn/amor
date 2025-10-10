@@ -91,10 +91,12 @@ class ArgParsable:
             if get_origin(typ) is list:
                 args['nargs'] = '+'
                 typ = get_args(typ)[0]
+                if get_origin(typ) is tuple:
+                    # tuple of items are put together during evaluation
+                    typ = get_args(typ)[0]
             elif get_origin(typ) is tuple:
                 args['nargs'] = len(get_args(typ))
                 typ = get_args(typ)[0]
-
             if issubclass(typ, StrEnum):
                 args['choices'] = [ci.value for ci in typ]
                 if field.default is not MISSING:
@@ -149,7 +151,12 @@ class ArgParsable:
             if get_origin(field.type) is Union and type(None) in get_args(field.type):
                 # optional argument
                 typ = get_args(field.type)[0]
-
+            if get_origin(typ) is list:
+                item_typ = get_args(typ)[0]
+                if get_origin(item_typ) is tuple:
+                    # tuple of items are put together during evaluation
+                    tuple_length = len(get_args(item_typ))
+                    value = [tuple(value[i*tuple_length+j] for j in range(tuple_length)) for i in range(len(value)//tuple_length)]
             if isinstance(typ, type) and issubclass(typ, StrEnum):
                 # convert str to enum
                 try:
@@ -357,6 +364,14 @@ class ReflectivityReductionConfig(ArgParsable):
                 'short': 'T',
                 'group': 'region of interest',
                 'help': 'theta region of interest w.r.t. beam center',
+                },
+            )
+    thetaFilters: List[Tuple[float, float]] = field(
+            default_factory=lambda: [],
+            metadata={
+                'short': 'TF',
+                'group': 'region of interest',
+                'help': 'add one or more theta ranges that will be filtered in reduction',
                 },
             )
     normalisationMethod: NormalisationMethod = field(
@@ -698,6 +713,15 @@ class E2HReductionConfig(ArgParsable):
                 'short': 'T',
                 'group': 'region of interest',
                 'help': 'theta region of interest w.r.t. beam center',
+                },
+            )
+
+    thetaFilters: List[Tuple[float, float]] = field(
+            default_factory=lambda: [],
+            metadata={
+                'short': 'TF',
+                'group': 'region of interest',
+                'help': 'add one or more theta ranges that will be filtered in reduction',
                 },
             )
 

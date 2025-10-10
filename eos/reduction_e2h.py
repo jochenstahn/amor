@@ -154,6 +154,8 @@ class E2HReduction:
                 self.projection.correct_gravity(last_file_header.geometry.detectorDistance)
             self.projection.apply_lamda_mask(self.config.experiment.lambdaRange)
             self.projection.apply_theta_mask(thetaRange)
+            for thi in self.config.reduction.thetaFilters:
+                self.projection.apply_theta_filter((thi[0]+tthh, thi[1]+tthh))
             self.projection.apply_norm_mask(self.norm)
 
         if self.config.reduction.plot==E2HPlotSelection.Q:
@@ -163,6 +165,8 @@ class E2HReduction:
             plz.calculate_q()
             plz.apply_lamda_mask(self.config.experiment.lambdaRange)
             plz.apply_theta_mask(thetaRange)
+            for thi in self.config.reduction.thetaFilters:
+                self.projection.apply_theta_filter((thi[0]+tthh, thi[1]+tthh))
             plz.apply_norm_mask(self.norm)
             self.projection = ReflectivityProjector(plz, self.norm)
 
@@ -191,6 +195,8 @@ class E2HReduction:
             plz.calculate_q()
             plz.apply_lamda_mask(self.config.experiment.lambdaRange)
             plz.apply_theta_mask(thetaRange)
+            for thi in self.config.reduction.thetaFilters:
+                plz.apply_theta_filter((thi[0]+tthh, thi[1]+tthh))
             plz.apply_norm_mask(self.norm)
             pr = ReflectivityProjector(plz, self.norm)
             pyz = YZProjection()
