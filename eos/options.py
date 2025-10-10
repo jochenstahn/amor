@@ -459,7 +459,7 @@ class ReflectivityOutputConfig(ArgParsable):
             )
 
     plot_colormap: PlotColormaps = field(
-            default=PlotColormaps.jochen_deluxe,
+            default=PlotColormaps.gist_ncar,
             metadata={
                 'short': 'pcmap',
                 'group': 'output',
