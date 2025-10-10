@@ -593,6 +593,7 @@ class ReflectivityConfig:
 
 class E2HPlotSelection(StrEnum):
     All = 'all'
+    Raw = 'raw'
     YZ = 'Iyz'
     LT = 'Ilt'
     YT = 'Iyt'
@@ -697,6 +698,15 @@ class E2HReductionConfig(ArgParsable):
                 'short': 'T',
                 'group': 'region of interest',
                 'help': 'theta region of interest w.r.t. beam center',
+                },
+            )
+
+    fontsize: float = field(
+            default=8.,
+            metadata={
+                'short': 'pf',
+                'group': 'output',
+                'help': 'font size for graphs',
                 },
             )
 

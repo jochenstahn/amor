@@ -48,10 +48,15 @@ class E2HReduction:
         self.file_index = 0
         self.plot_kwds = {}
         self.fig = plt.figure()
+        plt.rcParams.update({'font.size': self.config.reduction.fontsize})
 
         if self.config.reduction.update:
             # live update implies plotting
             self.config.reduction.show_plot = True
+
+        if self.config.reduction.plot==E2HPlotSelection.Raw:
+            # Raw implies fast caculations
+            self.config.reduction.fast = True
 
         if not self.config.reduction.fast or self.config.reduction.plot in NEEDS_LAMDA:
             from . import event_analysis as ea
@@ -89,9 +94,9 @@ class E2HReduction:
         if self.config.reduction.plot in [E2HPlotSelection.All, E2HPlotSelection.LT, E2HPlotSelection.Q]:
             self.grid = LZGrid(0.01, [0.0, 0.25])
 
-        if self.config.reduction.plot in [E2HPlotSelection.All, E2HPlotSelection.LT,
-                                          E2HPlotSelection.YZ, E2HPlotSelection.YT,
-                                          E2HPlotSelection.TZ]:
+        if self.config.reduction.plot in [E2HPlotSelection.All, E2HPlotSelection.Raw,
+                                          E2HPlotSelection.LT, E2HPlotSelection.YT,
+                                          E2HPlotSelection.YZ, E2HPlotSelection.TZ]:
             self.plot_kwds['colorbar'] = True
             self.plot_kwds['cmap'] = str(self.config.reduction.plot_colormap)
             if self.config.reduction.plotArgs==E2HPlotArguments.Linear:
@@ -192,6 +197,17 @@ class E2HReduction:
             pyz = YZProjection()
             self.projection = CombinedProjection(3, 2, [plz, pyz, pr],
                                                  [(0, 2, 0, 1), (0, 2, 1, 2), (2, 3, 0, 2)])
+
+        if self.config.reduction.plot==E2HPlotSelection.Raw:
+            del(self.plot_kwds['colorbar'])
+            # A combined graph that does not require longer calculations
+            plyt = YTProjection(tthh)
+            pltofz = TofZProjection(last_file_header.timing.tau, foldback=not self.config.reduction.fast)
+            pltof =  TofProjection(last_file_header.timing.tau, foldback=not self.config.reduction.fast)
+            plt = TProjection(tthh)
+
+            self.projection = CombinedProjection(3, 3, [plyt, pltofz, plt, pltof],
+                                                 [(0,2, 0, 1), (0, 2, 1, 3), (2,3, 0,1),(2,3,1,3)])
 
     def read_data(self):
         fileName = self.file_list[self.file_index]
