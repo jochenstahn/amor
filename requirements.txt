@@ -2,5 +2,6 @@ numpy
 h5py
 orsopy
 numba
+matplotlib
 backports.strenum; python_version<"3.11"
 backports.zoneinfo; python_version<"3.9"

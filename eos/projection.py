@@ -10,8 +10,6 @@ from typing import List, Tuple, Union
 import numpy as np
 from dataclasses import dataclass
 
-from matplotlib.colors import LogNorm
-
 from .event_data_types import EventDatasetProtocol
 from .instrument import Detector, LZGrid
 from .normalization import LZNormalisation
@@ -312,6 +310,7 @@ class LZProjection(ProjectionInterface):
         """
         Inline update of previous plot by just updating the data.
         """
+        from matplotlib.colors import LogNorm
         if self.is_normalized:
             I = self.data.ref
         else:
@@ -458,6 +457,7 @@ class YZProjection(ProjectionInterface):
         """
         Inline update of previous plot by just updating the data.
         """
+        from matplotlib.colors import LogNorm
         if isinstance(self._graph.norm, LogNorm):
             vmin = self.data.I[(self.data.I>0)].min()*0.5
         else:
@@ -597,6 +597,7 @@ class TofZProjection(ProjectionInterface):
         """
         Inline update of previous plot by just updating the data.
         """
+        from matplotlib.colors import LogNorm
         if isinstance(self._graph.norm, LogNorm):
             vmin = self.data.I[(self.data.I>0)].min()*0.5
         else:
