@@ -597,7 +597,14 @@ class TofZProjection(ProjectionInterface):
         """
         Inline update of previous plot by just updating the data.
         """
+        if isinstance(self._graph.norm, LogNorm):
+            vmin = self.data.I[(self.data.I>0)].min()*0.5
+        else:
+            vmin = 0
+        vmax = self.data.I.max()
         self._graph.set_array(self.data.I.T)
+        self._graph.norm.vmin = vmin
+        self._graph.norm.vmax = vmax
 
     def draw_tzcross(self, event):
         if event.inaxes is not self._graph_axis:
