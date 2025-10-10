@@ -41,6 +41,7 @@ class AmorHeader:
 
     def __init__(self, fileName:Union[str, h5py.File, BinaryIO]):
         if type(fileName) is str:
+            logging.debug(f'    opening file {fileName}')
             self.hdf = h5py.File(fileName, 'r', swmr=True)
         elif type(fileName) is h5py.File:
             self.hdf = fileName
@@ -222,6 +223,7 @@ class AmorEventData(AmorHeader):
 
     def __init__(self, fileName:Union[str, h5py.File, BinaryIO], first_index:int=0, max_events:int=100_000_000):
         if type(fileName) is str:
+            logging.debug(f'    opening file {fileName}')
             self.file_list = [fileName]
             hdf = h5py.File(fileName, 'r', swmr=True)
         elif type(fileName) is h5py.File:

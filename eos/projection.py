@@ -760,7 +760,7 @@ class TProjection(ProjectionInterface):
 
         plt.xlabel('Reflection Angle / °')
         plt.ylabel('I / cpm')
-        plt.xlim(self.theta[0], self.theta[-1])
+        plt.xlim(self.theta[-1], self.theta[0])
         plt.title('Theta')
 
     def update_plot(self):

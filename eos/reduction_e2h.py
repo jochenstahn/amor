@@ -37,6 +37,8 @@ class E2HReduction:
 
         self.header = Header()
 
+        self.fig = plt.figure()
+        self.register_colormap()
         self.prepare_actions()
 
     def prepare_actions(self):
@@ -47,7 +49,6 @@ class E2HReduction:
         self.file_list = self.path_resolver.resolve(self.config.reduction.fileIdentifier)
         self.file_index = 0
         self.plot_kwds = {}
-        self.fig = plt.figure()
         plt.rcParams.update({'font.size': self.config.reduction.fontsize})
 
         if self.config.reduction.update:
@@ -102,8 +103,6 @@ class E2HReduction:
             if self.config.reduction.plotArgs==E2HPlotArguments.Linear:
                 self.plot_kwds['norm'] = None
 
-        self.register_colormap()
-
     def reduce(self):
         if self.config.reduction.plot in [E2HPlotSelection.All, E2HPlotSelection.LT, E2HPlotSelection.Q]:
             if self.config.reduction.normalizationModel:
@@ -133,7 +132,7 @@ class E2HReduction:
             plt.show()
 
     def register_colormap(self):
-        cmap = plt.colormaps['gnuplot'](np.arange(256))
+        cmap = plt.colormaps['turbo'](np.arange(256))
         cmap[:1, :] = np.array([256/256, 255/256, 236/256, 1])
         cmap = ListedColormap(cmap, name='jochen_deluxe', N=cmap.shape[0])
         #cmap.set_bad((1.,1.,0.9))
@@ -227,7 +226,7 @@ class E2HReduction:
             self.projection.normalize_over_illuminated(self.norm)
 
     def create_file_output(self):
-        ...
+        raise NotImplementedError("Export to text output not yet implemented")
 
     def create_title(self):
         output = "Events to Histogram - "
@@ -247,14 +246,23 @@ class E2HReduction:
         new_files = self.path_resolver.resolve(f'{latest}')
         if not os.path.exists(new_files[-1]):
             return
+        try:
+            # check that events exist in the new file
+            AmorEventData(new_files[-1], 0, max_events=1000)
+        except Exception:
+            logging.debug("Problem when trying to load new dataset", exc_info=True)
+            return
+
         logging.warning(f"Preceding to next file {latest}")
         self.file_list = new_files
         self.file_index = 0
+        self.prepare_actions()
+        self.prepare_graphs()
         self.read_data()
-        self.projection.clear()
         self.add_data()
         self.fig.clear()
         self.create_graph()
+        plt.draw()
 
     def update(self):
         logging.debug("    check for update")
