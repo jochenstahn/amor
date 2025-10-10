@@ -709,6 +709,58 @@ class LProjection(ProjectionInterface):
         """
         self._graph[0].set_ydata(self.data.I.T)
 
+class TProjection(ProjectionInterface):
+    theta: np.ndarray
+    z: np.ndarray
+
+    data: np.recarray
+    _dtype = np.dtype([
+            ('cts', np.float64),
+            ('I', np.float64),
+            ('err', np.float64),
+            ])
+
+    def __init__(self, tthh):
+        self.z = np.arange(Detector.nBlades*Detector.nWires+1)-0.5
+        dd = Detector.delta_z[1]-Detector.delta_z[0]
+        delta = np.hstack([Detector.delta_z, Detector.delta_z[-1]+dd])-dd/2.
+        self.theta = tthh+delta
+        self.data = np.zeros(self.theta.shape[0]-1, dtype=self._dtype).view(np.recarray)
+        self.monitor = 0.
+
+    def project(self, dataset: EventDatasetProtocol, monitor: float):
+        detYi, detZi, detX, delta = Detector.pixelLookUp[dataset.data.events.pixelID-1].T
+
+        cts , *_ = np.histogram(detZi, bins=self.z)
+        self.data.cts += cts
+        self.monitor += monitor
+
+        self.data.I = self.data.cts / self.monitor
+        self.data.err = np.sqrt(self.data.cts) / self.monitor
+
+    def clear(self):
+        self.data[:] = 0
+        self.monitor = 0.
+
+    def plot(self, **kwargs):
+        from matplotlib import pyplot as plt
+        for key in ONLY_MAP:
+            if key in kwargs: del(kwargs[key])
+
+
+        self._graph = plt.plot(self.theta[:-1], self.data.I, **kwargs)
+
+        plt.xlabel('Reflection Angle / °')
+        plt.ylabel('I / cpm')
+        plt.xlim(self.theta[0], self.theta[-1])
+        plt.title('Theta')
+
+    def update_plot(self):
+        """
+        Inline update of previous plot by just updating the data.
+        """
+        self._graph[0].set_ydata(self.data.I.T)
+
 
 class CombinedProjection(ProjectionInterface):
     """

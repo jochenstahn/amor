@@ -20,9 +20,7 @@ from .options import E2HConfig, E2HPlotArguments, IncidentAngle, MonitorType, E2
 from . import event_handling as eh
 from .path_handling import PathResolver
 from .projection import CombinedProjection, LProjection, LZProjection, ProjectionInterface, ReflectivityProjector, \
-    TofProjection, \
-    TofZProjection, \
-    YTProjection, YZProjection
+    TofProjection,  TofZProjection,  TProjection, YTProjection, YZProjection
 
 NEEDS_LAMDA = (E2HPlotSelection.All, E2HPlotSelection.LT, E2HPlotSelection.Q, E2HPlotSelection.L)
 
@@ -169,6 +167,9 @@ class E2HReduction:
 
         if self.config.reduction.plot==E2HPlotSelection.YT:
             self.projection = YTProjection(tthh)
+
+        if self.config.reduction.plot==E2HPlotSelection.T:
+            self.projection = TProjection(tthh)
 
         if self.config.reduction.plot==E2HPlotSelection.L:
             self.projection = LProjection()
