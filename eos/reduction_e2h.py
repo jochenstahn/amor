@@ -124,12 +124,17 @@ class E2HReduction:
         if self.config.reduction.plotArgs==E2HPlotArguments.Default and not self.config.reduction.update:
             # safe to image file if not auto-updating graph
             plt.savefig(f'e2h_{self.config.reduction.plot}.png', dpi=300)
+        if self.config.reduction.kafka:
+            from .kafka_serializer import ESSSerializer
+            self.serializer = ESSSerializer()
+            self.serializer.send(self.projection)
         if self.config.reduction.update:
             self.timer = self.fig.canvas.new_timer(1000)
             self.timer.add_callback(self.update)
             self.timer.start()
         if self.config.reduction.show_plot:
             plt.show()
+
 
     def register_colormap(self):
         cmap = plt.colormaps['turbo'](np.arange(256))
@@ -299,3 +304,6 @@ class E2HReduction:
         self.projection.update_plot()
         plt.suptitle(self.create_title())
         plt.draw()
+
+        if self.config.reduction.kafka:
+            self.serializer.send(self.projection)

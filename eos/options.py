@@ -655,6 +655,14 @@ class E2HReductionConfig(ArgParsable):
                 },
             )
 
+    kafka: bool = field(
+            default=False,
+            metadata={
+                'group': 'output',
+                'help': 'send result to kafka for Nicos',
+                },
+            )
+
     plotArgs: E2HPlotArguments = field(
             default=E2HPlotArguments.Default,
             metadata={
