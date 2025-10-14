@@ -82,6 +82,8 @@ class KafkaReduction:
 
         logging.warning(f"Preceding to next file {latest}")
         self.current_file = new_file
+        self.proj_yz.clear()
+        self.proj_tofz.clear()
         self.read_data()
         self.add_data()
 

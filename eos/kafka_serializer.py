@@ -230,7 +230,6 @@ class ESSSerializer:
     def send(self, proj: Union[YZProjection, TofZProjection]):
         if isinstance(proj, YZProjection):
             if self._active_histogram_yz is None:
-                proj.clear()
                 return
             suffix = 'YZ'
             message = HistogramMessage(
@@ -263,7 +262,6 @@ class ESSSerializer:
             self._last_message_yz = message
         elif isinstance(proj, TofZProjection):
             if self._active_histogram_tofz is None:
-                proj.clear()
                 return
             suffix = 'TofZ'
             message = HistogramMessage(

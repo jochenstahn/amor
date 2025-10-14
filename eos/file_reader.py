@@ -41,7 +41,7 @@ class AmorHeader:
 
     def __init__(self, fileName:Union[str, h5py.File, BinaryIO]):
         if type(fileName) is str:
-            logging.debug(f'    opening file {fileName}')
+            logging.info(f'    opening file {fileName}')
             self.hdf = h5py.File(fileName, 'r', swmr=True)
         elif type(fileName) is h5py.File:
             self.hdf = fileName

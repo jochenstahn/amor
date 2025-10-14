@@ -18,7 +18,7 @@ def main():
 
     # read command line arguments and generate classes holding configuration parameters
     clas = commandLineArgs([ReaderConfig, ExperimentConfig, E2HReductionConfig],
-                           'events2histogram')
+                           'amor-nicos')
     update_loglevel(clas.verbose)
 
     reader_config = ReaderConfig.from_args(clas)
@@ -26,7 +26,7 @@ def main():
     reduction_config = E2HReductionConfig.from_args(clas)
     config = E2HConfig(reader_config, experiment_config, reduction_config)
 
-    logging.warning('######## events2histogram - data vizualization for Amor ########')
+    logging.warning('######## amor-nicos - Nicos histogram for Amor ########')
     from eos.reduction_kafka import KafkaReduction
 
     # only import heavy module if sufficient command line parameters were provided
@@ -36,7 +36,7 @@ def main():
     # Perform actual reduction
     reducer.reduce()
 
-    logging.info('######## events2histogram - finished ########')
+    logging.info('######## amor-nicos - finished ########')
 
 if __name__ == '__main__':
     main()
