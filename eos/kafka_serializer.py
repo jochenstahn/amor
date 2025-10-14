@@ -130,8 +130,10 @@ class ESSSerializer:
             "group.id": uuid4(),
             "default.topic.config": {"auto.offset.reset": "latest"},
             })
-        self._active_histogram = None
-        self._last_message = None
+        self._active_histogram_yz = None
+        self._active_histogram_tofz = None
+        self._last_message_yz = None
+        self._last_message_tofz = None
 
         self.consumer.subscribe([KAFKA_TOPICS['command']])
 
@@ -156,22 +158,41 @@ class ESSSerializer:
                     value=resp
                     )
             self.producer.flush()
-            if isinstance(command, Stop) and command.hist_id == self._active_histogram:
-                self._active_histogram = None
-                message = self._last_message
-                message.timestamp = ktime()
-                message.info=json.dumps({
-                    "start": self._start,
-                    "state": 'FINISHED',
-                    "num events": message.data.sum()
-                })
-                self._last_message = None
+            if isinstance(command, Stop):
+                if command.hist_id == self._active_histogram_yz:
+                    suffix = 'YZ'
+                    self._active_histogram_yz = None
+                    message = self._last_message_yz
+                    message.timestamp = ktime()
+                    message.info=json.dumps({
+                        "start": self._start,
+                        "state": 'FINISHED',
+                        "num events": message.data.sum()
+                    })
+                    self._last_message_yz = None
+                elif command.hist_id == self._active_histogram_tofz:
+                    suffix = 'TofZ'
+                    self._active_histogram_tofz = None
+                    message = self._last_message_tofz
+                    message.timestamp = ktime()
+                    message.info=json.dumps({
+                        "start": self._start,
+                        "state": 'FINISHED',
+                        "num events": message.data.sum()
+                    })
+                    self._last_message_tofz = None
+                else:
+                    return
                 self.producer.produce(value=message.serialize(),
-                                      topic=KAFKA_TOPICS['histogram'],
+                                      topic=KAFKA_TOPICS['histogram']+'_'+suffix,
                                       callback=self.acked)
                 self.producer.flush()
             elif isinstance(command, ConfigureHistogram):
-                self._active_histogram = command.histograms[0].id
+                for hist in command.histograms:
+                    if hist.topic == KAFKA_TOPICS['histogram']+'_YZ':
+                        self._active_histogram_yz = hist.id
+                    if hist.topic == KAFKA_TOPICS['histogram']+'_TofZ':
+                        self._active_histogram_tofz = hist.id
                 self._start = command.start
 
     def receive(self, timeout=5):
@@ -207,10 +228,11 @@ class ESSSerializer:
             logging.debug("Message produced: %s" % (str(msg)))
 
     def send(self, proj: Union[YZProjection, TofZProjection]):
-        if self._active_histogram is None:
-            proj.clear()
-            return
         if isinstance(proj, YZProjection):
+            if self._active_histogram_yz is None:
+                proj.clear()
+                return
+            suffix = 'YZ'
             message = HistogramMessage(
                 source='amor-eos',
                 timestamp=ktime(),
@@ -238,7 +260,12 @@ class ESSSerializer:
                     "num events": proj.data.cts.sum()
                 })
                 )
+            self._last_message_yz = message
         elif isinstance(proj, TofZProjection):
+            if self._active_histogram_tofz is None:
+                proj.clear()
+                return
+            suffix = 'TofZ'
             message = HistogramMessage(
                 source='amor-eos',
                 timestamp=ktime(),
@@ -266,11 +293,11 @@ class ESSSerializer:
                     "num events": proj.data.I.sum()
                 })
                 )
+            self._last_message_tofz = message
         else:
             raise NotImplementedError(f"Histogram for {proj.__class__.__name__} not implemented")
 
-        self._last_message = message
         self.producer.produce(value=message.serialize(),
-                              topic=KAFKA_TOPICS['histogram'],
+                              topic=KAFKA_TOPICS['histogram']+'_'+suffix,
                               callback=self.acked)
         self.producer.flush()
