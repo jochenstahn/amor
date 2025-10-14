@@ -93,7 +93,8 @@ class E2HReduction:
 
         # plot dependant options
         if self.config.reduction.plot in [E2HPlotSelection.All, E2HPlotSelection.LT, E2HPlotSelection.Q]:
-            self.grid = LZGrid(0.01, [0.0, 0.25])
+            self.grid = LZGrid(0.05, [0.0, 0.25])
+            self.grid.dldl = 0.05
 
         if self.config.reduction.plot in [E2HPlotSelection.All, E2HPlotSelection.Raw,
                                           E2HPlotSelection.LT, E2HPlotSelection.YT,
@@ -127,6 +128,8 @@ class E2HReduction:
         if self.config.reduction.kafka:
             from .kafka_serializer import ESSSerializer
             self.serializer = ESSSerializer()
+            self.fig.canvas.mpl_connect('close_event', self.serializer.end_command_thread)
+            self.serializer.start_command_thread()
             self.serializer.send(self.projection)
         if self.config.reduction.update:
             self.timer = self.fig.canvas.new_timer(1000)
