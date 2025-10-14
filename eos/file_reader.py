@@ -129,7 +129,7 @@ class AmorHeader:
         mu = self._replace_if_missing('instrument_control_parameters/mu', 'mu', float)
         nu = self._replace_if_missing('instrument_control_parameters/nu', 'nu', float)
         kap = self._replace_if_missing('instrument_control_parameters/kappa', 'kappa', float)
-        kad = self._replace_if_missing('instrument_control_parameters/kappa_offset', 'kad', float)
+        kad = self._replace_if_missing('instrument_control_parameters/kappa_offset', 'kappa_offset', float)
         div = self._replace_if_missing('instrument_control_parameters/div', 'div', float)
         ch1TriggerPhase = self._replace_if_missing('chopper/ch1_trigger_phase', 'ch1_trigger_phase', float)
         ch2TriggerPhase = self._replace_if_missing('chopper/ch2_trigger_phase', 'ch2_trigger_phase', float)
