@@ -34,7 +34,7 @@ import numpy as np
 import json
 from time import time
 from dataclasses import dataclass, asdict
-from streaming_data_types import histogram_hs00
+from streaming_data_types import histogram_hs01
 from confluent_kafka import Producer, Consumer, TopicPartition
 
 from uuid import uuid4
@@ -70,7 +70,7 @@ class HistogramMessage:
     info: str
 
     def serialize(self):
-        return histogram_hs00.serialise_hs00(asdict(self))
+        return histogram_hs01.serialise_hs01(asdict(self))
 
 @dataclass
 class CommandMessage:

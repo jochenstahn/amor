@@ -544,12 +544,12 @@ class TofZProjection(ProjectionInterface):
             ('err', np.float64),
             ])
 
-    def __init__(self, tau, foldback=False):
+    def __init__(self, tau, foldback=False, combine=1):
         self.z = np.arange(Detector.nBlades*Detector.nWires+1)-0.5
         if foldback:
-            self.tof = np.arange(0, tau, 0.0005)
+            self.tof = np.arange(0, tau, 0.0005*combine)
         else:
-            self.tof = np.arange(0, 2*tau, 0.0005)
+            self.tof = np.arange(0, 2*tau, 0.0005*combine)
         self.data = np.zeros((self.tof.shape[0]-1, self.z.shape[0]-1), dtype=self._dtype).view(np.recarray)
         self.monitor = 0.
 

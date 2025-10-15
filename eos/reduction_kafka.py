@@ -46,11 +46,7 @@ class KafkaReduction:
         self.event_actions |= eh.ApplyMask()
 
     def reduce(self):
-        last_file_header = AmorHeader(self.current_file)
-
-        self.proj_yz = YZProjection()
-        self.proj_tofz = TofZProjection(last_file_header.timing.tau, foldback=True)
-
+        self.create_projections()
         self.read_data()
         self.add_data()
 
@@ -58,6 +54,11 @@ class KafkaReduction:
         self.serializer.start_command_thread()
 
         self.loop()
+
+    def create_projections(self):
+        file_header = AmorHeader(self.current_file)
+        self.proj_yz = YZProjection()
+        self.proj_tofz = TofZProjection(file_header.timing.tau, foldback=True, combine=2)
 
 
     def read_data(self):
@@ -82,8 +83,7 @@ class KafkaReduction:
 
         logging.warning(f"Preceding to next file {latest}")
         self.current_file = new_file
-        self.proj_yz.clear()
-        self.proj_tofz.clear()
+        self.create_projections() # need to recreate projections, in case tau changed
         self.read_data()
         self.add_data()
 
