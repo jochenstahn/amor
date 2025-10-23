@@ -115,7 +115,7 @@ class KafkaEventData(Thread):
         self.events.resize(prev_size+new_events, refcheck=False)
         self.events.pixelID[prev_size:] = events.pixel_id
         self.events.mask[prev_size:] = 0
-        self.events.tof[prev_size:] = events.time_of_flight
+        self.events.tof[prev_size:] = events.time_of_flight/1.e9
 
     nicos_mapping = {
         'mu': ('geometry', 'mu'),

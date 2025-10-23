@@ -89,10 +89,9 @@ class KafkaReduction:
             self.serializer.new_count_started.clear()
             self.proj_yz.clear()
             self.proj_tofz.clear()
+            return
         elif self.serializer.count_stopped.is_set() and not self.event_data.stop_counting.is_set():
-            logging.warning(f'  stop counting, total events {int(self.proj_tofz.data.cts.sum())}')
-            self.wait_for = self.serializer.new_count_started
-            self.event_data.stop_counting.set()
+            return self.finish_count()
         try:
             update_data = self.event_data.get_events()
         except EOFError:
@@ -107,3 +106,24 @@ class KafkaReduction:
 
         self.serializer.send(self.proj_yz)
         self.serializer.send(self.proj_tofz)
+
+    def finish_count(self):
+        logging.debug("    stop event set, hold event collection and send final results")
+        self.wait_for = self.serializer.new_count_started
+        self.event_data.stop_counting.set()
+
+        try:
+            update_data = self.event_data.get_events()
+        except EOFError:
+            pass
+        else:
+            self.event_actions(update_data)
+            self.dataset = update_data
+            self.monitor = self.dataset.monitor
+            self.proj_yz.project(update_data, self.monitor)
+            self.proj_tofz.project(update_data, self.monitor)
+
+        logging.warning(f'  stop counting, total events {int(self.proj_tofz.data.cts.sum())}')
+
+        self.serializer.send(self.proj_yz, final=True)
+        self.serializer.send(self.proj_tofz, final=True)

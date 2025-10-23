@@ -133,8 +133,6 @@ class ESSSerializer:
             })
         self._active_histogram_yz = None
         self._active_histogram_tofz = None
-        self._last_message_yz = None
-        self._last_message_tofz = None
         self.new_count_started = Event()
         self.count_stopped = Event()
 
@@ -163,34 +161,9 @@ class ESSSerializer:
             self.producer.flush()
             if isinstance(command, Stop):
                 if command.hist_id == self._active_histogram_yz:
-                    suffix = 'YZ'
-                    self._active_histogram_yz = None
-                    message = self._last_message_yz
-                    message.timestamp = ktime()
-                    message.info=json.dumps({
-                        "start": self._start,
-                        "state": 'FINISHED',
-                        "num events": message.data.sum()
-                    })
-                    self._last_message_yz = None
                     self.count_stopped.set()
-                elif command.hist_id == self._active_histogram_tofz:
-                    suffix = 'TofZ'
-                    self._active_histogram_tofz = None
-                    message = self._last_message_tofz
-                    message.timestamp = ktime()
-                    message.info=json.dumps({
-                        "start": self._start,
-                        "state": 'FINISHED',
-                        "num events": message.data.sum()
-                    })
-                    self._last_message_tofz = None
                 else:
                     return
-                self.producer.produce(value=message.serialize(),
-                                      topic=KAFKA_TOPICS['histogram']+'_'+suffix,
-                                      callback=self.acked)
-                self.producer.flush()
             elif isinstance(command, ConfigureHistogram):
                 for hist in command.histograms:
                     if hist.topic == KAFKA_TOPICS['histogram']+'_YZ':
@@ -199,7 +172,6 @@ class ESSSerializer:
                         self._start = command.start
                         self.count_stopped.clear()
                         self.new_count_started.set()
-                        self.set_empty_messages()
                     if hist.topic == KAFKA_TOPICS['histogram']+'_TofZ':
                         self._active_histogram_tofz = hist.id
 
@@ -234,7 +206,11 @@ class ESSSerializer:
         else:
             logging.debug("Message produced: %s" % (str(msg)))
 
-    def send(self, proj: Union[YZProjection, TofZProjection]):
+    def send(self, proj: Union[YZProjection, TofZProjection], final=False):
+        if final:
+            state = 'FINISHED'
+        else:
+            state = 'COUNTING'
         if isinstance(proj, YZProjection):
             if self._active_histogram_yz is None:
                 return
@@ -262,12 +238,11 @@ class ESSSerializer:
                 errors=np.sqrt(proj.data.cts),
                 info=json.dumps({
                     "start": self._start,
-                    "state": 'COUNTING',
+                    "state": state,
                     "num events": proj.data.cts.sum()
                 })
                 )
-            self._last_message_yz = message
-            logging.info(f"   Sending {proj.data.cts.sum()} events to Nicos")
+            logging.info(f"   {state}: Sending {proj.data.cts.sum()} events to Nicos")
         elif isinstance(proj, TofZProjection):
             if self._active_histogram_tofz is None:
                 return
@@ -295,11 +270,10 @@ class ESSSerializer:
                 errors=np.sqrt(proj.data.cts),
                 info=json.dumps({
                     "start": self._start,
-                    "state": 'COUNTING',
+                    "state": state,
                     "num events": proj.data.I.sum()
                 })
                 )
-            self._last_message_tofz = message
         else:
             raise NotImplementedError(f"Histogram for {proj.__class__.__name__} not implemented")
 
@@ -307,59 +281,3 @@ class ESSSerializer:
                               topic=KAFKA_TOPICS['histogram']+'_'+suffix,
                               callback=self.acked)
         self.producer.flush()
-
-    def set_empty_messages(self):
-        self._last_message_yz = HistogramMessage(
-                source='amor-eos',
-                timestamp=ktime(),
-                current_shape=(64, 448),
-                dim_metadata=(
-                    DimMetadata(
-                            length=64,
-                            unit="pixel",
-                            label="Y",
-                            bin_boundaries=np.arange(64),
-                            ),
-                    DimMetadata(
-                            length=448,
-                            unit="pixel",
-                            label="Z",
-                            bin_boundaries=np.arange(448),
-                            )
-                    ),
-                last_metadata_timestamp=0,
-                data=np.zeros((64, 448)),
-                errors=np.zeros((64, 448)),
-                info=json.dumps({
-                    "start":      self._start,
-                    "state":      'COUNTING',
-                    "num events": 0
-                    })
-                )
-        self._last_message_tofz =             message = HistogramMessage(
-                source='amor-eos',
-                timestamp=ktime(),
-                current_shape=(56, 448),
-                dim_metadata=(
-                    DimMetadata(
-                            length=56,
-                            unit="ms",
-                            label="ToF",
-                            bin_boundaries=np.arange(56),
-                            ),
-                    DimMetadata(
-                            length=448,
-                            unit="pixel",
-                            label="Z",
-                            bin_boundaries=np.arange(448),
-                            ),
-                ),
-                last_metadata_timestamp=0,
-                data=np.zeros((56, 448)),
-                errors=np.zeros((56, 448)),
-                info=json.dumps({
-                    "start": self._start,
-                    "state": 'COUNTING',
-                    "num events": 0
-                })
-                )
