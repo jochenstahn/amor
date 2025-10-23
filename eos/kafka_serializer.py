@@ -191,6 +191,7 @@ class ESSSerializer:
                 for hist in command.histograms:
                     if hist.topic == KAFKA_TOPICS['histogram']+'_YZ':
                         self._active_histogram_yz = hist.id
+                        logging.debug(f"   histogram data_topic: {hist.data_topics}")
                     if hist.topic == KAFKA_TOPICS['histogram']+'_TofZ':
                         self._active_histogram_tofz = hist.id
                 self._start = command.start
