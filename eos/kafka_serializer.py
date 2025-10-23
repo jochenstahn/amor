@@ -29,13 +29,14 @@ hist = {
 """
 import logging
 from typing import List, Tuple, Union
+from threading import Thread, Event
 
 import numpy as np
 import json
 from time import time
 from dataclasses import dataclass, asdict
 from streaming_data_types import histogram_hs01
-from confluent_kafka import Producer, Consumer, TopicPartition
+from confluent_kafka import Producer, Consumer
 
 from uuid import uuid4
 
@@ -134,6 +135,8 @@ class ESSSerializer:
         self._active_histogram_tofz = None
         self._last_message_yz = None
         self._last_message_tofz = None
+        self.new_count_started = Event()
+        self.count_stopped = Event()
 
         self.consumer.subscribe([KAFKA_TOPICS['command']])
 
@@ -147,7 +150,7 @@ class ESSSerializer:
             except Exception:
                 logging.error(f'Could not interpret message: \n{command}', exc_info=True)
                 return
-            logging.warning(command)
+            logging.info(command)
             resp = json.dumps({
                 "msg_id":   getattr(command, "id", None) or command.msg_id,
                 "response": "ACK",
@@ -170,6 +173,7 @@ class ESSSerializer:
                         "num events": message.data.sum()
                     })
                     self._last_message_yz = None
+                    self.count_stopped.set()
                 elif command.hist_id == self._active_histogram_tofz:
                     suffix = 'TofZ'
                     self._active_histogram_tofz = None
@@ -192,9 +196,12 @@ class ESSSerializer:
                     if hist.topic == KAFKA_TOPICS['histogram']+'_YZ':
                         self._active_histogram_yz = hist.id
                         logging.debug(f"   histogram data_topic: {hist.data_topics}")
+                        self._start = command.start
+                        self.count_stopped.clear()
+                        self.new_count_started.set()
+                        self.set_empty_messages()
                     if hist.topic == KAFKA_TOPICS['histogram']+'_TofZ':
                         self._active_histogram_tofz = hist.id
-                self._start = command.start
 
     def receive(self, timeout=5):
         rec = self.consumer.poll(timeout)
@@ -205,20 +212,19 @@ class ESSSerializer:
             return False
 
     def receive_loop(self):
-        while self._keep_receiving:
+        while not self._stop_receiving.is_set():
             try:
                 self.receive()
             except Exception:
                 logging.error("Exception while receiving", exc_info=True)
 
     def start_command_thread(self):
-        from threading import Thread
-        self._keep_receiving = True
+        self._stop_receiving = Event()
         self._command_thread = Thread(target=self.receive_loop)
         self._command_thread.start()
 
     def end_command_thread(self, event=None):
-        self._keep_receiving = False
+        self._stop_receiving.set()
         self._command_thread.join()
 
     def acked(self, err, msg):
@@ -261,6 +267,7 @@ class ESSSerializer:
                 })
                 )
             self._last_message_yz = message
+            logging.info(f"   Sending {proj.data.cts.sum()} events to Nicos")
         elif isinstance(proj, TofZProjection):
             if self._active_histogram_tofz is None:
                 return
@@ -300,3 +307,59 @@ class ESSSerializer:
                               topic=KAFKA_TOPICS['histogram']+'_'+suffix,
                               callback=self.acked)
         self.producer.flush()
+
+    def set_empty_messages(self):
+        self._last_message_yz = HistogramMessage(
+                source='amor-eos',
+                timestamp=ktime(),
+                current_shape=(64, 448),
+                dim_metadata=(
+                    DimMetadata(
+                            length=64,
+                            unit="pixel",
+                            label="Y",
+                            bin_boundaries=np.arange(64),
+                            ),
+                    DimMetadata(
+                            length=448,
+                            unit="pixel",
+                            label="Z",
+                            bin_boundaries=np.arange(448),
+                            )
+                    ),
+                last_metadata_timestamp=0,
+                data=np.zeros((64, 448)),
+                errors=np.zeros((64, 448)),
+                info=json.dumps({
+                    "start":      self._start,
+                    "state":      'COUNTING',
+                    "num events": 0
+                    })
+                )
+        self._last_message_tofz =             message = HistogramMessage(
+                source='amor-eos',
+                timestamp=ktime(),
+                current_shape=(56, 448),
+                dim_metadata=(
+                    DimMetadata(
+                            length=56,
+                            unit="ms",
+                            label="ToF",
+                            bin_boundaries=np.arange(56),
+                            ),
+                    DimMetadata(
+                            length=448,
+                            unit="pixel",
+                            label="Z",
+                            bin_boundaries=np.arange(448),
+                            ),
+                ),
+                last_metadata_timestamp=0,
+                data=np.zeros((56, 448)),
+                errors=np.zeros((56, 448)),
+                info=json.dumps({
+                    "start": self._start,
+                    "state": 'COUNTING',
+                    "num events": 0
+                })
+                )

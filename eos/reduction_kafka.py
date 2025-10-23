@@ -7,11 +7,10 @@ import logging
 import os
 
 from time import sleep
-from .file_reader import AmorEventData, AmorHeader
+from .kafka_events import KafkaEventData
 from .header import Header
 from .options import E2HConfig
 from . import event_handling as eh, event_analysis as ea
-from .path_handling import PathResolver
 from .projection import  TofZProjection,  YZProjection
 from .kafka_serializer import ESSSerializer
 
@@ -29,6 +28,8 @@ class KafkaReduction:
         self.config = config
 
         self.header = Header()
+        self.event_data = KafkaEventData()
+        self.event_data.start()
 
         self.prepare_actions()
 
@@ -36,9 +37,6 @@ class KafkaReduction:
         """
         Does not do any actual reduction.
         """
-        self.path_resolver = PathResolver(self.config.reader.year, self.config.reader.rawPath)
-        self.current_file = self.path_resolver.resolve('0')[0]
-
         # Actions on datasets not used for normalization
         self.event_actions = eh.ApplyPhaseOffset(self.config.experiment.chopperPhaseOffset)
         self.event_actions |= eh.CorrectChopperPhase()
@@ -56,70 +54,54 @@ class KafkaReduction:
         self.loop()
 
     def create_projections(self):
-        file_header = AmorHeader(self.current_file)
         self.proj_yz = YZProjection()
-        self.proj_tofz = TofZProjection(file_header.timing.tau, foldback=True, combine=2)
-
+        self.proj_tofz = TofZProjection(self.event_data.timing.tau, foldback=True, combine=2)
 
     def read_data(self):
-        self.dataset = AmorEventData(self.current_file, max_events=self.config.reduction.max_events)
+        # make sure the first events have arrived before starting analysis
+        self.event_data.new_events.wait()
+        self.dataset = self.event_data.get_events()
         self.event_actions(self.dataset)
 
+
     def add_data(self):
-        self.monitor = self.dataset.data.pulses.monitor.sum()
+        self.monitor = self.dataset.monitor
         self.proj_yz.project(self.dataset, monitor=self.monitor)
         self.proj_tofz.project(self.dataset, monitor=self.monitor)
 
-    def replace_dataset(self, latest):
-        new_file = self.path_resolver.resolve('0')[0]
-        if not os.path.exists(new_file):
-            return
-        try:
-            # check that events exist in the new file
-            AmorEventData(new_file, 0, max_events=1000)
-        except Exception:
-            logging.debug("Problem when trying to load new dataset", exc_info=True)
-            return
-
-        logging.warning(f"Preceding to next file {latest}")
-        self.current_file = new_file
-        self.create_projections() # need to recreate projections, in case tau changed
-        self.read_data()
-        self.add_data()
-
     def loop(self):
+        self.wait_for = self.serializer.new_count_started
         while True:
             try:
                 self.update()
-                sleep(1.0)
+                self.wait_for.wait(1.0)
             except KeyboardInterrupt:
+                self.event_data.stop_event.set()
+                self.event_data.join()
                 self.serializer.end_command_thread()
                 return
 
     def update(self):
-        logging.debug("    check for update")
-        if self.config.reduction.fileIdentifier=='0':
-            # if latest file was choosen, check if new one available and switch to it
-            current = int(os.path.basename(self.current_file)[9:15])
-            latest = self.path_resolver.search_latest(0)
-            if latest>current:
-                self.replace_dataset(latest)
-                return
-        # if all events were read last time, only load more if file was modified
-        if self.dataset.EOF and os.path.getmtime(self.current_file)<=self._last_mtime:
-            return
-
-        self._last_mtime = os.path.getmtime(self.current_file)
+        if self.serializer.new_count_started.is_set():
+            logging.warning('Start new count, clearing event data')
+            self.wait_for = self.serializer.count_stopped
+            self.event_data.restart()
+            self.serializer.new_count_started.clear()
+            self.proj_yz.clear()
+            self.proj_tofz.clear()
+        elif self.serializer.count_stopped.is_set() and not self.event_data.stop_counting.is_set():
+            logging.warning(f'  stop counting, total events {int(self.proj_tofz.data.cts.sum())}')
+            self.wait_for = self.serializer.new_count_started
+            self.event_data.stop_counting.set()
         try:
-            update_data = AmorEventData(self.current_file, self.dataset.last_index+1,
-                                        max_events=self.config.reduction.max_events)
+            update_data = self.event_data.get_events()
         except EOFError:
             return
         logging.info("    updating with new data")
 
         self.event_actions(update_data)
         self.dataset=update_data
-        self.monitor = self.dataset.data.pulses.monitor.sum()
+        self.monitor = self.dataset.monitor
         self.proj_yz.project(update_data, self.monitor)
         self.proj_tofz.project(update_data, self.monitor)
 
