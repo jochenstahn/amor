@@ -87,8 +87,7 @@ class KafkaReduction:
             self.wait_for = self.serializer.count_stopped
             self.event_data.restart()
             self.serializer.new_count_started.clear()
-            self.proj_yz.clear()
-            self.proj_tofz.clear()
+            self.create_projections()
             return
         elif self.serializer.count_stopped.is_set() and not self.event_data.stop_counting.is_set():
             return self.finish_count()
