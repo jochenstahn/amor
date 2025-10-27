@@ -20,6 +20,10 @@ def main():
     clas = commandLineArgs([ReaderConfig, ExperimentConfig, E2HReductionConfig],
                            'amor-nicos')
     update_loglevel(clas.verbose)
+    if clas.verbose<2:
+        # only log info level in logfile
+        logger = logging.getLogger()  # logging.getLogger('quicknxs')
+        logger.setLevel(logging.INFO)
 
     reader_config = ReaderConfig.from_args(clas)
     experiment_config = ExperimentConfig.from_args(clas)
