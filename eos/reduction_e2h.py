@@ -58,6 +58,9 @@ class E2HReduction:
         if self.config.reduction.plot==E2HPlotSelection.Raw:
             # Raw implies fast caculations
             self.config.reduction.fast = True
+        if not self.config.experiment.is_default('lambdaRange'):
+            # filtering wavelength requires frame analysis
+            self.config.reduction.fast = False
 
         if not self.config.reduction.fast or self.config.reduction.plot in NEEDS_LAMDA:
             from . import event_analysis as ea
@@ -84,7 +87,7 @@ class E2HReduction:
                 # perform corrections for tof if not fast mode
                 self.event_actions |= eh.TofTimeCorrection(self.config.experiment.incidentAngle==IncidentAngle.alphaF)
         # select needed actions in depenence of plots
-        if self.config.reduction.plot in NEEDS_LAMDA:
+        if self.config.reduction.plot in NEEDS_LAMDA or not self.config.experiment.is_default('lambdaRange'):
             self.event_actions |= ea.MergeFrames()
             self.event_actions |= ea.AnalyzePixelIDs(self.config.experiment.yRange)
             self.event_actions |= eh.TofTimeCorrection(self.config.experiment.incidentAngle==IncidentAngle.alphaF)
