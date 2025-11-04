@@ -88,7 +88,7 @@ class E2HReduction:
                 self.event_actions |= eh.TofTimeCorrection(self.config.experiment.incidentAngle==IncidentAngle.alphaF)
         # select needed actions in depenence of plots
         if self.config.reduction.plot in NEEDS_LAMDA or not self.config.experiment.is_default('lambdaRange'):
-            self.event_actions |= ea.MergeFrames()
+            self.event_actions |= ea.MergeFrames(lamdaCut=self.config.experiment.lambdaRange[0])
             self.event_actions |= ea.AnalyzePixelIDs(self.config.experiment.yRange)
             self.event_actions |= eh.TofTimeCorrection(self.config.experiment.incidentAngle==IncidentAngle.alphaF)
             self.event_actions |= ea.CalculateWavelength(self.config.experiment.lambdaRange)
@@ -96,7 +96,7 @@ class E2HReduction:
 
         # plot dependant options
         if self.config.reduction.plot in [E2HPlotSelection.All, E2HPlotSelection.LT, E2HPlotSelection.Q]:
-            self.grid = LZGrid(0.05, [0.0, 0.25])
+            self.grid = LZGrid(0.05, [0.0, 0.25], lambda_overwrite=self.config.experiment.lambdaRange)
             self.grid.dldl = 0.05
 
         if self.config.reduction.plot in [E2HPlotSelection.All, E2HPlotSelection.Raw,

@@ -25,8 +25,15 @@ class ExtractWalltime(EventDataAction):
         dataset.data.events = new_events
 
 class MergeFrames(EventDataAction):
+    def __init__(self, lamdaCut=None):
+        self.lamdaCut=lamdaCut
+
     def perform_action(self, dataset: EventDatasetProtocol)->None:
-        tofCut = const.lamdaCut*dataset.geometry.chopperDetectorDistance/const.hdm*1e-13
+        if self.lamdaCut is None:
+            lamdaCut = const.lamdaCut
+        else:
+            lamdaCut = self.lamdaCut
+        tofCut = lamdaCut*dataset.geometry.chopperDetectorDistance/const.hdm*1e-13
         total_offset = (tofCut +
                         dataset.timing.tau * (dataset.timing.ch1TriggerPhase + dataset.timing.chopperPhase/2)/180)
         dataset.data.events.tof = merge_frames(dataset.data.events.tof, tofCut, dataset.timing.tau, total_offset)

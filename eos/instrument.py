@@ -65,9 +65,14 @@ class LZGrid:
     def qzRange(self):
         return self._qzRange
 
-    def __init__(self, qResolution, qzRange):
+    def __init__(self, qResolution, qzRange, lambda_overwrite=None):
         self._qResolution = qResolution
         self._qzRange = qzRange
+        if lambda_overwrite is None:
+            self.lamdaMax = const.lamdaMax
+            self.lamdaCut = const.lamdaCut
+        else:
+            self.lamdaCut, self.lamdaMax = lambda_overwrite
 
     @property
     @cache
@@ -92,8 +97,8 @@ class LZGrid:
 
     @cache
     def lamda(self):
-        lamdaMax = 16
-        lamdaMin = const.lamdaCut
+        lamdaMax = self.lamdaMax
+        lamdaMin = self.lamdaCut
         lamda_grid = lamdaMin*(1+self.dldl)**np.arange(int(np.log(lamdaMax/lamdaMin)/np.log(1+self.dldl)+1))
         return lamda_grid
 

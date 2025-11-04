@@ -298,7 +298,7 @@ class LZProjection(ProjectionInterface):
                 plt.colorbar(label='I / cpm')
         plt.xlabel('$\\lambda$ / $\\AA$')
         plt.ylabel('$\\Theta$ / °')
-        plt.xlim(3., 12.)
+        plt.xlim(self.lamda[0,0], self.lamda[-1,0])
         af = self.alphaF[self.data.mask]
         plt.ylim(af.min(), af.max())
         plt.title('Wavelength vs. Reflection Angle')
