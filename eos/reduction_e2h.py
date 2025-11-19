@@ -51,6 +51,7 @@ class E2HReduction:
         self.plot_kwds = {}
         plt.rcParams.update({'font.size': self.config.reduction.fontsize})
 
+        self.overwrite = eh.ApplyParameterOverwrites(self.config.experiment) # some actions use instrument parameters, change before that
         if self.config.reduction.update:
             # live update implies plotting
             self.config.reduction.show_plot = True
@@ -68,6 +69,7 @@ class E2HReduction:
         # Actions on datasets not used for normalization
         self.event_actions = eh.ApplyPhaseOffset(self.config.experiment.chopperPhaseOffset)
         if not self.config.reduction.fast:
+            self.event_actions |= self.overwrite
             self.event_actions |= eh.CorrectChopperPhase()
             self.event_actions |= ea.ExtractWalltime()
         else:
@@ -97,7 +99,7 @@ class E2HReduction:
         # plot dependant options
         if self.config.reduction.plot in [E2HPlotSelection.All, E2HPlotSelection.LT, E2HPlotSelection.Q]:
             self.grid = LZGrid(0.05, [0.0, 0.25], lambda_overwrite=self.config.experiment.lambdaRange)
-            self.grid.dldl = 0.05
+            self.grid.dldl = 0.01
 
         if self.config.reduction.plot in [E2HPlotSelection.All, E2HPlotSelection.Raw,
                                           E2HPlotSelection.LT, E2HPlotSelection.YT,
@@ -151,6 +153,7 @@ class E2HReduction:
 
     def prepare_graphs(self):
         last_file_header = AmorHeader(self.file_list[-1])
+        self.overwrite.perform_action(last_file_header)
         tthh  = last_file_header.geometry.nu - last_file_header.geometry.mu
 
         if not self.config.reduction.is_default('thetaRangeR'):

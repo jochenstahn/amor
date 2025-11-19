@@ -117,7 +117,7 @@ class ReflectivityReduction:
             plt.show()
 
     def read_file_block(self, i, short_notation):
-        logging.warning('reading input:')
+        logging.warning('input:')
         file_list = self.path_resolver.resolve(short_notation)
 
         self.header.measurement_data_files = []
@@ -159,7 +159,7 @@ class ReflectivityReduction:
 
     def analyze_unsliced(self, i):
         self.monitor = self.dataset.data.pulses.monitor.sum()
-        logging.warning(f'    monitor = {self.monitor:8.2f} {MONITOR_UNITS[self.config.experiment.monitorType]}')
+        logging.info(f'    monitor = {self.monitor:8.2f} {MONITOR_UNITS[self.config.experiment.monitorType]}')
 
         proj:LZProjection = self.project_on_lz()
         try:
