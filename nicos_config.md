@@ -37,6 +37,7 @@ hist_tofz = device('nicos_sinq.devices.just_bin_it.JustBinItImage',
 ```
 
 These images have then to be set in the detector configuration as _images_ items:
+
 ```                      
 images=['hist_yz', 'hist_tofz'],
 ```
