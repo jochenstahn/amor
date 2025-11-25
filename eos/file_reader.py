@@ -84,7 +84,7 @@ class AmorHeader:
         user_orcid = None
         sampleName = self.hdf['entry1/sample/name'][0].decode('utf-8')
         model = self.hdf['entry1/sample/model'][0].decode('utf-8')
-        if 'stack:' in model:
+        if 'stack' in model:
             import yaml
             model = yaml.safe_load(model)
         else:
