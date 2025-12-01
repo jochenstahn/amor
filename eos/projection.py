@@ -85,12 +85,19 @@ class ProjectedReflectivity:
         self.R -= R
         self.dR = np.sqrt(self.dR**2+dR**2)
 
+    def plot(self, **kwargs):
+        from matplotlib import pyplot as plt
+        plt.errorbar(self.Q, self.R, yerr=self.dR, **kwargs)
+        plt.yscale('log')
+        plt.xlabel('Q / Å$^{-1}$')
+        plt.ylabel('R')
 
 class LZProjection(ProjectionInterface):
     grid: LZGrid
     lamda: np.ndarray
     alphaF: np.ndarray
     is_normalized: bool
+    angle: float
 
     data: np.recarray
     _dtype = np.dtype([
@@ -107,6 +114,7 @@ class LZProjection(ProjectionInterface):
     def __init__(self, tthh: float, grid: LZGrid):
         self.grid = grid
         self.is_normalized = False
+        self.angle = tthh
 
         alphaF_z  = tthh + Detector.delta_z
         lamda_l  = self.grid.lamda()
@@ -206,12 +214,14 @@ class LZProjection(ProjectionInterface):
         Normalize the dataaset and take into account a difference in
         detector angle for measurement and reference.
         """
+        logging.debug(f'        correcting for incident angle difference from norm {norm.angle} to data {self.angle}')
         norm_lz = norm.norm
-        thetaN_z = Detector.delta_z+norm.angle
-        thetaN_lz = np.ones_like(norm_lz)*thetaN_z
-        thetaN_lz = np.where(np.absolute(thetaN_lz)>5e-3, thetaN_lz, np.nan)
-        self.data.mask &=  (np.absolute(thetaN_lz)>5e-3)
-        ref_lz = (self.data.I*np.absolute(thetaN_lz))/(norm_lz*np.absolute(self.alphaF))
+        delta_lz = np.ones_like(norm_lz)*Detector.delta_z
+        # do not perform gravity correction for footprint, would require norm detector distance that is unknown here
+        fp_corr_lz = np.where(np.absolute(delta_lz+norm.angle)>5e-3,
+                              (delta_lz+self.angle)/(delta_lz+norm.angle), np.nan)
+        self.data.mask &=  np.logical_not(np.isnan(fp_corr_lz))
+        ref_lz = self.data.I/norm_lz/fp_corr_lz
         ref_lz *= norm.monitor/self.monitor
         ref_lz[np.logical_not(self.data.mask)] = np.nan
         self.data.norm = norm_lz
