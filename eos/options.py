@@ -381,6 +381,21 @@ class ReflectivityReductionConfig(ArgParsable):
                 'priority': 90,
                 'group': 'input data',
                 'help': 'normalisation method: [o]verillumination, [u]nderillumination, [d]irect_beam'})
+    normalizationFilter: float = field(
+            default=-1,
+            metadata={
+                'group': 'input data',
+                'help': 'minimum normalization counts in lambda-theta bin to use, else filter'})
+    normAngleFilter: float = field(
+            default=-1,
+            metadata={
+                'group': 'input data',
+                'help': 'minimum normalization counts total thetat bin to use, else filter'})
+    normalizationSmoothing: float = field(
+            default=0,
+            metadata={
+                'group': 'input data',
+                'help': 'apply convolution on lambda axes to smooth the normalization data, useful for low statistics'})
     scale: List[float] = field(
             default_factory=lambda: [1.],
             metadata={

@@ -176,9 +176,12 @@ class LZProjection(ProjectionInterface):
         self.data.mask &= self.lamda>=lamda_range[0]
         self.data.mask &= self.lamda<=lamda_range[1]
 
-    def apply_norm_mask(self, norm: LZNormalisation):
+    def apply_norm_mask(self, norm: LZNormalisation, min_norm=-1, min_theta=-1):
         # Mask points where normliazation is nan
-        self.data.mask &= np.logical_not(np.isnan(norm.norm))
+        self.data.mask &= np.logical_not(np.isnan(norm.norm))&(norm.norm>min_norm)
+        if min_theta>0:
+            thsum = np.nansum(norm.norm, axis=0)
+            self.data.mask &= (thsum>min_theta)[np.newaxis, :]
 
     def project(self, dataset: EventDatasetProtocol, monitor: float):
         """
@@ -198,6 +201,7 @@ class LZProjection(ProjectionInterface):
         self.data[:] = 0
         self.data.mask = True
         self.monitor = 0.
+        self.norm_monitor = 1.
 
     @property
     def I(self):
@@ -207,7 +211,7 @@ class LZProjection(ProjectionInterface):
 
     def calc_error(self):
         # calculate error bars for resulting intensity after normalization
-        self.data.err = self.data.ref * np.sqrt( 1./(self.data.I+.1) + 1./self.data.norm )
+        self.data.err = self.data.ref * np.sqrt( 1./(self.data.I+.1) + 1./(self.data.norm+0.1) )
 
     def normalize_over_illuminated(self, norm: LZNormalisation):
         """
@@ -221,10 +225,11 @@ class LZProjection(ProjectionInterface):
         fp_corr_lz = np.where(np.absolute(delta_lz+norm.angle)>5e-3,
                               (delta_lz+self.angle)/(delta_lz+norm.angle), np.nan)
         self.data.mask &=  np.logical_not(np.isnan(fp_corr_lz))
-        ref_lz = self.data.I/norm_lz/fp_corr_lz
+        self.data.norm = norm_lz*fp_corr_lz
+        self.norm_monitor = norm.monitor
+        ref_lz = self.data.I/np.where(self.data.norm>0, self.data.norm, np.nan)
         ref_lz *= norm.monitor/self.monitor
         ref_lz[np.logical_not(self.data.mask)] = np.nan
-        self.data.norm = norm_lz
         self.data.ref = ref_lz
         self.calc_error()
         self.is_normalized = True
@@ -244,6 +249,7 @@ class LZProjection(ProjectionInterface):
             raise ValueError("Dataset needs to be normalized, first")
         self.data.ref *= factor
         self.data.err *= factor
+        self.norm_monitor /= factor
 
     def project_on_qz(self):
         if not self.is_normalized:
@@ -251,29 +257,25 @@ class LZProjection(ProjectionInterface):
         q_q       = self.grid.q()
         weights_lzf = self.data.norm[self.data.mask]
         q_lzf = self.data.qz[self.data.mask]
-        R_lzf = self.data.ref[self.data.mask]
-        dR_lzf = self.data.err[self.data.mask]
+        I_lzf = self.data.I[self.data.mask]
         dq_lzf = self.data.res[self.data.mask]
 
-        N_q       = np.histogram(q_lzf, bins = q_q, weights = weights_lzf )[0]
+        # get number of grid points contributing to a bin, filter points with no contribution
+        N_q       = np.histogram(q_lzf, bins = q_q)[0]
         N_q       = np.where(N_q > 0, N_q, np.nan)
+        fltr      = N_q>0
 
-        R_q       = np.histogram(q_lzf, bins = q_q, weights = weights_lzf * R_lzf )[0]
-        R_q       = R_q / N_q
-
-        dR_q      = np.histogram(q_lzf, bins = q_q, weights = (weights_lzf * dR_lzf)**2 )[0]
-        dR_q      = np.sqrt( dR_q ) / N_q
-
-        # TODO: different error propagations for dR and dq!
-        # this is what should work:
-        #dq_q      = np.histogram(q_lzf, bins = q_q, weights = (weights_lzf * dq_lzf)**2 )[0]
-        #dq_q      = np.sqrt( dq_q ) / N_q
-        # and this actually works:
-        N_q       = np.histogram(q_lzf, bins = q_q, weights = weights_lzf**2 )[0]
-        N_q       = np.where(N_q > 0, N_q, np.nan)
-        dq_q      = np.histogram(q_lzf, bins = q_q, weights = (weights_lzf * dq_lzf)**2 )[0]
-        dq_q      = np.sqrt( dq_q / N_q )
-
+        # calculate sum of all normalization weights per bin
+        W_q       = np.maximum(np.histogram(q_lzf, bins = q_q, weights = weights_lzf)[0], 1e-10)
+        # calculate sum of all dataset counts per bin
+        I_q       = np.histogram(q_lzf, bins = q_q, weights = I_lzf)[0]
+        # normlaize dataaset by normalization counts and scale by monitor
+        R_q       = np.where(fltr, I_q*self.norm_monitor/self.monitor / W_q, np.nan)
+        # error as squar-root of counts and sqrt from normalization (dR/R = sqrt( (dI/I)² + (dW/W)²)
+        dR_q      = np.where(fltr, R_q*(np.sqrt(1./(I_q+0.1)+ 1./(W_q+0.1))), np.nan)
+        # q-resolution is the weighted sum of individual points q-resolutions
+        dq_q      = np.histogram(q_lzf, bins = q_q, weights = weights_lzf * dq_lzf**2 )[0]
+        dq_q      = np.where(fltr, np.sqrt(dq_q/W_q), np.nan)
         return ProjectedReflectivity(R_q, dR_q, (q_q[1:]+q_q[:-1])/2., dq_q)
 
     def plot(self, **kwargs):

@@ -85,6 +85,9 @@ class ReflectivityReduction:
         else:
             self.norm = LZNormalisation.unity(self.grid)
 
+        if self.config.reduction.normalizationSmoothing:
+            self.norm.smooth(self.config.reduction.normalizationSmoothing)
+
         # load R(q_z) curve to be subtracted:
         if self.config.reduction.subtract:
             self.sq_q, self.sR_q, self.sdR_q, self.sFileName = self.loadRqz(self.config.reduction.subtract)
@@ -390,7 +393,8 @@ class ReflectivityReduction:
 
         proj.apply_lamda_mask(self.config.experiment.lambdaRange)
 
-        proj.apply_norm_mask(self.norm)
+        proj.apply_norm_mask(self.norm, min_norm=self.config.reduction.normalizationFilter,
+                             min_theta=self.config.reduction.normAngleFilter)
 
         proj.project(dataset, self.monitor)
 

@@ -24,7 +24,6 @@ class LZNormalisation:
         detZ_e = reference.data.events.detZ
         self.monitor = np.sum(reference.data.pulses.monitor)
         norm_lz, _, _ = np.histogram2d(lamda_e, detZ_e, bins=(grid.lamda(), grid.z()))
-        norm_lz = np.where(norm_lz>2, norm_lz, np.nan)
         if normalisationMethod==NormalisationMethod.direct_beam:
             self.norm = np.flip(norm_lz, 1)
         else:
@@ -100,3 +99,32 @@ class LZNormalisation:
 
     def update_header(self, header:Header):
         header.measurement_additional_files = self.file_list
+
+    def smooth(self, width):
+        logging.debug(f'apply convolution with gaussian along lambda axis to smooth norm, sigma={width}')
+        try:
+            from scipy.signal import fftconvolve
+        except ImportError:
+            self._smooth_slow(width)
+        kx = np.arange(self.norm.shape[0])-self.norm.shape[0]/2.
+        kernel = np.exp(-0.5*kx**2/width**2)
+        kernel/=kernel.sum()
+        kernel = kernel[:, np.newaxis]*np.ones(self.norm.shape[1])[np.newaxis, :]
+        unorm = np.where(np.isnan(self.norm), 0., self.norm)
+        nnorm = fftconvolve(unorm, kernel, mode='same', axes=0)
+        nnorm[np.isnan(self.norm)] = np.nan
+        self.norm = nnorm
+
+    def _smooth_slow(self, width):
+        # like smooth but using numpy buildin slow convolve
+        nnorm = np.zeros_like(self.norm)
+
+        kx = np.arange(self.norm.shape[0])-self.norm.shape[0]/2.
+        kernel = np.exp(-0.5*kx**2/width**2)
+        kernel/=kernel.sum()
+        unorm = np.where(np.isnan(self.norm), 0., self.norm)
+
+        for row in range(self.norm.shape[1]):
+            nnorm[:, row] = np.convolve(unorm[:, row], kernel, mode='same')
+        nnorm[np.isnan(self.norm)] = np.nan
+        self.norm = nnorm
