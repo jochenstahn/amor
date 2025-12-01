@@ -274,8 +274,8 @@ class LZProjection(ProjectionInterface):
         # error as squar-root of counts and sqrt from normalization (dR/R = sqrt( (dI/I)² + (dW/W)²)
         dR_q      = np.where(fltr, R_q*(np.sqrt(1./(I_q+0.1)+ 1./(W_q+0.1))), np.nan)
         # q-resolution is the weighted sum of individual points q-resolutions
-        dq_q      = np.histogram(q_lzf, bins = q_q, weights = weights_lzf * dq_lzf**2 )[0]
-        dq_q      = np.where(fltr, np.sqrt(dq_q/W_q), np.nan)
+        dq_q      = np.histogram(q_lzf, bins = q_q, weights = weights_lzf * dq_lzf )[0]
+        dq_q      = np.where(fltr, dq_q/W_q, np.nan)
         return ProjectedReflectivity(R_q, dR_q, (q_q[1:]+q_q[:-1])/2., dq_q)
 
     def plot(self, **kwargs):
