@@ -116,8 +116,16 @@ class AmorHeader:
         self.sample = fileio.Sample(
                 name=sampleName,
                 model=SampleModel.from_dict(model),
-                sample_parameters=None,
+                sample_parameters={},
                 )
+        # while event times are not evaluated, use average_value reported in file for SEE
+        if self.hdf['entry1/sample'].get('temperature', None) is not None \
+            and float(self.hdf['entry1/sample/temperature/average_value'][0])>0:
+            self.sample.sample_parameters['temperature'] = fileio.Value(
+                    float(self.hdf['entry1/sample/temperature/average_value'][0]), unit='K')
+        if self.hdf['entry1/sample'].get('magnetic_field', None) is not None:
+            self.sample.sample_parameters['magnetic_field'] = fileio.Value(
+                    float(self.hdf['entry1/sample/magnetic_field/average_value'][0]), unit='T')
 
     def read_instrument_configuration(self):
         chopperSeparation = float(np.take(self.hdf['entry1/Amor/chopper/pair_separation'], 0))

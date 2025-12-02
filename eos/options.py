@@ -419,7 +419,7 @@ class ReflectivityReductionConfig(ArgParsable):
                 'group': 'input data', 
                 'help': 'File with R(q_z) curve to be subtracted (in .Rqz.ort format)'})
     normalisationFileIdentifier: Optional[List[str]] = field(
-            default_factory=lambda: [None], 
+            default_factory=lambda: [],
             metadata={
                 'short': 'n', 
                 'priority': 90,
