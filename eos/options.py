@@ -21,6 +21,11 @@ except ImportError:
         # python <3.10 use Enum instead
         from enum import Enum as StrEnum
 
+class InCallString(StrEnum):
+    auto='auto'
+    always='always'
+    never='never'
+
 @dataclass
 class CommandlineParameterConfig:
     argument: str # default parameter for command line resutign ins "--argument"
@@ -28,6 +33,7 @@ class CommandlineParameterConfig:
     short_form: Optional[str] = None
     group: str = 'misc'
     priority: int = 0
+    in_call_string: InCallString = InCallString.auto
 
     def __gt__(self, other):
         """
@@ -90,6 +96,7 @@ class ArgParsable:
                 typ = field.type
             if get_origin(typ) is list:
                 args['nargs'] = '+'
+                args['action'] = 'extend'
                 typ = get_args(typ)[0]
                 if get_origin(typ) is tuple:
                     # tuple of items are put together during evaluation
@@ -117,6 +124,7 @@ class ArgParsable:
                     group=field.metadata.get('group', 'misc'),
                     short_form=field.metadata.get('short', None),
                     priority=field.metadata.get('priority', 0),
+                    in_call_string=field.metadata.get('in_call_string', InCallString.auto),
                     ))
         return output
 
@@ -168,6 +176,34 @@ class ArgParsable:
             inpargs[field.name] = value
         return cls(**inpargs)
 
+    def get_call_parameters(self, abbrv=True):
+        """
+        Return a list of command line arguments that reproduce this config, do not add default parameters.
+        """
+        output = []
+        for arg in sorted(self.get_commandline_parameters()):
+            if ((arg.in_call_string==InCallString.auto and self.is_default(arg.argument)) or
+                    arg.in_call_string==InCallString.never):
+                # skip default arguments or arguments defined to never appear in call string
+                continue
+            if arg.short_form and abbrv:
+                item = '-' + arg.short_form + ' '
+            else:
+                item = '--' + arg.argument + ' '
+            if arg.add_argument_args.get('type', None) in [str, float, int]:
+                nargs = arg.add_argument_args.get('nargs', None)
+                if nargs is None:
+                    item += str(getattr(self, arg.argument))
+                elif nargs=='+':
+                    # remove the default parameters, only show added ones
+                    ignore = len(arg.add_argument_args.get('default', []))
+                    item += ' '.join([str(pi) for pi in getattr(self, arg.argument)[ignore:]])
+                else:
+                    item += ' '.join([str(pi) for pi in getattr(self, arg.argument)])
+            # boolean flags only reach this point if they are non-default
+            output.append((arg, item))
+        return output
+
 # definition of command line arguments
 
 @dataclass
@@ -178,6 +214,7 @@ class ReaderConfig(ArgParsable):
                 'short': 'Y', 
                 'group': 'input data', 
                 'help': 'year the measurement was performed',
+                'in_call_string': InCallString.always,
                 },
             )
     rawPath: List[str] = field(
@@ -302,7 +339,7 @@ class ExperimentConfig(ArgParsable):
                 },                               
             )                          
     muOffset: Optional[float] = field(
-            default=0,
+            default=None,
             metadata={
                 'short': 'm',
                 'group': 'sample',  
@@ -419,7 +456,7 @@ class ReflectivityReductionConfig(ArgParsable):
                 'group': 'input data', 
                 'help': 'File with R(q_z) curve to be subtracted (in .Rqz.ort format)'})
     normalisationFileIdentifier: Optional[List[str]] = field(
-            default_factory=lambda: [],
+            default=None,
             metadata={
                 'short': 'n', 
                 'priority': 90,
@@ -541,85 +578,19 @@ class ReflectivityConfig:
     
     def call_string(self):
         base = 'eos'
-        
-        inpt = ''
-        if self.reader.year:
-            inpt += f' -Y {self.reader.year}'
-        else:
-            inpt += f' -Y {datetime.now().year}'
-        if np.shape(self.reader.rawPath)[0] == 1:
-            inpt += f' --rawPath {self.reader.rawPath}'
-        if self.reduction.subtract:
-            inpt += f' -subtract {self.reduction.subtract}'
-        if self.reduction.normalisationFileIdentifier:
-            inpt += f' -n {" ".join(self.reduction.normalisationFileIdentifier)}'
-        if self.reduction.fileIdentifier:
-            inpt += f' -f {" ".join(self.reduction.fileIdentifier)}'
 
-        otpt = ''
-        if self.reduction.qResolution:
-            otpt += f' -r {self.reduction.qResolution}'
-        if self.output.outputPath != '.':
-            inpt += f' --outputdPath {self.output.outputPath}'
-        if self.output.outputName:
-            otpt += f' -o {self.output.outputName}'
-        if self.output.outputFormats != ['Rqz.ort']:
-            otpt += f' -of {" ".join(self.output.outputFormats)}'
-            
-        mask = ''
+        call_parameters = self.reader.get_call_parameters()
+        call_parameters += self.output.get_call_parameters()
+        call_parameters += self.reduction.get_call_parameters()
+        call_parameters += self.experiment.get_call_parameters()
 
-        mask += f' -y {" ".join(str(ii) for ii in self.experiment.yRange)}'
-        mask += f' -l {" ".join(str(ff) for ff in self.experiment.lambdaRange)}'
-        mask += f' -t {" ".join(str(ff) for ff in self.reduction.thetaRange)}'
-        mask += f' -T {" ".join(str(ff) for ff in self.reduction.thetaRangeR)}'
-        mask += f' -q {" ".join(str(ff) for ff in self.reduction.qzRange)}'
+        call_parameters.sort()
 
-        para = ''
-        # TODO: Check if we want these parameters for defaults
-        para += f' --chopperPhase {self.experiment.chopperPhase}'
-        para += f' --chopperPhaseOffset {self.experiment.chopperPhaseOffset}'
-        if self.experiment.mu:
-            para += f' --mu {self.experiment.mu}'
-        elif self.experiment.muOffset:
-            para += f' --muOffset {self.experiment.muOffset}'
-        if self.experiment.nu:
-            para += f' --nu {self.experiment.nu}'
+        cpout = f'{base} ' + ' '.join([cp[1] for cp in call_parameters])
 
-        modl = ''
-        if self.experiment.sampleModel:
-            modl += f" --sampleModel '{self.experiment.sampleModel}'"
 
-        acts = ''
-        if self.reduction.autoscale:
-            acts += f' --autoscale {" ".join(str(ff) for ff in self.reduction.autoscale)}'
-        # TODO: Check if should be shown if not default
-        acts += f' --scale {self.reduction.scale}'
-        if self.reduction.timeSlize:
-            acts += f' --timeSlize {" ".join(str(ff) for ff in self.reduction.timeSlize)}'
-
-        mlst = base + inpt + otpt 
-        if mask:
-            mlst += mask
-        if para:
-            mlst += para
-        if acts:
-            mlst += acts
-        if modl:
-            mlst += modl
-
-        if len(mlst) > 70:
-            mlst = base + '  ' + inpt + '  ' + otpt 
-            if mask:
-                mlst += '  ' + mask
-            if para:
-                mlst += '  ' + para
-            if acts:
-                mlst += '  ' + acts
-            if modl:
-                mlst += '  ' + modl
-
-        logging.debug(f'Argument list build in EOSConfig.call_string: {mlst}')
-        return  mlst
+        logging.debug(f'Argument list build in EOSConfig.call_string: {cpout}')
+        return  cpout
 
 class E2HPlotSelection(StrEnum):
     All = 'all'
