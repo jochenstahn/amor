@@ -6,6 +6,8 @@ import os
 import numpy as np
 from typing import List, Optional
 
+from orsopy import fileio
+
 from .event_data_types import EventDatasetProtocol
 from .header import Header
 from .options import NormalisationMethod
@@ -46,7 +48,7 @@ class LZNormalisation:
         self = super().__new__(cls)
         with open(filename, 'rb') as fh:
             hash = str(np.load(fh, allow_pickle=True))
-            self.file_list = np.load(fh, allow_pickle=True)
+            self.file_list = np.load(fh, allow_pickle=True).tolist()
             self.angle = np.load(fh, allow_pickle=True)
             self.norm = np.load(fh, allow_pickle=True)
             self.monitor = np.load(fh, allow_pickle=True)
@@ -98,7 +100,7 @@ class LZNormalisation:
             np.save(fh, self.monitor, allow_pickle=False)
 
     def update_header(self, header:Header):
-        header.measurement_additional_files = self.file_list
+        header.measurement_additional_files = [fileio.File(file=os.path.basename(entry)) for entry in self.file_list]
 
     def smooth(self, width):
         logging.debug(f'apply convolution with gaussian along lambda axis to smooth norm, sigma={width}')

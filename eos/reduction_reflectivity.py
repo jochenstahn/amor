@@ -149,7 +149,7 @@ class ReflectivityReduction:
             self.dataset.append(di)
 
         for fileName in file_list:
-            self.header.measurement_data_files.append(fileio.File( file=fileName.split('/')[-1],
+            self.header.measurement_data_files.append(fileio.File( file=os.path.basename(fileName),
                                                                    timestamp=self.dataset.fileDate))
 
 
@@ -367,7 +367,7 @@ class ReflectivityReduction:
             if reference.data.events.shape[0] > 1e6:
                 self.norm.safe(n_path, self.normevent_actions.action_hash())
 
-        self.header.measurement_additional_files = self.norm.file_list
+        self.norm.update_header(self.header)
         self.header.reduction.corrections.append('normalisation with \'additional files\'')
 
     def project_on_lz(self, dataset=None):

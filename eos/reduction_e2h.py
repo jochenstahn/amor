@@ -236,7 +236,7 @@ class E2HReduction:
         self.event_actions(self.dataset)
         self.dataset.update_header(self.header)
 
-        self.header.measurement_data_files.append(fileio.File(file=fileName.split('/')[-1],
+        self.header.measurement_data_files.append(fileio.File(file=os.path.basename(fileName),
                                                               timestamp=self.dataset.fileDate))
 
     def add_data(self):
