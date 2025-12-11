@@ -113,9 +113,13 @@ class AmorHeader:
                 facility=source,
                 proposalID=proposal_id
                 )
+        if model['stack'] == '':
+            om = None
+        else:
+            om = SampleModel.from_dict(model)
         self.sample = fileio.Sample(
                 name=sampleName,
-                model=SampleModel.from_dict(model),
+                model=om,
                 sample_parameters={},
                 )
         # while event times are not evaluated, use average_value reported in file for SEE
