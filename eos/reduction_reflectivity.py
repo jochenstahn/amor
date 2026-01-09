@@ -104,6 +104,16 @@ class ReflectivityReduction:
             self.read_file_block(i, short_notation)
 
         # output
+        if self.config.output.outputName == 'fromEOS':
+            import datetime
+            _date = datetime.datetime.now().replace(microsecond=0).isoformat()
+            if self.header.sample.name:
+                _sampleName = self.header.sample.name.replace(' ', '_')
+            else:
+                _sampleName = 'unknown'
+            _mu = int(self.dataset.geometry.mu * 3)
+            self.config.output.outputName = f'{_sampleName}_{_mu:03}_{_date}'
+
         logging.warning('output:')
 
         if 'Rqz.ort' in self.config.output.outputFormats:
