@@ -104,7 +104,7 @@ class ReflectivityReduction:
             self.read_file_block(i, short_notation)
 
         # output
-        if self.config.output.outputName == 'fromEOS':
+        if self.config.output.is_default('outputName'):
             import datetime
             _date = datetime.datetime.now().replace(microsecond=0).isoformat()
             if self.header.sample.name:
