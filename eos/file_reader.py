@@ -29,7 +29,7 @@ except ImportError:
 AMOR_LOCAL_TIMEZONE = zoneinfo.ZoneInfo(key='Europe/Zurich')
 
 if  platform.node().startswith('amor'):
-    NICOS_CACHE_DIR = '/home/amor/nicosdata/amor/cache/'
+    NICOS_CACHE_DIR = '/home/amor/nicosdata/cache/'
     GREP = '/usr/bin/grep "value"'
 else:
     NICOS_CACHE_DIR = None
