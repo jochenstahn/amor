@@ -25,8 +25,8 @@ except ImportError:
 
 
 KAFKA_BROKER = 'linkafka01.psi.ch:9092'
-AMOR_EVENTS = 'amor_ev44'
-AMOR_NICOS = 'AMOR_nicosForwarder'
+AMOR_EVENTS = 'amor_detector'
+AMOR_NICOS = 'amor_nicosForwarder'
 
 class KafkaFrozenData:
     """
