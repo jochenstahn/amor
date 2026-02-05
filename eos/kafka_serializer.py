@@ -44,9 +44,9 @@ from .projection import TofZProjection, YZProjection
 
 KAFKA_BROKER = 'linkafka01.psi.ch:9092'
 KAFKA_TOPICS = {
-    'histogram': 'AMOR_histograms',
-    'response': 'AMOR_histResponse',
-    'command':  'AMOR_histCommands'
+    'histogram': 'amor_histograms',
+    'response': 'amor_histResponse',
+    'command':  'amor_histCommands'
     }
 
 def ktime():

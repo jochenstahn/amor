@@ -74,25 +74,32 @@ class AmorHeader:
                 logging.warning(f"     parameter {key} not found, relpace by zero")
                 return dtype(0)
 
+     def get_hdf_single_entry(self, path):
+         if not np.shape(self.hdf['entry1/title']):
+            return self.hdf[path][()].decode('utf-8')
+        else:
+            # format until 2025 
+            return self.hdf[path][0].decode('utf-8')
+
     def read_header_info(self):
         # read general information and first data set
-        title = self.hdf['entry1/title'][0].decode('utf-8')
-        proposal_id = self.hdf['entry1/proposal_id'][0].decode('utf-8')
-        user_name = self.hdf['entry1/user/name'][0].decode('utf-8')
+        title = self.get_hdf_single_entry('entry1/title')
+        proposal_id = self.get_hdf_single_entry('entry1/proposal_id')
+        user_name = self.get_hdf_single_entry('entry1/user/name')
         user_affiliation = 'unknown'
-        user_email = self.hdf['entry1/user/email'][0].decode('utf-8')
+        user_email = self.get_hdf_single_entry('entry1/user/email')
         user_orcid = None
-        sampleName = self.hdf['entry1/sample/name'][0].decode('utf-8')
-        model = self.hdf['entry1/sample/model'][0].decode('utf-8')
+        sampleName = self.get_hdf_single_entry('entry1/sample/name')
+        instrumentName = 'Amor'
+        source = self.get_hdf_single_entry('entry1/Amor/source/name')
+        sourceProbe = 'neutron'
+        model = self.get_hdf_single_entry('entry1/sample/model')
         if 'stack' in model:
             import yaml
             model = yaml.safe_load(model)
         else:
             model = dict(stack=model)
-        instrumentName = 'Amor'
-        source = self.hdf['entry1/Amor/source/name'][0].decode('utf-8')
-        sourceProbe = 'neutron'
-        start_time = self.hdf['entry1/start_time'][0].decode('utf-8')
+        start_time = self.get_hdf_single_entry('entry1/start_time')
         # extract start time as unix time, adding UTC offset of 1h to time string
         start_date = datetime.fromisoformat(start_time)
         self.fileDate = start_date.replace(tzinfo=AMOR_LOCAL_TIMEZONE)
