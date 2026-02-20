@@ -22,7 +22,36 @@ on:
           - all_incl_release
 
 jobs:
+  test:
+
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13']
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+            lfs: 'true'
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest
+          pip install -r requirements.txt
+
+      - name: Test with pytest
+        run: |
+          python -m pytest tests
+  
+
   build-ubuntu-latest:
+    needs: [test]
     runs-on: ubuntu-latest
     if: ${{ (github.event_name != 'workflow_dispatch') || (contains(fromJson('["all", "linux", "all_incl_release"]'), github.event.inputs.build-items)) }}
     permissions:
@@ -55,6 +84,7 @@ jobs:
         skip-existing: true
 
   build-windows:
+    needs: [test]
     runs-on: windows-latest
     if: ${{ (github.event_name != 'workflow_dispatch') || (contains(fromJson('["all", "windows", "all_incl_release"]'), github.event.inputs.build-items)) }}
 
