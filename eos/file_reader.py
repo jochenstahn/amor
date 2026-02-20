@@ -29,7 +29,7 @@ except ImportError:
 AMOR_LOCAL_TIMEZONE = zoneinfo.ZoneInfo(key='Europe/Zurich')
 
 if  platform.node().startswith('amor'):
-    NICOS_CACHE_DIR = '/home/amor/nicosdata/cache/'
+    NICOS_CACHE_DIR = '/home/data/nicosdata/cache/'
     GREP = '/usr/bin/grep "value"'
 else:
     NICOS_CACHE_DIR = None
@@ -182,9 +182,11 @@ class AmorHeader:
                                                round(mu+kap+kad+0.5*div, 3),
                                                'deg'),
             wavelength = fileio.ValueRange(const.lamdaCut, const.lamdaMax, 'angstrom'),
-            #polarization = fileio.Polarization.unpolarized,
             polarization = fileio.Polarization(polarizationConfig)
             )
+        self.instrument_settings.qz = fileio.ValueRange(round(4*np.pi*np.sin(np.deg2rad(mu+kap+kad-0.5*div))/const.lamdaMax, 3),
+                                                        round(4*np.pi*np.sin(np.deg2rad(mu+kap+kad+0.5*div))/const.lamdaCut, 3),
+                                                        '1/angstrom')
         self.instrument_settings.mu = fileio.Value(
                 round(mu, 3),
                 'deg',
