@@ -74,11 +74,11 @@ class AmorHeader:
                 logging.warning(f"     parameter {key} not found, relpace by zero")
                 return dtype(0)
 
-     def get_hdf_single_entry(self, path):
-         if not np.shape(self.hdf['entry1/title']):
+    def get_hdf_single_entry(self, path):
+        if not np.shape(self.hdf['entry1/title']):
             return self.hdf[path][()].decode('utf-8')
         else:
-            # format until 2025 
+            # format until 2025
             return self.hdf[path][0].decode('utf-8')
 
     def read_header_info(self):
