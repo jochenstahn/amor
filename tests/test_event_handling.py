@@ -1,3 +1,4 @@
+import os
 import numpy as np
 
 from unittest import TestCase
@@ -6,13 +7,15 @@ from copy import deepcopy
 
 from orsopy.fileio import Person, Experiment, Sample, InstrumentSettings, Value, ValueRange, Polarization
 
+from eos import const
 from eos.header import Header
 from eos.event_data_types import EVENT_BITMASKS, AmorGeometry, AmorTiming, AmorEventStream, \
-    EventDataAction, EventDatasetProtocol, PACKET_TYPE, PC_TYPE, PULSE_TYPE, EVENT_TYPE
-from eos.event_handling import CorrectChopperPhase, CorrectSeriesTime, AssociatePulseWithMonitor, \
-    FilterMonitorThreshold
-from eos.event_analysis import ExtractWalltime
-from eos.options import MonitorType
+    EventDataAction, EventDatasetProtocol, PACKET_TYPE, PC_TYPE, PULSE_TYPE, EVENT_TYPE, append_fields
+from eos.event_handling import ApplyPhaseOffset, ApplyParameterOverwrites, CorrectChopperPhase, CorrectSeriesTime, \
+    AssociatePulseWithMonitor, FilterMonitorThreshold, FilterStrangeTimes, TofTimeCorrection, ApplyMask
+from eos.event_analysis import ExtractWalltime, MergeFrames, AnalyzePixelIDs, CalculateWavelength, CalculateQ, \
+    FilterQzRange
+from eos.options import MonitorType, IncidentAngle, ExperimentConfig
 
 
 class MockEventData:
@@ -209,6 +212,8 @@ class TestActionClass(TestCase):
 class TestSimpleActions(TestCase):
     def setUp(self):
         self.d = MockEventData()
+        self.header = Header()
+        self.d.update_header(self.header)
 
     def test_chopper_phase(self):
         cp = CorrectChopperPhase()
@@ -298,3 +303,196 @@ class TestSimpleActions(TestCase):
         self.d.data.events.mask = 0
         fma.perform_action(self.d)
         self.assertEqual(self.d.data.events.mask.sum(), self.d.data.events.shape[0]*EVENT_BITMASKS['MonitorThreshold'])
+
+    def test_filter_strage_times(self):
+        st = FilterStrangeTimes()
+
+        st.perform_action(self.d)
+        self.assertEqual(self.d.data.events.mask.sum(), 0)
+
+        # half events should be strange times (outside of ToF frame)
+        self.d.data.events.tof += self.d.timing.tau
+        st.perform_action(self.d)
+        self.assertEqual(self.d.data.events.mask.sum(),
+                         (self.d.data.events.tof>2*self.d.timing.tau).sum()*EVENT_BITMASKS['StrangeTimes'])
+
+    def test_apply_phase_offset(self):
+        action = ApplyPhaseOffset(12.5)
+        action.perform_action(self.d)
+        self.assertEqual(self.d.timing.ch1TriggerPhase, 12.5)
+
+    def test_apply_parameter_overwrites(self):
+        action = ApplyParameterOverwrites(ExperimentConfig(muOffset=0.25, mu=3.5, nu=4.5))
+        action.perform_action(self.d)
+        self.assertEqual(self.d.geometry.mu, 3.5)
+        self.assertEqual(self.d.geometry.nu, 4.5)
+
+        action = ApplyParameterOverwrites(ExperimentConfig(muOffset=0.25))
+        action.perform_action(self.d)
+        self.assertEqual(self.d.geometry.mu, 3.75)
+
+        action = ApplyParameterOverwrites(ExperimentConfig(sampleModel='air | Si | Fe'))
+        action.update_header(self.header)
+        self.assertIsNotNone(self.header.sample.model)
+
+    def test_apply_sample_model_file(self):
+        if os.path.isfile('test.yaml'):
+            os.remove('test.yaml')
+        action = ApplyParameterOverwrites(ExperimentConfig(sampleModel='test.yaml'))
+        action.update_header(self.header)
+        self.assertIsNone(self.header.sample.model)
+
+        with open('test.yaml', 'w') as fh:
+            fh.write("""stack: air | Si | Fe""")
+
+        try:
+            action = ApplyParameterOverwrites(ExperimentConfig(sampleModel='test.yaml'))
+            action.update_header(self.header)
+            self.assertEqual(self.header.sample.model.stack, 'air | Si | Fe')
+        finally:
+            os.remove('test.yaml')
+
+    def test_tof_time_correction(self):
+        action = TofTimeCorrection()
+        with self.assertRaises(ValueError):
+            action.perform_action(self.d)
+
+        new_events = append_fields(self.d.data.events, [('delta', np.float64)])
+        new_events.delta = 10.0
+        self.d.data.events = new_events
+        tof_before = self.d.data.events.tof.copy()
+        action.perform_action(self.d)
+        np.testing.assert_allclose(
+            self.d.data.events.tof,
+            tof_before - (10.0 / 180.0) * self.d.timing.tau
+        )
+
+        self.d.create_data()
+        new_events = append_fields(self.d.data.events, [('delta', np.float64)])
+        new_events.delta = 10.0
+        self.d.data.events = new_events
+        tof_before = self.d.data.events.tof.copy()
+        action = TofTimeCorrection(correct_chopper_opening=False)
+        action.perform_action(self.d)
+        np.testing.assert_allclose(
+            self.d.data.events.tof,
+            tof_before - (self.d.geometry.kad / 180.0) * self.d.timing.tau
+        )
+
+    def test_apply_mask(self):
+        self.d.data.events = self.d.data.events[:6].copy()
+        self.d.data.events.mask[:] = [0, 1, 2, 3, 4, 5]
+
+        action = ApplyMask()
+        action.perform_action(self.d)
+        self.assertEqual(self.d.data.events.shape[0], 1)
+        self.assertEqual(self.d.data.events.mask[0], 0)
+
+        self.d.create_data()
+        self.d.data.events = self.d.data.events[:6].copy()
+        self.d.data.events.mask[:] = [0, 1, 2, 3, 4, 5]
+        action = ApplyMask(bitmask_filter=EVENT_BITMASKS['MonitorThreshold'])
+        action.perform_action(self.d)
+        np.testing.assert_array_equal(self.d.data.events.mask, np.array([0, EVENT_BITMASKS['MonitorThreshold']],
+                                                                        dtype=np.int32))
+
+    def test_merge_frames(self):
+        action = MergeFrames(lamdaCut=0.0)
+        action.perform_action(self.d)
+        self.assertEqual(self.d.data.events.tof.shape, self.d.orig_data.events.tof.shape)
+        np.testing.assert_array_compare(lambda x,y: x<=y, self.d.data.events.tof, self.d.orig_data.events.tof)
+        self.assertTrue((-self.d.timing.tau<=self.d.data.events.tof).all())
+        np.testing.assert_array_less(self.d.data.events.tof, self.d.timing.tau)
+
+        action = MergeFrames(lamdaCut=2.0)
+        self.d.data.events.tof = self.d.orig_data.events.tof[:]
+        action.perform_action(self.d)
+        tofCut = 2.0*self.d.geometry.chopperDetectorDistance/const.hdm*1e-13
+        self.assertTrue((tofCut-self.d.timing.tau<=self.d.data.events.tof).all())
+        self.assertTrue((self.d.data.events.tof<=tofCut+self.d.timing.tau).all())
+
+    def test_analyze_pixel_ids(self):
+        action = AnalyzePixelIDs((1000, 1001))
+        action.perform_action(self.d)
+        self.assertIn('detZ', self.d.data.events.dtype.names)
+        self.assertIn('detXdist', self.d.data.events.dtype.names)
+        self.assertIn('delta', self.d.data.events.dtype.names)
+        self.assertEqual(
+            np.bitwise_and(self.d.data.events.mask, EVENT_BITMASKS['yRange']).astype(bool).sum(),
+            self.d.data.events.shape[0]
+        )
+        # TODO: maybe add a test actually checking correct detector-id resolution
+
+    def test_calculate_wavelength(self):
+        action = CalculateWavelength((3.0, 5.0))
+        with self.assertRaises(ValueError):
+            action.perform_action(self.d)
+
+        new_events = append_fields(self.d.data.events, [('detXdist', np.float64)])
+        new_events.detXdist = 0.0
+        self.d.data.events = new_events
+        action.perform_action(self.d)
+        self.assertIn('lamda', self.d.data.events.dtype.names)
+        flt = self.d.data.events.mask!=EVENT_BITMASKS['LamdaRange']
+        # check all wavelength in range not filtered
+        np.testing.assert_array_less(self.d.data.events.lamda[flt], 5.0)
+        np.testing.assert_array_less(3.0, self.d.data.events.lamda[flt])
+        # check all wavelength out of range filtered
+        flt = self.d.data.events.mask==EVENT_BITMASKS['LamdaRange']
+        self.assertTrue(((self.d.data.events.lamda[flt]<3.0)|(self.d.data.events.lamda[flt]>5.0)).all())
+
+    def test_calculate_q(self):
+        action = CalculateQ(IncidentAngle.alphaF)
+        with self.assertRaises(ValueError):
+            action.perform_action(self.d)
+
+        # TODO: add checks for actual resulting values
+
+        new_events = append_fields(self.d.data.events, [('lamda', np.float64), ('delta', np.float64)])
+        new_events.lamda = 5.0
+        new_events.delta = 0.0
+        self.d.data.events = new_events
+        action.perform_action(self.d)
+        self.assertIn('qz', self.d.data.events.dtype.names)
+        self.assertNotIn('qx', self.d.data.events.dtype.names)
+        action.update_header(self.header)
+        self.assertEqual(self.header.measurement_scheme, 'angle- and energy-dispersive')
+
+        self.d.create_data()
+        new_events = append_fields(self.d.data.events, [('lamda', np.float64), ('delta', np.float64)])
+        new_events.lamda = 5.0
+        new_events.delta = 0.0
+        self.d.data.events = new_events
+        action = CalculateQ(IncidentAngle.mu)
+        action.perform_action(self.d)
+        self.assertIn('qz', self.d.data.events.dtype.names)
+        self.assertIn('qx', self.d.data.events.dtype.names)
+        action.update_header(self.header)
+        self.assertEqual(self.header.measurement_scheme, 'energy-dispersive')
+
+        self.d.create_data()
+        new_events = append_fields(self.d.data.events, [('lamda', np.float64), ('delta', np.float64)])
+        new_events.lamda = 5.0
+        new_events.delta = 0.0
+        self.d.data.events = new_events
+        action = CalculateQ(IncidentAngle.nu)
+        action.perform_action(self.d)
+        self.assertIn('qz', self.d.data.events.dtype.names)
+        self.assertNotIn('qx', self.d.data.events.dtype.names)
+        action.update_header(self.header)
+        self.assertEqual(self.header.measurement_scheme, 'energy-dispersive')
+
+    def test_filter_qz_range(self):
+        action = FilterQzRange((0.1, 0.2))
+        with self.assertRaises(ValueError):
+            action.perform_action(self.d)
+
+        self.d.data.events = self.d.data.events[:5].copy()
+        new_events = append_fields(self.d.data.events, [('qz', np.float64)])
+        new_events.qz = np.array([0.05, 0.1, 0.15, 0.2, 0.25])
+        self.d.data.events = new_events
+        action.perform_action(self.d)
+        np.testing.assert_array_equal(
+            self.d.data.events.mask,
+            np.array([1, 0, 0, 0, 1], dtype=np.int32) * EVENT_BITMASKS['qRange']
+        )
