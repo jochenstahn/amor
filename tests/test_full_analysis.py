@@ -61,7 +61,7 @@ class FullAmorTest(TestCase):
         reduction_config = options.ReflectivityReductionConfig(
                 normalisationMethod=self._field_defaults['ReflectivityReductionConfig']['normalisationMethod'],
                 qResolution=0.01,
-                qzRange=self._field_defaults['ReflectivityReductionConfig']['qzRange'],
+                qzRange=(0.01, 0.15),
                 thetaRange=(-0.75, 0.75),
                 fileIdentifier=["6003-6005"],
                 scale=[1],

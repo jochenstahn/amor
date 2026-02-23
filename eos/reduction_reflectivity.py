@@ -68,7 +68,8 @@ class ReflectivityReduction:
         self.dataevent_actions |= eh.TofTimeCorrection(self.config.experiment.incidentAngle==IncidentAngle.alphaF)
         self.dataevent_actions |= ea.CalculateWavelength(self.config.experiment.lambdaRange)
         self.dataevent_actions |= ea.CalculateQ(self.config.experiment.incidentAngle)
-        self.dataevent_actions |= ea.FilterQzRange(self.config.reduction.qzRange)
+        if not self.config.reduction.is_default('qzRange'):
+            self.dataevent_actions |= ea.FilterQzRange(self.config.reduction.qzRange)
         self.dataevent_actions |= eh.ApplyMask()
 
         self.grid = LZGrid(self.config.reduction.qResolution, self.config.reduction.qzRange)

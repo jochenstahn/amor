@@ -124,5 +124,4 @@ class FilterQzRange(EventDataAction):
         if not 'qz' in dataset.data.events.dtype.names:
             raise ValueError("FilterQzRange requires dataset with qz values per events, perform WavelengthAndQ first")
 
-        if self.qzRange[1]<0.5:
-            d.events.mask += EVENT_BITMASKS["qRange"]*((self.qzRange[0]>d.events.qz) | (d.events.qz>self.qzRange[1]))
+        d.events.mask += EVENT_BITMASKS["qRange"]*((self.qzRange[0]>d.events.qz) | (d.events.qz>self.qzRange[1]))
