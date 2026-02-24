@@ -275,7 +275,7 @@ class TestSimpleActions(TestCase):
 
         self.d.data.pulses.monitor = 13
         amT.perform_action(self.d)
-        np.testing.assert_array_equal(self.d.data.pulses.monitor, self.d.timing.tau*2)
+        np.testing.assert_array_equal(self.d.data.pulses.monitor, np.float32(2*self.d.timing.tau))
 
         self.d.data.pulses.monitor = 13
         amPC.perform_action(self.d)
