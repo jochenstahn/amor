@@ -1,8 +1,8 @@
 """
 Specify the data type and protocol used for event datasets.
 """
-from typing import List, Optional, Protocol, Tuple
-from dataclasses import dataclass
+from typing import Dict, List, Optional, Protocol, Tuple
+from dataclasses import dataclass, field
 from .header import Header
 from abc import ABC, abstractmethod
 from hashlib import sha256
@@ -34,6 +34,7 @@ EVENT_TYPE = np.dtype([('tof', np.float64), ('pixelID', np.uint32), ('mask', np.
 PACKET_TYPE = np.dtype([('start_index', np.uint32), ('time', np.int64)])
 PULSE_TYPE = np.dtype([('time', np.int64), ('monitor', np.float32)])
 PC_TYPE = np.dtype([('current', np.float32), ('time', np.int64)])
+LOG_TYPE = np.dtype([('value', np.float32), ('time', np.int64)])
 
 # define the bitmask for individual event filters
 EVENT_BITMASKS = {
@@ -60,6 +61,7 @@ class AmorEventStream:
     packets: np.recarray # PACKET_TYPE
     pulses: np.recarray  # PULSE_TYPE
     proton_current: np.recarray # PC_TYPE
+    device_logs: Dict[str, np.recarray] = field(default_factory=dict) # LOG_TYPE
 
 class EventDatasetProtocol(Protocol):
     """
