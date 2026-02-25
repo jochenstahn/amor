@@ -107,7 +107,10 @@ class AmorHeader:
             elif dtype is str:
                 return self.read_string(hdf_path)
             else:
-                return dtype(hdfgrp[0])
+                if len(hdfgrp.shape)==1:
+                    return dtype(hdfgrp[0])
+                else:
+                    return dtype(hdfgrp[()])
         except (KeyError, IndexError):
             if nicos:
                 nicos_key = nicos[0]
@@ -395,7 +398,11 @@ class AmorEventData(AmorHeader):
     def read_proton_current_stream(self, packets):
         proton_current = np.recarray(self.hdf['entry1/Amor/detector/proton_current/time'].shape, dtype=PC_TYPE)
         proton_current.time = self.hdf['entry1/Amor/detector/proton_current/time'][:]
-        proton_current.current = self.hdf['entry1/Amor/detector/proton_current/value'][:,0]
+        if self.hdf['entry1/Amor/detector/proton_current/value'].ndim==1:
+            proton_current.current = self.hdf['entry1/Amor/detector/proton_current/value'][:]
+        else:
+            proton_current.current = self.hdf['entry1/Amor/detector/proton_current/value'][:,0]
+
         if self.first_index>0 or not self.EOF:
             proton_current = proton_current[(proton_current.time>=packets.time[0])&
                                             (proton_current.time<=packets.time[-1])]
