@@ -347,16 +347,21 @@ class AmorEventData(AmorHeader):
         nevts = self.hdf['/entry1/Amor/detector/data/event_time_offset'].shape[0]
         if (nevts-self.first_index)>self.max_events:
             end_packet = np.where(packets.start_index<=(self.first_index+self.max_events))[0][-1]
-            self.last_index = packets.start_index[end_packet]-1
+            end_packet = max(1, end_packet)
+            if len(packets)==1:
+                self.last_index = nevts-1
+            else:
+                self.last_index = packets.start_index[end_packet]-1
             packets = packets[:end_packet]
         else:
             self.last_index = nevts-1
             self.EOF = True
-        nevts = self.last_index+1-self.first_index
 
         if packets.shape[0]==0:
             raise EOFError(f'No more packets left after end_packet filter, first_index={self.first_index}, '
                            f'max_events={self.max_events}, nevts={nevts}')
+
+        nevts = self.last_index+1-self.first_index
 
         # adapte packet to event index relation
         packets.start_index -= self.first_index

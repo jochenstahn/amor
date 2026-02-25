@@ -268,7 +268,7 @@ class E2HReduction:
             return
         try:
             # check that events exist in the new file
-            AmorEventData(new_files[-1], 0, max_events=1000)
+            AmorEventData(new_files[-1], 0, max_events=1_000)
         except Exception:
             logging.debug("Problem when trying to load new dataset", exc_info=True)
             return
