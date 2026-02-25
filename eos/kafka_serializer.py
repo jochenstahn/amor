@@ -160,7 +160,7 @@ class ESSSerializer:
                     )
             self.producer.flush()
             if isinstance(command, Stop):
-                if command.hist_id == self._active_histogram_yz:
+                if command.hist_id in [self._active_histogram_yz, self._active_histogram_tofz]:
                     self.count_stopped.set()
                 else:
                     return
