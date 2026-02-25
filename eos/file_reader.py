@@ -42,6 +42,7 @@ class AmorHeader:
             source_name=('entry1/Amor/source/name', str),
             sample_model=('entry1/sample/model', str),
             start_time=('entry1/start_time', str),
+            start_time_fallback=('entry1/Amor/instrument_control_parameters/start_time', str),
 
             chopper_separation=('entry1/Amor/chopper/pair_separation', float),
             detector_distance=('entry1/Amor/detector/transformation/distance', float),
@@ -129,7 +130,11 @@ class AmorHeader:
 
     def read_header_info(self):
         self._start_time_ns = np.uint64(0)
-        start_time = self.rv('start_time')
+        try:
+            start_time = self.rv('start_time')
+        except KeyError:
+            start_time = self.rv('start_time_fallback')
+
         # extract start time as unix time, adding UTC offset of 1h to time string
         start_date = datetime.fromisoformat(start_time)
         self.fileDate = start_date.replace(tzinfo=AMOR_LOCAL_TIMEZONE)
