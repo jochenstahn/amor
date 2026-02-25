@@ -406,7 +406,9 @@ class AmorEventData(AmorHeader):
             logging.warning('     no chopper trigger data available, using event steram instead')
             startTime = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][0], dtype=np.int64)
             stopTime = np.array(self.hdf['/entry1/Amor/detector/data/event_time_zero'][-2], dtype=np.int64)
-            pulseTimeS = np.arange(startTime, stopTime, self.timing.tau*1e9, dtype=np.int64)
+            ptime_unique = np.unique(packets.time)
+            min_time_step = (ptime_unique[1:]-ptime_unique[:-1]).min()
+            pulseTimeS = np.arange(startTime, stopTime, min_time_step, dtype=np.int64)
         pulses = np.recarray(pulseTimeS.shape, dtype=PULSE_TYPE)
         pulses.time = pulseTimeS
         pulses.monitor = 1. # default is monitor pulses as it requires no calculation
