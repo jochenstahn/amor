@@ -312,7 +312,12 @@ class AmorEventData(AmorHeader):
 
         super().__init__(hdf)
         self.hdf = hdf
-        self.read_event_stream()
+        try:
+            self.read_event_stream()
+        except EOFError:
+            self.hdf.close()
+            del(self.hdf)
+            raise
         self.read_log_streams()
 
         if type(fileName) is str:
@@ -326,6 +331,9 @@ class AmorEventData(AmorHeader):
         Read the actual event data from file. If file is too large, find event index from packets
         that allow splitting of file smaller than self.max_events.
         """
+        if self.hdf['/entry1/Amor/detector/data/event_index'].shape[0]==0:
+            raise EOFError(f'No event packet found starting at event #{self.first_index}, '
+                           f'number of events is 0')
         packets = np.recarray(self.hdf['/entry1/Amor/detector/data/event_index'].shape, dtype=PACKET_TYPE)
         packets.start_index = self.hdf['/entry1/Amor/detector/data/event_index'][:]
         packets.time = self.hdf['/entry1/Amor/detector/data/event_time_zero'][:]
@@ -395,7 +403,7 @@ class AmorEventData(AmorHeader):
         pulses.time = pulseTimeS
         pulses.monitor = 1. # default is monitor pulses as it requires no calculation
         # apply filter in case the events were filtered
-        if self.first_index>0 or not self.EOF:
+        if (self.first_index>0 or not self.EOF):
             pulses = pulses[(pulses.time>=packets.time[0])&(pulses.time<=packets.time[-1])]
         self.eventStartTime = startTime
         return pulses
