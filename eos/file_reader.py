@@ -341,6 +341,8 @@ class AmorEventData(AmorHeader):
             raise EOFError(f'No event packet found starting at event #{self.first_index}, '
                            f'number of events is {self.hdf["/entry1/Amor/detector/data/event_time_offset"].shape[0]}')
         packets = packets[start_packet:]
+        if packets.shape[0]==0:
+            raise EOFError(f'No more packets left after start_packet filter')
 
         nevts = self.hdf['/entry1/Amor/detector/data/event_time_offset'].shape[0]
         if (nevts-self.first_index)>self.max_events:
@@ -353,8 +355,7 @@ class AmorEventData(AmorHeader):
         nevts = self.last_index+1-self.first_index
 
         if packets.shape[0]==0:
-            raise EOFError(f'No event packet found starting at event #{self.first_index}, '
-                           f'number of packets is 0')
+            raise EOFError(f'No more packets left after end_packet filter')
 
         # adapte packet to event index relation
         packets.start_index -= self.first_index
