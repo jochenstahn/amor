@@ -301,7 +301,7 @@ class E2HReduction:
         try:
             update_data = AmorEventData(self.file_list[-1], self.dataset.last_index+1,
                                         max_events=self.config.reduction.max_events)
-        except EOFError:
+        except (EOFError, IndexError):
             return
         logging.info("    updating with new data")
 
