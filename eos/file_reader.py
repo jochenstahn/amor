@@ -355,7 +355,8 @@ class AmorEventData(AmorHeader):
         nevts = self.last_index+1-self.first_index
 
         if packets.shape[0]==0:
-            raise EOFError(f'No more packets left after end_packet filter')
+            raise EOFError(f'No more packets left after end_packet filter, first_index={self.first_index}, '
+                           f'max_events={self.max_events}, nevts={nevts}')
 
         # adapte packet to event index relation
         packets.start_index -= self.first_index
