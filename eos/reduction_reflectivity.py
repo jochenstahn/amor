@@ -329,8 +329,23 @@ class ReflectivityReduction:
     def save_Rqz(self):
         fname = os.path.join(self.config.output.outputPath, f'{self.config.output.outputName}.Rqz.ort')
         logging.warning(f'    {fname}')
-        theSecondLine = f' {self.header.experiment.title} | {self.header.experiment.start_date} | sample {self.header.sample.name} | R(q_z)'
-        fileio.save_orso(self.datasetsRqz, fname, data_separator='\n', comment=theSecondLine)
+        if os.path.exists(fname) and self.config.output.append:
+            logging.info('        file already exists, append as new dataset')
+            with open(fname, 'r') as f:
+                f.readline()
+                theSecondLine = f.readline()[3:]
+            prev_data = fileio.load_orso(fname)
+            prev_names = [di.info.data_set for di in prev_data]
+            for i, di in enumerate(self.datasetsRqz):
+                while di.info.data_set in prev_names:
+                    if di.info.data_set.startswith('Nr '):
+                        di.info.data_set = f'Nr {i+len(prev_data)} :'+di.info.data_set.split(':', 1)[1]
+                        break
+                    di.info.data_set = di.info.data_set+'_'
+            fileio.save_orso(prev_data+self.datasetsRqz, fname, data_separator='\n', comment=theSecondLine)
+        else:
+            theSecondLine = f' {self.header.experiment.title} | {self.header.experiment.start_date} | sample {self.header.sample.name} | R(q_z)'
+            fileio.save_orso(self.datasetsRqz, fname, data_separator='\n', comment=theSecondLine)
 
     def save_Rtl(self):
         fname = os.path.join(self.config.output.outputPath, f'{self.config.output.outputName}.Rlt.ort')

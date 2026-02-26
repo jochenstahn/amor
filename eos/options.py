@@ -543,6 +543,14 @@ class ReflectivityOutputConfig(ArgParsable):
                 },
             )
 
+    append: bool = field(
+            default=False,
+            metadata={
+                'group': 'output',
+                'help': 'if file already exists, append result as additional ORSO dataset (only Rqz.ort)',
+                },
+            )
+
     def _output_format_list(self, outputFormat):
         format_list = []
         if OutputFomatOption.ort in outputFormat\
