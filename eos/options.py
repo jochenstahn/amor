@@ -471,6 +471,15 @@ class ReflectivityReductionConfig(ArgParsable):
                 },
             )
 
+    logfilter: List[str] = field(
+            default_factory=lambda: [],
+            metadata={
+                'short': 'lf',
+                'group': 'region of interest',
+                'help':  'filter using comparison to a log values, multpiple allowd (example "sample_temperature<150")',
+                },
+            )
+
 
 class OutputFomatOption(StrEnum):
     Rqz_ort = "Rqz.ort"

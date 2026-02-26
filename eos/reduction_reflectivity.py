@@ -70,6 +70,8 @@ class ReflectivityReduction:
         self.dataevent_actions |= ea.CalculateQ(self.config.experiment.incidentAngle)
         if not self.config.reduction.is_default('qzRange'):
             self.dataevent_actions |= ea.FilterQzRange(self.config.reduction.qzRange)
+        for lf in self.config.reduction.logfilter:
+            self.dataevent_actions |= ea.FilterByLog(lf)
         self.dataevent_actions |= eh.ApplyMask()
 
         self.grid = LZGrid(self.config.reduction.qResolution, self.config.reduction.qzRange)

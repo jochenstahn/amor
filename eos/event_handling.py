@@ -71,6 +71,8 @@ class CorrectSeriesTime(EventDataAction):
         dataset.data.pulses.time -= self.seriesStartTime
         dataset.data.events.wallTime -= self.seriesStartTime
         dataset.data.proton_current.time -= self.seriesStartTime
+        for value in dataset.data.device_logs.values():
+            value.time -= self.seriesStartTime
         start, stop = dataset.data.events.wallTime[0], dataset.data.events.wallTime[-1]
         logging.debug(f'      wall time from {start/1e9:6.1f} s to {stop/1e9:6.1f} s, '
                       f'series time = {self.seriesStartTime/1e9:6.1f}')
